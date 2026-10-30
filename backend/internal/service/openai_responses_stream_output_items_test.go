@@ -28,6 +28,7 @@ func TestNormalizeResponsesStreamingTerminalOutputPreservesReportedItems(t *test
 	normalized, changed := normalizeResponsesStreamingTerminalOutput(
 		[]byte(`{"type":"response.completed","response":{"status":"completed","output":[]}}`),
 		nil,
+		doneItems,
 		nil,
 	)
 	require.True(t, changed)
@@ -69,7 +70,7 @@ func TestNormalizeResponsesStreamingTerminalOutputIgnoresNonDoneEvents(t *testin
 	require.False(t, doneItems.HasItems())
 
 	raw := []byte(`{"type":"response.completed","response":{"status":"completed","output":[]}}`)
-	normalized, changed := normalizeResponsesStreamingTerminalOutput(raw, nil, nil)
+	normalized, changed := normalizeResponsesStreamingTerminalOutput(raw, nil, doneItems, nil)
 	require.False(t, changed)
 	require.Equal(t, string(raw), string(normalized))
 }
@@ -91,7 +92,7 @@ func TestNormalizeResponsesStreamingTerminalOutputRepairsTruncatedOutput(t *test
 	normalized, changed := normalizeResponsesStreamingTerminalOutput([]byte(`{
 		"type":"response.completed",
 		"response":{"status":"completed","output":[{"type":"message","role":"assistant","id":"msg_fabricated","status":"completed","content":[{"type":"output_text","text":"shipped","annotations":[],"logprobs":[]}]}]}
-	}`), nil, nil)
+	}`), nil, doneItems, nil)
 	require.True(t, changed)
 
 	require.Len(t, gjson.GetBytes(normalized, "response.output").Array(), 2)
@@ -110,7 +111,7 @@ func TestNormalizeResponsesStreamingTerminalOutputLeavesCompleteOutputAlone(t *t
 	}`))
 
 	raw := []byte(`{"type":"response.completed","response":{"status":"completed","output":[{"type":"message","id":"msg_upstream","status":"completed","vendor":"keep"}]}}`)
-	normalized, changed := normalizeResponsesStreamingTerminalOutput(raw, nil, nil)
+	normalized, changed := normalizeResponsesStreamingTerminalOutput(raw, nil, doneItems, nil)
 	require.False(t, changed)
 	require.Equal(t, string(raw), string(normalized))
 }

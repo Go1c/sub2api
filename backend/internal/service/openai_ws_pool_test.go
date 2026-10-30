@@ -1171,8 +1171,8 @@ func TestOpenAIWSConnPool_AcquireRetainedSessionsUsesScaledCapacity(t *testing.T
 				leases = append(leases, lease)
 			}
 
-	high := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 20}
-	require.Equal(t, 8, pool.effectiveMaxConnsByAccount(high), "v2 路径也必须受连接池硬上限约束")
+			high := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 20}
+			require.Equal(t, 8, pool.effectiveMaxConnsByAccount(high), "v2 路径也必须受连接池硬上限约束")
 
 			leases[0].Release()
 			reused, err := pool.Acquire(ctx, req)

@@ -14,9 +14,9 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tidwall/gjson"
 )
 
 // 重试相关常量
@@ -90,8 +90,6 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
-	beginUpstreamResponseModelObservation(c)
-	defer func() { attachObservedForwardResult(c, result) }()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
 	}
@@ -122,6 +120,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			}
 		}
 	}()
+	beginUpstreamResponseModelObservation(c)
 
 	// Web Search 模拟：纯 web_search 请求时，直接调用搜索 API 构造响应
 	if account != nil && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body.Bytes()) {
@@ -200,6 +199,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		clientUserAgent = c.GetHeader("User-Agent")
 	}
 	isClaudeCode := IsClaudeCodeClient(ctx) || isClaudeCodeClient(clientUserAgent, parsed.MetadataUserID)
+
+	// 补充判定：上游 API 网关（如 new-api）转发真实 Claude Code 流量时，
+	// UA 会变成 Go-http-client 但 body 保留了完整的 Claude Code 特征
+	// （billing attribution block + metadata.user_id）。此时如果仍走 mimicry
+	// 重写 system prompt，会破坏 Anthropic prompt cache 的前缀匹配——
+	// 导致 messages 级缓存永远 miss、cache_creation 每轮全量重写。
+	// 通过检查 body 中的 billing attribution block 来识别被代理的真实 CC 流量。
+	if !isClaudeCode && parsed.MetadataUserID != "" {
+		isClaudeCode = systemHasBillingAttributionBlock(body)
+	}
+
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	if shouldMimicClaudeCode {
@@ -208,20 +218,15 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		// Code..." system prompt 但缺少 billing attribution block，导致 Anthropic
 		// 检测到"有 CC prompt 但无 billing block"的不一致而判为 third-party。
 		// Parrot 的 transform_request 从不检查客户端 system 内容，直接覆盖。
-		systemRewritten := false
 		systemRaw, _ := parsed.SystemValue()
 		systemPromptInjectionEnabled, systemPrompt, systemPromptBlocks := s.claudeOAuthSystemPromptInjectionSettings(ctx)
 		if systemPromptInjectionEnabled {
 			if err := replaceBody(rewriteSystemForNonClaudeCodeWithPromptBlocks(body, systemRaw, systemPrompt, systemPromptBlocks)); err != nil {
 				return nil, err
 			}
-			systemRewritten = true
 		}
 
-		// system 被重写时保留 CC prompt 的 cache_control: ephemeral（匹配真实 Claude Code 行为）；
-		// 未重写时（注入开关关闭）剥离客户端 cache_control，与原有行为一致。
-		// 两种情况下 enforceCacheControlLimit 都会兜底处理上限。
-		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: !systemRewritten}
+		normalizeOpts := claudeOAuthNormalizeOptions{}
 		if s.identityService != nil && c != nil {
 			fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 			if err == nil && fp != nil {
@@ -399,26 +404,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
-			// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
-			safeErr := sanitizeUpstreamErrorMessage(err.Error())
-			setOpsUpstreamError(c, 0, safeErr, "")
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-				Platform:           account.Platform,
-				AccountID:          account.ID,
-				AccountName:        account.Name,
-				UpstreamStatusCode: 0,
-				UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
-				Kind:               "request_error",
-				Message:            safeErr,
+			return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{
+				UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
 			})
-			c.JSON(http.StatusBadGateway, gin.H{
-				"type": "error",
-				"error": gin.H{
-					"type":    "upstream_error",
-					"message": "Upstream request failed",
-				},
-			})
-			return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 		}
 
 		// 优先检测thinking block签名错误（400）并重试一次
@@ -429,6 +417,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 				if s.shouldRectifySignatureError(ctx, account, respBody, reqModel) {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+						ProxyID:            opsUpstreamProxyID(account),
+						ProxyName:          opsUpstreamProxyName(account),
 						Platform:           account.Platform,
 						AccountID:          account.ID,
 						AccountName:        account.Name,
@@ -490,6 +480,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 							_ = retryResp.Body.Close()
 							if retryReadErr == nil && retryResp.StatusCode == 400 && s.isSignatureErrorPattern(ctx, account, retryRespBody) {
 								appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+									ProxyID:            opsUpstreamProxyID(account),
+									ProxyName:          opsUpstreamProxyName(account),
 									Platform:           account.Platform,
 									AccountID:          account.ID,
 									AccountName:        account.Name,
@@ -530,6 +522,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 											_ = retryResp2.Body.Close()
 										}
 										appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+											ProxyID:            opsUpstreamProxyID(account),
+											ProxyName:          opsUpstreamProxyName(account),
 											Platform:           account.Platform,
 											AccountID:          account.ID,
 											AccountName:        account.Name,
@@ -569,6 +563,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				errMsg := extractUpstreamErrorMessage(respBody)
 				if isThinkingBudgetConstraintError(errMsg) && s.settingService.IsBudgetRectifierEnabled(ctx) {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+						ProxyID:            opsUpstreamProxyID(account),
+						ProxyName:          opsUpstreamProxyName(account),
 						Platform:           account.Platform,
 						AccountID:          account.ID,
 						AccountName:        account.Name,
@@ -639,6 +635,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				respBody, _ := s.readUpstreamErrorBody(resp)
 				_ = resp.Body.Close()
 				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					ProxyID:            opsUpstreamProxyID(account),
+					ProxyName:          opsUpstreamProxyName(account),
 					Platform:           account.Platform,
 					AccountID:          account.ID,
 					AccountName:        account.Name,
@@ -691,8 +689,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			logger.LegacyPrintf("service.gateway", "[Forward] Upstream error (retry exhausted, failover): Account=%d(%s) Status=%d RequestID=%s Body=%s",
 				account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
-			s.handleRetryExhaustedSideEffects(ctx, resp, account)
+			s.handleRetryExhaustedSideEffects(ctx, resp, account, reqModel)
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				ProxyID:            opsUpstreamProxyID(account),
+				ProxyName:          opsUpstreamProxyName(account),
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -713,7 +713,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 			}
 		}
-		return s.handleRetryExhaustedError(ctx, resp, c, account)
+		return s.handleRetryExhaustedError(ctx, resp, c, account, reqModel)
 	}
 
 	// 处理可切换账号的错误
@@ -728,6 +728,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 		s.handleFailoverSideEffects(ctx, resp, account, reqModel)
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			UpstreamStatusCode: resp.StatusCode,
@@ -770,6 +772,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					upstreamDetail = truncateString(string(respBody), maxBytes)
 				}
 				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					ProxyID:            opsUpstreamProxyID(account),
+					ProxyName:          opsUpstreamProxyName(account),
 					Platform:           account.Platform,
 					AccountID:          account.ID,
 					AccountName:        account.Name,
@@ -821,6 +825,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if errors.As(err, &sseErr) {
 				return nil, s.sseStreamErrorEventFailover(ctx, c, account, resp, sseErr.RawData, reqModel, c.Writer.Size() != writerSizeBeforeStream)
 			}
+			// 流中断（缺失 terminal 事件、读错误、数据间隔超时等）时保留已观测到的
+			// usage 与错误一起返回，handler 在错误处理完成后照常提交 usage 记录。
+			if partial := partialStreamUsageResult(c, resp, streamResult, originalModel, mappedModel, startTime, err); partial != nil {
+				return partial, err
+			}
 			return nil, err
 		}
 		usage = streamResult.usage
@@ -834,14 +843,18 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 
 	return &ForwardResult{
-		RequestID:        resp.Header.Get("x-request-id"),
-		Usage:            *usage,
-		Model:            originalModel, // 使用原始模型用于计费和日志
-		UpstreamModel:    mappedModel,
-		Stream:           reqStream,
-		Duration:         time.Since(startTime),
-		FirstTokenMs:     firstTokenMs,
-		ClientDisconnect: clientDisconnect,
+		RequestID:                     resp.Header.Get("x-request-id"),
+		UpstreamHeaders:               resp.Header,
+		Usage:                         *usage,
+		Model:                         originalModel, // 使用原始模型用于计费和日志
+		UpstreamModel:                 mappedModel,
+		UpstreamResponseModel:         observedUpstreamResponseModel(c),
+		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+		Stream:                        reqStream,
+		Duration:                      time.Since(startTime),
+		FirstTokenMs:                  firstTokenMs,
+		ClientDisconnect:              clientDisconnect,
 	}, nil
 }
 
@@ -863,8 +876,9 @@ func anthropicSpeedModel(parsed *ParsedRequest, result *ForwardResult) string {
 // 承载（Opus 4.7 的 fast mode 已被移除，传 speed=fast 会直接报错）。这里按模型和
 // 平台收紧，避免上游根本没跑 fast 时仍然按 2x 计费——宁可漏收也不能多收。
 //
-// 注：判据是请求参数而非响应里的 usage.speed。等 usage 解析链路统一暴露该字段后，
-// 应改为以响应为准。
+// 这里只决定请求侧的档位；上游响应里的 usage.speed 由 UpstreamResponseServiceTier
+// 带回，用量记录时经 ResolveBillingServiceTier 只降不升（usage.speed=standard 则按
+// 标准价计费）。
 func anthropicSpeedServiceTier(account *Account, speed, model string) *string {
 	if account == nil || account.Platform != PlatformAnthropic || speed != "fast" {
 		return nil

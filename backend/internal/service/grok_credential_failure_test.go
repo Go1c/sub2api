@@ -1621,3 +1621,7 @@ func expiredGrokOAuthAccountForCredentialTest(id int64) *Account {
 		},
 	}
 }
+
+func (s *grokOAuthClientStub) LoginWithPassword(_ context.Context, _, _, _ string) (*GrokPasswordLoginResult, error) {
+	return nil, nil
+}

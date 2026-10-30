@@ -12,67 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
-
-// GetSiteMessageSettings reads the site-message feature switch and limits.
-func (s *SettingService) GetSiteMessageSettings(ctx context.Context) (SiteMessageSettings, error) {
-	vals, err := s.settingRepo.GetMultiple(ctx, []string{
-		SettingKeySiteMessagesEnabled,
-		SettingKeySiteMessagesDailySendLimit,
-		SettingKeySiteMessagesRetentionDays,
-		SettingKeySiteMessagesDefaultRecipientEmail,
-	})
-	if err != nil {
-		return SiteMessageSettings{}, err
-	}
-
-	settings := SiteMessageSettings{
-		Enabled:               vals[SettingKeySiteMessagesEnabled] == "true",
-		DailySendLimit:        SiteMessagesDailySendLimitDefault,
-		RetentionDays:         SiteMessagesRetentionDaysDefault,
-		DefaultRecipientEmail: strings.TrimSpace(vals[SettingKeySiteMessagesDefaultRecipientEmail]),
-	}
-	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesDailySendLimit]); raw != "" {
-		if value, err := strconv.Atoi(raw); err == nil {
-			settings.DailySendLimit = value
-		}
-	}
-	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesRetentionDays]); raw != "" {
-		if value, err := strconv.Atoi(raw); err == nil {
-			settings.RetentionDays = value
-		}
-	}
-	return normalizeSiteMessageSettings(settings), nil
-}
-
-// GetSubscriptionQuotaResetConfig returns the global subscription quota reset window.
-func (s *SettingService) GetSubscriptionQuotaResetConfig(ctx context.Context) SubscriptionQuotaResetConfig {
-	if s == nil || s.settingRepo == nil {
-		return SubscriptionQuotaResetConfig{}
-	}
-	values, err := s.settingRepo.GetMultiple(ctx, []string{
-		SettingKeySubscriptionQuotaResetUTCOffsetMinutes,
-		SettingKeySubscriptionQuotaResetHour,
-	})
-	if err != nil {
-		slog.Warn("get subscription quota reset config failed", "error", err)
-		return SubscriptionQuotaResetConfig{}
-	}
-	return parseSubscriptionQuotaResetConfig(values)
-}
-
-// GetSubscriptionMultiplePurchasesEnabled reports whether users may hold multiple consumable subscriptions.
-func (s *SettingService) GetSubscriptionMultiplePurchasesEnabled(ctx context.Context) bool {
-	if s == nil || s.settingRepo == nil {
-		return false
-	}
-	values, err := s.settingRepo.GetMultiple(ctx, []string{SettingKeySubscriptionMultiplePurchasesEnabled})
-	if err != nil {
-		slog.Warn("get subscription multiple purchases setting failed", "error", err)
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(values[SettingKeySubscriptionMultiplePurchasesEnabled]), "true")
-}
 
 // IsRegistrationEnabled 检查是否开放注册
 func (s *SettingService) IsRegistrationEnabled(ctx context.Context) bool {
@@ -130,35 +72,6 @@ func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
-func normalizeInvitationRegistrationMode(value string) string {
-	switch strings.TrimSpace(value) {
-	case InvitationRegistrationModeAffiliateLink:
-		return InvitationRegistrationModeAffiliateLink
-	case InvitationRegistrationModeBoth:
-		return InvitationRegistrationModeBoth
-	default:
-		return InvitationRegistrationModeDefault
-	}
-}
-
-func invitationRegistrationModeAllowsRedeemCode(mode string) bool {
-	mode = normalizeInvitationRegistrationMode(mode)
-	return mode == InvitationRegistrationModeRedeemCode || mode == InvitationRegistrationModeBoth
-}
-
-func invitationRegistrationModeAllowsAffiliateLink(mode string) bool {
-	mode = normalizeInvitationRegistrationMode(mode)
-	return mode == InvitationRegistrationModeAffiliateLink || mode == InvitationRegistrationModeBoth
-}
-
-func (s *SettingService) GetInvitationRegistrationMode(ctx context.Context) string {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyInvitationRegistrationMode)
-	if err != nil {
-		return InvitationRegistrationModeDefault
-	}
-	return normalizeInvitationRegistrationMode(value)
-}
-
 // GetCustomMenuItemsRaw returns the raw JSON string of custom_menu_items setting.
 func (s *SettingService) GetCustomMenuItemsRaw(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyCustomMenuItems)
@@ -177,6 +90,16 @@ func (s *SettingService) IsAffiliateEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+// IsAffiliateAdminRechargeEnabled reports whether admin balance
+// deposits should participate in the affiliate rebate program.
+func (s *SettingService) IsAffiliateAdminRechargeEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateAdminRechargeEnabled)
+	if err != nil {
+		return AdminRechargeRebateEnabledDefault
+	}
+	return value == "true"
+}
+
 // GetAffiliateRebateRatePercent 读取并 clamp 全局返利比例。
 // 解析失败、缺失或越界都回退到 AffiliateRebateRateDefault — 该比例从不抛错，
 // 调用方只关心一个可用的数值。
@@ -190,17 +113,6 @@ func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) floa
 		return AffiliateRebateRateDefault
 	}
 	return clampAffiliateRebateRate(rate)
-}
-
-func (s *SettingService) GetAffiliateRebateTiers(ctx context.Context) []AffiliateRebateTier {
-	if s == nil || s.settingRepo == nil {
-		return defaultAffiliateRebateTiers()
-	}
-	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateTiers)
-	if err != nil {
-		return defaultAffiliateRebateTiers()
-	}
-	return parseAffiliateRebateTiers(raw)
 }
 
 // GetAffiliateRebateFreezeHours 返回返利冻结期（小时）。
@@ -251,109 +163,6 @@ func (s *SettingService) GetAffiliateRebatePerInviteeCap(ctx context.Context) fl
 	return cap
 }
 
-func (s *SettingService) IsAffiliateSignupBonusEnabled(ctx context.Context) bool {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateSignupBonusEnabled)
-	if err != nil {
-		return AffiliateSignupBonusEnabledDefault
-	}
-	return value == "true"
-}
-
-func (s *SettingService) GetAffiliateSignupBonusAmount(ctx context.Context) float64 {
-	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusAmount, AffiliateSignupBonusAmountDefault)
-}
-
-func (s *SettingService) GetAffiliateSignupBonusTotalCap(ctx context.Context) float64 {
-	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusTotalCap, AffiliateSignupBonusTotalCapDefault)
-}
-
-func (s *SettingService) GetAffiliateSignupBonusDailyCap(ctx context.Context) float64 {
-	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusDailyCap, AffiliateSignupBonusDailyCapDefault)
-}
-
-func (s *SettingService) IsBalanceUsageGateEnabled(ctx context.Context) bool {
-	enabled, _, _ := s.GetBalanceUsageGateSettings(ctx)
-	return enabled
-}
-
-func (s *SettingService) GetBalanceUsageGateSettings(ctx context.Context) (enabled bool, minBalance, minRecharge float64) {
-	if s == nil || s.settingRepo == nil {
-		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
-	}
-	if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
-		if time.Now().UnixNano() < cached.expiresAt {
-			return cached.enabled, cached.minBalance, cached.minRecharge
-		}
-	}
-
-	type gateResult struct {
-		enabled     bool
-		minBalance  float64
-		minRecharge float64
-	}
-	result, err, _ := balanceUsageGateSF.Do("balance_usage_gate", func() (any, error) {
-		if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
-			if time.Now().UnixNano() < cached.expiresAt {
-				return gateResult{cached.enabled, cached.minBalance, cached.minRecharge}, nil
-			}
-		}
-
-		dbCtx, cancel := context.WithTimeout(context.Background(), balanceUsageGateDBTimeout)
-		defer cancel()
-		settings, err := s.settingRepo.GetMultiple(dbCtx, []string{
-			SettingKeyBalanceUsageGateEnabled,
-			SettingKeyBalanceUsageGateMinBalance,
-			SettingKeyBalanceUsageGateMinRecharge,
-		})
-		ttl := balanceUsageGateCacheTTL
-		if err != nil {
-			ttl = balanceUsageGateErrorTTL
-			settings = map[string]string{}
-		}
-		value := gateResult{
-			enabled:     settings[SettingKeyBalanceUsageGateEnabled] == "true",
-			minBalance:  parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault),
-			minRecharge: parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault),
-		}
-		balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{
-			enabled:     value.enabled,
-			minBalance:  value.minBalance,
-			minRecharge: value.minRecharge,
-			expiresAt:   time.Now().Add(ttl).UnixNano(),
-		})
-		return value, nil
-	})
-	if err != nil {
-		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
-	}
-	value, ok := result.(gateResult)
-	if !ok {
-		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
-	}
-	return value.enabled, value.minBalance, value.minRecharge
-}
-
-func (s *SettingService) GetBalanceUsageGateMinBalance(ctx context.Context) float64 {
-	_, minBalance, _ := s.GetBalanceUsageGateSettings(ctx)
-	return minBalance
-}
-
-func (s *SettingService) GetBalanceUsageGateMinRecharge(ctx context.Context) float64 {
-	_, _, minRecharge := s.GetBalanceUsageGateSettings(ctx)
-	return minRecharge
-}
-
-func (s *SettingService) getNonNegativeFloatSetting(ctx context.Context, key string, fallback float64) float64 {
-	if s == nil || s.settingRepo == nil {
-		return fallback
-	}
-	raw, err := s.settingRepo.GetValue(ctx, key)
-	if err != nil {
-		return fallback
-	}
-	return parseNonNegativeFloat(raw, fallback)
-}
-
 // IsPasswordResetEnabled 检查是否启用密码重置功能
 // 要求：必须同时开启邮件验证
 func (s *SettingService) IsPasswordResetEnabled(ctx context.Context) bool {
@@ -373,6 +182,53 @@ func (s *SettingService) IsTotpEnabled(ctx context.Context) bool {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyTotpEnabled)
 	if err != nil {
 		return false // 默认关闭
+	}
+	return value == "true"
+}
+
+// PasskeyEnabled reports the effective runtime switch. WebAuthn deployment
+// configuration remains the security boundary; the database setting can only
+// disable a valid configured relying party, never replace or weaken it.
+func (s *SettingService) PasskeyEnabled(ctx context.Context) (bool, error) {
+	if !s.passkeyConfigured() {
+		return false, nil
+	}
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyPasskeyEnabled)
+	if errors.Is(err, ErrSettingNotFound) {
+		return true, nil // configured deployments default to enabled until the admin persists the switch
+	}
+	if err != nil {
+		return false, fmt.Errorf("read passkey setting: %w", err)
+	}
+	return value == "true", nil
+}
+
+// PasskeyConfiguration returns non-secret relying-party configuration for the
+// admin status UI. Enabled configurations have already passed Config.Validate.
+func (s *SettingService) PasskeyConfiguration() (configured bool, rpID string, origins []string) {
+	if s == nil || s.cfg == nil {
+		return false, "", []string{}
+	}
+	origins = append([]string{}, s.cfg.WebAuthn.RPOrigins...)
+	return s.cfg.WebAuthn.Enabled,
+		strings.TrimSpace(s.cfg.WebAuthn.RPID),
+		origins
+}
+
+func (s *SettingService) passkeyConfigured() bool {
+	return s != nil && s.cfg != nil && s.cfg.WebAuthn.Enabled
+}
+
+// passkeySettingEnabled must stay ANDed with passkeyConfigured: a stale
+// "true" row after the WebAuthn config is removed would otherwise make the
+// admin update gate reject every settings save while the UI toggle is locked.
+func (s *SettingService) passkeySettingEnabled(settings map[string]string) bool {
+	if !s.passkeyConfigured() {
+		return false
+	}
+	value, ok := settings[SettingKeyPasskeyEnabled]
+	if !ok {
+		return true
 	}
 	return value == "true"
 }
@@ -712,7 +568,7 @@ func (s *SettingService) GetIdentityPatchPrompt(ctx context.Context) string {
 	return value
 }
 
-// GenerateAdminAPIKey 生成新的管理员 API Key
+// GenerateAdminAPIKey 轮换已存在的旧版管理员 API Key，不允许新建。
 func (s *SettingService) GenerateAdminAPIKey(ctx context.Context) (string, error) {
 	// 生成 32 字节随机数 = 64 位十六进制字符
 	bytes := make([]byte, 32)
@@ -722,9 +578,19 @@ func (s *SettingService) GenerateAdminAPIKey(ctx context.Context) (string, error
 
 	key := AdminAPIKeyPrefix + hex.EncodeToString(bytes)
 
-	// 存储到 settings 表
-	if err := s.settingRepo.Set(ctx, SettingKeyAdminAPIKey, key); err != nil {
+	// 旧版密钥只能轮换已有记录。使用条件 UPDATE，避免删除与轮换并发时被 upsert 重新创建。
+	repo, ok := s.settingRepo.(interface {
+		ReplaceExistingAdminAPIKey(context.Context, string) (bool, error)
+	})
+	if !ok {
+		return "", infraerrors.InternalServer("ADMIN_API_KEY_REPOSITORY_UNSUPPORTED", "旧版管理员密钥存储不支持原子轮换")
+	}
+	exists, err := repo.ReplaceExistingAdminAPIKey(ctx, key)
+	if err != nil {
 		return "", fmt.Errorf("save admin api key: %w", err)
+	}
+	if !exists {
+		return "", infraerrors.Forbidden("ADMIN_API_KEY_NOT_FOUND", "旧版密钥已停止新建，请创建权限管理密钥")
 	}
 
 	return key, nil
@@ -908,6 +774,40 @@ func (s *SettingService) SetRateLimit429CooldownSettings(ctx context.Context, se
 	}
 
 	return s.settingRepo.Set(ctx, SettingKeyRateLimit429CooldownSettings, string(data))
+}
+
+func (s *SettingService) GetOpenAIImagesOAuthUnavailableCooldownSettings(ctx context.Context) (*OpenAIImagesOAuthUnavailableCooldownSettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultOpenAIImagesOAuthUnavailableCooldownSettings(), nil
+		}
+		return nil, fmt.Errorf("get OpenAI images OAuth unavailable cooldown settings: %w", err)
+	}
+	if value == "" {
+		return DefaultOpenAIImagesOAuthUnavailableCooldownSettings(), nil
+	}
+
+	var settings OpenAIImagesOAuthUnavailableCooldownSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil ||
+		settings.CooldownMinutes <= 0 || settings.CooldownMinutes > openAIImagesOAuthUnavailableMaxCooldownMinutes {
+		return DefaultOpenAIImagesOAuthUnavailableCooldownSettings(), nil
+	}
+	return &settings, nil
+}
+
+func (s *SettingService) SetOpenAIImagesOAuthUnavailableCooldownSettings(ctx context.Context, settings *OpenAIImagesOAuthUnavailableCooldownSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+	if settings.CooldownMinutes <= 0 || settings.CooldownMinutes > openAIImagesOAuthUnavailableMaxCooldownMinutes {
+		return fmt.Errorf("cooldown_minutes must be between 1-%d", openAIImagesOAuthUnavailableMaxCooldownMinutes)
+	}
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal OpenAI images OAuth unavailable cooldown settings: %w", err)
+	}
+	return s.settingRepo.Set(ctx, SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings, string(data))
 }
 
 // GetStreamTimeoutSettings 获取流超时处理配置
@@ -1129,6 +1029,7 @@ func (s *SettingService) SetOpenAIFastPolicySettings(ctx context.Context, settin
 	}
 	validTiers := map[string]bool{
 		OpenAIFastTierAny: true, OpenAIFastTierPriority: true, OpenAIFastTierUltrafast: true, OpenAIFastTierFlex: true,
+		OpenAIFastTierMissing: true,
 	}
 
 	for i, rule := range settings.Rules {
@@ -1235,6 +1136,69 @@ func (s *SettingService) GetDefaultPlatformQuotas(ctx context.Context) (map[stri
 	return out, nil // 补齐全部允许 platform key，保持与旧实现一致的下游契约
 }
 
+// GetAccountSchedulingThresholds returns per-platform auto-pause thresholds (1..100).
+// 100 disables the threshold for that platform. Hot-path cached with singleflight.
+func (s *SettingService) GetAccountSchedulingThresholds(ctx context.Context) map[string]int {
+	if s == nil || s.settingRepo == nil {
+		return defaultAccountSchedulingThresholds()
+	}
+	if cached, ok := accountSchedulingThresholdsCache.Load().(*cachedAccountSchedulingThresholds); ok {
+		if cached != nil && len(cached.thresholds) > 0 && time.Now().UnixNano() < cached.expiresAt {
+			return cloneAccountSchedulingThresholds(cached.thresholds)
+		}
+	}
+
+	result, err, _ := accountSchedulingThresholdsSF.Do(SettingKeyAccountSchedulingThresholds, func() (any, error) {
+		if cached, ok := accountSchedulingThresholdsCache.Load().(*cachedAccountSchedulingThresholds); ok {
+			if cached != nil && len(cached.thresholds) > 0 && time.Now().UnixNano() < cached.expiresAt {
+				return cloneAccountSchedulingThresholds(cached.thresholds), nil
+			}
+		}
+
+		thresholds := defaultAccountSchedulingThresholds()
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), accountSchedulingThresholdsDBTimeout)
+		defer cancel()
+
+		raw, err := s.settingRepo.GetValue(dbCtx, SettingKeyAccountSchedulingThresholds)
+		if err != nil {
+			if errors.Is(err, ErrSettingNotFound) {
+				accountSchedulingThresholdsCache.Store(&cachedAccountSchedulingThresholds{
+					thresholds: cloneAccountSchedulingThresholds(thresholds),
+					expiresAt:  time.Now().Add(accountSchedulingThresholdsCacheTTL).UnixNano(),
+				})
+				return cloneAccountSchedulingThresholds(thresholds), nil
+			}
+			slog.Warn("failed to get account scheduling thresholds, falling back to defaults", "error", err)
+			accountSchedulingThresholdsCache.Store(&cachedAccountSchedulingThresholds{
+				thresholds: cloneAccountSchedulingThresholds(thresholds),
+				expiresAt:  time.Now().Add(accountSchedulingThresholdsErrorTTL).UnixNano(),
+			})
+			return cloneAccountSchedulingThresholds(thresholds), nil
+		}
+
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			if parsed, err := parseAccountSchedulingThresholdsSetting(trimmed); err != nil {
+				slog.Warn("failed to parse account scheduling thresholds, falling back to defaults", "error", err)
+			} else {
+				thresholds = parsed
+			}
+		}
+
+		accountSchedulingThresholdsCache.Store(&cachedAccountSchedulingThresholds{
+			thresholds: cloneAccountSchedulingThresholds(thresholds),
+			expiresAt:  time.Now().Add(accountSchedulingThresholdsCacheTTL).UnixNano(),
+		})
+		return cloneAccountSchedulingThresholds(thresholds), nil
+	})
+	if err != nil {
+		return defaultAccountSchedulingThresholds()
+	}
+	if thresholds, ok := result.(map[string]int); ok {
+		return cloneAccountSchedulingThresholds(thresholds)
+	}
+	return defaultAccountSchedulingThresholds()
+}
+
 // GetAuthSourcePlatformQuotas 读取指定 auth source 的 platform quota 覆盖（仅返回有配置的平台，override 语义）。
 func (s *SettingService) GetAuthSourcePlatformQuotas(ctx context.Context, source string) map[string]*DefaultPlatformQuotaSetting {
 	out := map[string]*DefaultPlatformQuotaSetting{}
@@ -1264,4 +1228,186 @@ func mergePlatformQuotaDefaults(dst, src *DefaultPlatformQuotaSetting) {
 	if src.MonthlyLimitUSD != nil {
 		dst.MonthlyLimitUSD = src.MonthlyLimitUSD
 	}
+}
+
+func (s *SettingService) GetAffiliateRebateTiers(ctx context.Context) []AffiliateRebateTier {
+	if s == nil || s.settingRepo == nil {
+		return defaultAffiliateRebateTiers()
+	}
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateTiers)
+	if err != nil {
+		return defaultAffiliateRebateTiers()
+	}
+	return parseAffiliateRebateTiers(raw)
+}
+
+func (s *SettingService) GetAffiliateSignupBonusAmount(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusAmount, AffiliateSignupBonusAmountDefault)
+}
+
+func (s *SettingService) IsAffiliateSignupBonusEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateSignupBonusEnabled)
+	if err != nil {
+		return AffiliateSignupBonusEnabledDefault
+	}
+	return value == "true"
+}
+
+func (s *SettingService) GetAffiliateSignupBonusTotalCap(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusTotalCap, AffiliateSignupBonusTotalCapDefault)
+}
+
+// GetSiteMessageSettings reads the site-message feature switch and limits.
+func (s *SettingService) GetSiteMessageSettings(ctx context.Context) (SiteMessageSettings, error) {
+	vals, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeySiteMessagesEnabled,
+		SettingKeySiteMessagesDailySendLimit,
+		SettingKeySiteMessagesRetentionDays,
+		SettingKeySiteMessagesDefaultRecipientEmail,
+	})
+	if err != nil {
+		return SiteMessageSettings{}, err
+	}
+
+	settings := SiteMessageSettings{
+		Enabled:               vals[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        SiteMessagesDailySendLimitDefault,
+		RetentionDays:         SiteMessagesRetentionDaysDefault,
+		DefaultRecipientEmail: strings.TrimSpace(vals[SettingKeySiteMessagesDefaultRecipientEmail]),
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesDailySendLimit]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.DailySendLimit = value
+		}
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesRetentionDays]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.RetentionDays = value
+		}
+	}
+	return normalizeSiteMessageSettings(settings), nil
+}
+
+// GetSubscriptionQuotaResetConfig returns the global subscription quota reset window.
+func (s *SettingService) GetSubscriptionQuotaResetConfig(ctx context.Context) SubscriptionQuotaResetConfig {
+	if s == nil || s.settingRepo == nil {
+		return SubscriptionQuotaResetConfig{}
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes,
+		SettingKeySubscriptionQuotaResetHour,
+	})
+	if err != nil {
+		slog.Warn("get subscription quota reset config failed", "error", err)
+		return SubscriptionQuotaResetConfig{}
+	}
+	return parseSubscriptionQuotaResetConfig(values)
+}
+
+// GetSubscriptionMultiplePurchasesEnabled reports whether users may hold multiple consumable subscriptions.
+func (s *SettingService) GetSubscriptionMultiplePurchasesEnabled(ctx context.Context) bool {
+	if s == nil || s.settingRepo == nil {
+		return false
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, []string{SettingKeySubscriptionMultiplePurchasesEnabled})
+	if err != nil {
+		slog.Warn("get subscription multiple purchases setting failed", "error", err)
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(values[SettingKeySubscriptionMultiplePurchasesEnabled]), "true")
+}
+
+func (s *SettingService) GetInvitationRegistrationMode(ctx context.Context) string {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyInvitationRegistrationMode)
+	if err != nil {
+		return InvitationRegistrationModeDefault
+	}
+	return normalizeInvitationRegistrationMode(value)
+}
+
+func (s *SettingService) GetAffiliateSignupBonusDailyCap(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusDailyCap, AffiliateSignupBonusDailyCapDefault)
+}
+
+func (s *SettingService) IsBalanceUsageGateEnabled(ctx context.Context) bool {
+	enabled, _, _ := s.GetBalanceUsageGateSettings(ctx)
+	return enabled
+}
+
+func (s *SettingService) GetBalanceUsageGateSettings(ctx context.Context) (enabled bool, minBalance, minRecharge float64) {
+	if s == nil || s.settingRepo == nil {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.enabled, cached.minBalance, cached.minRecharge
+		}
+	}
+
+	type gateResult struct {
+		enabled     bool
+		minBalance  float64
+		minRecharge float64
+	}
+	result, err, _ := balanceUsageGateSF.Do("balance_usage_gate", func() (any, error) {
+		if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return gateResult{cached.enabled, cached.minBalance, cached.minRecharge}, nil
+			}
+		}
+
+		dbCtx, cancel := context.WithTimeout(context.Background(), balanceUsageGateDBTimeout)
+		defer cancel()
+		settings, err := s.settingRepo.GetMultiple(dbCtx, []string{
+			SettingKeyBalanceUsageGateEnabled,
+			SettingKeyBalanceUsageGateMinBalance,
+			SettingKeyBalanceUsageGateMinRecharge,
+		})
+		ttl := balanceUsageGateCacheTTL
+		if err != nil {
+			ttl = balanceUsageGateErrorTTL
+			settings = map[string]string{}
+		}
+		value := gateResult{
+			enabled:     settings[SettingKeyBalanceUsageGateEnabled] == "true",
+			minBalance:  parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault),
+			minRecharge: parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault),
+		}
+		balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{
+			enabled:     value.enabled,
+			minBalance:  value.minBalance,
+			minRecharge: value.minRecharge,
+			expiresAt:   time.Now().Add(ttl).UnixNano(),
+		})
+		return value, nil
+	})
+	if err != nil {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	value, ok := result.(gateResult)
+	if !ok {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	return value.enabled, value.minBalance, value.minRecharge
+}
+
+func (s *SettingService) GetBalanceUsageGateMinBalance(ctx context.Context) float64 {
+	_, minBalance, _ := s.GetBalanceUsageGateSettings(ctx)
+	return minBalance
+}
+
+func (s *SettingService) GetBalanceUsageGateMinRecharge(ctx context.Context) float64 {
+	_, _, minRecharge := s.GetBalanceUsageGateSettings(ctx)
+	return minRecharge
+}
+
+func (s *SettingService) getNonNegativeFloatSetting(ctx context.Context, key string, fallback float64) float64 {
+	if s == nil || s.settingRepo == nil {
+		return fallback
+	}
+	raw, err := s.settingRepo.GetValue(ctx, key)
+	if err != nil {
+		return fallback
+	}
+	return parseNonNegativeFloat(raw, fallback)
 }

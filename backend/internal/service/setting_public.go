@@ -587,6 +587,8 @@ type PublicSettingsInjectionPayload struct {
 	UserSubscriptionsVisible              bool                     `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               string                   `json:"purchase_subscription_url"`
+	SubscriptionEnabled                   bool                     `json:"subscription_enabled"`
+	PaymentBalanceDisabled                bool                     `json:"payment_balance_disabled"`
 	TableDefaultPageSize                  int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                  []int                    `json:"table_page_size_options"`
 	CustomMenuItems                       json.RawMessage          `json:"custom_menu_items"`
@@ -678,6 +680,8 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		UserSubscriptionsVisible:              settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:           settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
+		SubscriptionEnabled:                   settings.SubscriptionEnabled,
+		PaymentBalanceDisabled:                settings.PaymentBalanceDisabled,
 		TableDefaultPageSize:                  settings.TableDefaultPageSize,
 		TablePageSizeOptions:                  settings.TablePageSizeOptions,
 		CustomMenuItems:                       filterUserVisibleMenuItems(settings.CustomMenuItems),

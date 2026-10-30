@@ -141,7 +141,6 @@ func isOpenAIPersonalAccessTokenAuthMode(value string) bool {
 	}
 }
 
-
 // TempUnschedulableRule.Scope 的取值：命中后隔离的粒度。
 const (
 	TempUnschedScopeAccount = "account"
@@ -1508,13 +1507,13 @@ func (a *Account) IsOpenAIApiKey() bool {
 }
 
 // GetOpenAIBaseURL 解析 OpenAI 协议族账号的上游 base_url。
-// 适用 openai 与国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）；grok 走 GetGrokBaseURL，
-// 此处对 grok 返回 "" 以保持原有行为。
+// 适用 openai 与多协议 API Key 供应商（国产厂商、OpenCode、Command Code）；
+// grok 走 GetGrokBaseURL，此处对 grok 返回 "" 以保持原有行为。
 func (a *Account) GetOpenAIBaseURL() string {
-	if !a.IsOpenAI() && !a.IsCNProvider() {
+	if !a.IsOpenAI() && !a.IsMultiProtocolAPIKey() {
 		return ""
 	}
-	if a.IsCNProvider() && a.IsAdaptiveAPIProtocol() {
+	if a.IsMultiProtocolAPIKey() && a.IsAdaptiveAPIProtocol() {
 		if baseURLs, ok := a.Credentials["api_base_urls"].(map[string]any); ok {
 			if baseURL, ok := baseURLs[APIProtocolChatCompletions].(string); ok && strings.TrimSpace(baseURL) != "" {
 				return strings.TrimSpace(baseURL)
@@ -1526,23 +1525,11 @@ func (a *Account) GetOpenAIBaseURL() string {
 			return baseURL
 		}
 	}
-	// 平台默认 base_url：CN 供应商按 account_mode 选择 payg / coding 默认值。
-	switch a.Platform {
-	case PlatformKimi:
-		if a.GetAccountMode() == AccountModeCoding {
-			return DefaultKimiCodingBaseURL
-		}
-		return DefaultKimiPayGBaseURL
-	case PlatformZhipu:
-		if a.GetAccountMode() == AccountModeCoding {
-			return DefaultZhipuCodingBaseURL
-		}
-		return DefaultZhipuPayGBaseURL
-	case PlatformDeepseek:
-		return DefaultDeepseekBaseURL
-	default:
-		return "https://api.openai.com"
+	// 平台默认 base_url：多协议供应商按 account_mode 查 provider profile。
+	if baseURL := a.defaultProviderBaseURL(APIProtocolChatCompletions); baseURL != "" {
+		return baseURL
 	}
+	return "https://api.openai.com"
 }
 
 // GetAccountMode 返回国产供应商账号的接入模式（payg / coding）；非国产供应商或未设置时

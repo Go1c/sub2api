@@ -8,6 +8,9 @@ import (
 )
 
 func NormalizeOpenAICompatRequestedModel(model string) string {
+	if openai.IsGPT61TerraModelSpelling(model) {
+		return "gpt-6.1-terra"
+	}
 	if openai.IsGPT61SolModelSpelling(model) {
 		return "gpt-6.1-sol"
 	}
@@ -24,10 +27,11 @@ func NormalizeOpenAICompatRequestedModel(model string) string {
 }
 
 func applyOpenAICompatModelNormalization(req *apicompat.AnthropicRequest) {
-	if req != nil && openai.IsGPT61SolModelSpelling(req.Model) {
-		canonical := canonicalizeOpenAIModelAliasSpelling(req.Model)
-		if effort, ok := strings.CutPrefix(canonical, "gpt-6.1-sol-"); ok && effort != "openai-compact" {
-			req.Model = "gpt-6.1-sol"
+	if req != nil && (openai.IsGPT61SolModelSpelling(req.Model) || openai.IsGPT61TerraModelSpelling(req.Model)) {
+		canonical := openai.CanonicalizeOpenAIModelAliasSpelling(req.Model)
+		baseModel := NormalizeOpenAICompatRequestedModel(req.Model)
+		if effort, ok := strings.CutPrefix(canonical, baseModel+"-"); ok && effort != "openai-compact" {
+			req.Model = baseModel
 			if req.OutputConfig == nil {
 				req.OutputConfig = &apicompat.AnthropicOutputConfig{}
 			}
@@ -122,9 +126,12 @@ func openAIReasoningEffortToClaudeOutputEffort(effort string) string {
 
 // openAICompatAnthropicReasoningEffort resolves the effort emitted by the
 // Anthropic bridge after the final upstream model is known. Anthropic's max is
-// normally translated to OpenAI xhigh, but GPT-5.6 / GPT-6 Sol/Luna accept the
-// original max value on Responses and Chat Completions.
+// normally translated to OpenAI xhigh, but GPT-5.6 accepts the original max
+// value on Responses and Chat Completions.
 func openAICompatAnthropicReasoningEffort(req *apicompat.AnthropicRequest, upstreamModel, convertedEffort string) string {
+	if convertedEffort == "none" {
+		return convertedEffort
+	}
 	if req == nil || req.OutputConfig == nil || !strings.EqualFold(strings.TrimSpace(req.OutputConfig.Effort), "max") {
 		return convertedEffort
 	}

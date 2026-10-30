@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -69,20 +70,28 @@ func redactedGrokBaseURLValidator(validator xai.BaseURLValidator) xai.BaseURLVal
 	}
 }
 
-func buildGrokResponsesURL(account *Account, cfg *config.Config) (string, error) {
+func buildGrokResponsesURL(account *Account, cfg *config.Config, settings ...*SettingService) (string, error) {
 	validator, err := grokBaseURLValidator(account, cfg)
 	if err != nil {
 		return "", err
 	}
-	return xai.BuildResponsesURLWithValidator(account.GetGrokBaseURL(), validator)
+	baseURL := account.GetGrokBaseURL()
+	if len(settings) > 0 && settings[0] != nil {
+		baseURL = settings[0].ResolveGrokBaseURL(context.Background(), account)
+	}
+	return xai.BuildResponsesURLWithValidator(baseURL, validator)
 }
 
-func buildGrokChatCompletionsURL(account *Account, cfg *config.Config) (string, error) {
+func buildGrokChatCompletionsURL(account *Account, cfg *config.Config, settings ...*SettingService) (string, error) {
 	validator, err := grokBaseURLValidator(account, cfg)
 	if err != nil {
 		return "", err
 	}
-	return xai.BuildChatCompletionsURLWithValidator(account.GetGrokBaseURL(), validator)
+	baseURL := account.GetGrokBaseURL()
+	if len(settings) > 0 && settings[0] != nil {
+		baseURL = settings[0].ResolveGrokBaseURL(context.Background(), account)
+	}
+	return xai.BuildChatCompletionsURLWithValidator(baseURL, validator)
 }
 
 // buildGrokBillingURL 解析 billing 探测端点：跟随账号的转发 base_url，
@@ -92,7 +101,14 @@ func buildGrokBillingURL(account *Account, cfg *config.Config, weekly bool) (str
 	if err != nil {
 		return "", err
 	}
-	return xai.BuildBillingURLWithValidator(account.GetGrokBaseURL(), weekly, validator)
+	baseURL := account.GetGrokBaseURL()
+	// Official public/regional API hosts do not expose Grok Build billing.
+	// Keep custom relays on their configured host because they may proxy the CLI
+	// billing path alongside inference.
+	if xai.IsOfficialBaseURL(baseURL) && !isGrokCLIProxyBaseURL(baseURL) {
+		baseURL = xai.DefaultCLIBaseURL
+	}
+	return xai.BuildBillingURLWithValidator(baseURL, weekly, validator)
 }
 
 func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaEndpoint, requestID string) (string, error) {
@@ -107,9 +123,6 @@ func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaE
 	case GrokMediaEndpointImagesEdits:
 		return xai.BuildImagesEditsURLWithValidator(baseURL, validator)
 	case GrokMediaEndpointVideosGenerations:
-		if account != nil && account.GrokVideoCompatModeEnabled() {
-			return xai.BuildVideosURLWithValidator(baseURL, validator)
-		}
 		return xai.BuildVideosGenerationsURLWithValidator(baseURL, validator)
 	case GrokMediaEndpointVideosEdits:
 		return xai.BuildVideosEditsURLWithValidator(baseURL, validator)
@@ -128,6 +141,10 @@ func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaE
 	}
 }
 
+// buildGrokVoiceURL returns the official xAI Voice API endpoint.
+// Voice HTTP (/tts, /stt, /custom-voices) and WS (/realtime) are only exposed
+// by api.x.ai — the CLI chat proxy does not implement them. When the account
+// base_url points at the CLI proxy (or is empty), fall back to DefaultBaseURL.
 func buildGrokVoiceURL(account *Account, cfg *config.Config, endpoint string) (string, error) {
 	validator, err := grokBaseURLValidator(account, cfg)
 	if err != nil {
@@ -137,7 +154,7 @@ func buildGrokVoiceURL(account *Account, cfg *config.Config, endpoint string) (s
 	if account != nil {
 		base = account.GetGrokMediaBaseURL()
 	}
-	if strings.TrimSpace(base) == "" || isGrokCLIProxyTarget(base) {
+	if strings.TrimSpace(base) == "" || isGrokCLIProxyBaseURL(base) {
 		base = xai.DefaultBaseURL
 	}
 	validated, err := validator(base)
@@ -157,4 +174,8 @@ func buildGrokVoiceURL(account *Account, cfg *config.Config, endpoint string) (s
 		encoded = append(encoded, url.PathEscape(part))
 	}
 	return strings.TrimRight(validated, "/") + "/" + strings.Join(encoded, "/"), nil
+}
+
+func isGrokCLIProxyBaseURL(raw string) bool {
+	return isGrokCLIProxyTarget(raw)
 }

@@ -42,6 +42,16 @@ func EffortLevelsForModel(model string) []string {
 	return nil
 }
 
+// IsOpus55 identifies the fixed Opus 5.5 ID after provider/local suffix normalization.
+func IsOpus55(model string) bool {
+	return normalizeEffortModelID(model) == "claude-opus-5-5"
+}
+
+// IsSonnet55 identifies the fixed Sonnet 5.5 ID after provider/local suffix normalization.
+func IsSonnet55(model string) bool {
+	return normalizeEffortModelID(model) == "claude-sonnet-5-5"
+}
+
 // IsHaiku55 identifies the fixed Haiku 5.5 ID after provider/local suffix normalization.
 func IsHaiku55(model string) bool {
 	return normalizeEffortModelID(model) == "claude-haiku-5-5"

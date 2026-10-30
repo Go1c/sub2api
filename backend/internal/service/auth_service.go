@@ -416,7 +416,6 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	return token, user, nil
 }
 
-
 // SendVerifyCodeResult 发送验证码返回结果
 type SendVerifyCodeResult struct {
 	Countdown int `json:"countdown"` // 倒计时秒数
@@ -2075,4 +2074,25 @@ func (s *AuthService) snapshotPlatformQuotaDefaults(ctx context.Context, userID 
 		return nil // fail-open：返回 nil，让调用方继续
 	}
 	return nil
+}
+
+func invitationRegistrationModeAllowsRedeemCode(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeRedeemCode || mode == InvitationRegistrationModeBoth
+}
+
+func invitationRegistrationModeAllowsAffiliateLink(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeAffiliateLink || mode == InvitationRegistrationModeBoth
+}
+
+func normalizeInvitationRegistrationMode(value string) string {
+	switch strings.TrimSpace(value) {
+	case InvitationRegistrationModeAffiliateLink:
+		return InvitationRegistrationModeAffiliateLink
+	case InvitationRegistrationModeBoth:
+		return InvitationRegistrationModeBoth
+	default:
+		return InvitationRegistrationModeDefault
+	}
 }

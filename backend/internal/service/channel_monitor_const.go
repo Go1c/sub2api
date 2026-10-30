@@ -220,4 +220,6 @@ var (
 		"CHANNEL_MONITOR_MODE_MISMATCH",
 		"channel monitor mode does not allow this operation",
 	)
+
+	providerZhipuPath = "/api/paas/v4/chat/completions"
 )

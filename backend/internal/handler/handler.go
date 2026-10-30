@@ -12,9 +12,6 @@ type AdminHandlers struct {
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler
-	SiteMessage            *admin.SiteMessageHandler
-	Lottery                *admin.LotteryHandler
-	Invoice                *admin.InvoiceHandler
 	DataManagement         *admin.DataManagementHandler
 	Backup                 *admin.BackupHandler
 	OAuth                  *admin.OAuthHandler
@@ -24,14 +21,12 @@ type AdminHandlers struct {
 	GrokOAuth              *admin.GrokOAuthHandler
 	CNProvider             *admin.CNProviderHandler
 	Proxy                  *admin.ProxyHandler
-	ProxyIPGroup           *admin.ProxyIPGroupHandler
 	Redeem                 *admin.RedeemHandler
 	Promo                  *admin.PromoHandler
 	Setting                *admin.SettingHandler
 	Ops                    *admin.OpsHandler
 	System                 *admin.SystemHandler
 	Subscription           *admin.SubscriptionHandler
-	SubscriptionWasteStats *admin.SubscriptionWasteStatsHandler
 	Usage                  *admin.UsageHandler
 	UserAttribute          *admin.UserAttributeHandler
 	ErrorPassthrough       *admin.ErrorPassthroughHandler
@@ -42,13 +37,18 @@ type AdminHandlers struct {
 	Channel                *admin.ChannelHandler
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
-	ChannelIQ              *admin.ChannelIQHandler
 	ContentModeration      *admin.ContentModerationHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
+	SiteMessage            *admin.SiteMessageHandler
+	Lottery                *admin.LotteryHandler
+	Invoice                *admin.InvoiceHandler
+	ProxyIPGroup           *admin.ProxyIPGroupHandler
+	SubscriptionWasteStats *admin.SubscriptionWasteStatsHandler
+	ChannelIQ              *admin.ChannelIQHandler
 	BalanceClient          *admin.BalanceClientHandler
 }
 
@@ -61,9 +61,6 @@ type Handlers struct {
 	Redeem           *RedeemHandler
 	Subscription     *SubscriptionHandler
 	Announcement     *AnnouncementHandler
-	SiteMessage      *SiteMessageHandler
-	Lottery          *LotteryHandler
-	Invoice          *InvoiceHandler
 	ChannelMonitor   *ChannelMonitorUserHandler
 	ChannelMonitorV2 *ChannelMonitorV2Handler
 	Admin            *AdminHandlers
@@ -71,17 +68,20 @@ type Handlers struct {
 	OpenAIGateway    *OpenAIGatewayHandler
 	Setting          *SettingHandler
 	Totp             *TotpHandler
-	UserAccessToken  *UserAccessTokenHandler
+	Passkey          *PasskeyHandler
 	Payment          *PaymentHandler
 	PaymentWebhook   *PaymentWebhookHandler
 	AvailableChannel *AvailableChannelHandler
-	ModelMarket      *ModelMarketHandler
-	BatchImage       *BatchImageHandler
+	ModelPlaza       *ModelPlazaHandler
 	AsyncImage       *AsyncImageHandler
+	BatchImage       *BatchImageHandler
+	SiteMessage      *SiteMessageHandler
+	Lottery          *LotteryHandler
+	Invoice          *InvoiceHandler
+	UserAccessToken  *UserAccessTokenHandler
+	ModelMarket      *ModelMarketHandler
 	DesktopHandoff   *DesktopPaymentHandoffHandler
 	BalanceWallet    *BalanceWalletHandler
-	Passkey          *PasskeyHandler
-	ModelPlaza       *ModelPlazaHandler
 }
 
 // BuildInfo contains build-time information

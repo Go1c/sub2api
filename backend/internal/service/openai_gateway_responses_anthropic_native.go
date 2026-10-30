@@ -502,5 +502,3 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 
 	return resultWithUsage(), nil
 }
-
-

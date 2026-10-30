@@ -1,29 +1,6 @@
 # Model Pricing Data
 
-This directory contains a local copy of the mirrored model pricing data as a fallback mechanism, plus an optional **local overrides** file for platform policy pricing.
-
-## Local overrides (`pricing_overrides.json`)
-
-Use this when you need to pin specific model base rates while still following the remote price table for everything else.
-
-Priority (highest first):
-
-1. Channel / group custom pricing (if configured)
-2. **`pricing.overrides_file`** (this file by default)
-3. Remote `model-price-repo` / local cache (`data/model_pricing.json`)
-4. `fallback_file` (this directory's full JSON, only fills missing models)
-5. Hardcoded Go fallbacks
-
-Only models listed in `pricing_overrides.json` are overridden. Unlisted models keep remote auto-updates.
-
-Configure path via:
-
-```yaml
-pricing:
-  overrides_file: "./resources/model-pricing/pricing_overrides.json"
-```
-
-Default ships with `gpt-5.6-luna` pinned to pre-2026-07-31 rates, and Claude Fable 5 / 5.1 pinned to Anthropic official cache rates (`$12.50` 5m write / `$20` 1h write; Fable 5.1 cache read `$0.25`). Edit or empty the file to change policy; restart (or wait for next pricing reload after process restart) to apply.
+This directory contains a local copy of the mirrored model pricing data as a fallback mechanism.
 
 ## Source
 The original file is maintained by the LiteLLM project and mirrored into the `price-mirror` branch of this repository via GitHub Actions:

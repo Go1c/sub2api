@@ -16,10 +16,10 @@ import (
 
 const (
 	EndpointMessages             = "/v1/messages"
+	EndpointSystemOne            = "/v1/systemone"
 	EndpointChatCompletions      = "/v1/chat/completions"
 	EndpointEmbeddings           = "/v1/embeddings"
 	EndpointAlphaSearch          = "/v1/alpha/search"
-	EndpointXSearch              = "/v1/x_search"
 	EndpointResponses            = "/v1/responses"
 	EndpointResponsesCompact     = "/v1/responses/compact"
 	EndpointResponsesInputTokens = "/v1/responses/input_tokens"
@@ -27,11 +27,12 @@ const (
 	EndpointImagesEdits          = "/v1/images/edits"
 	EndpointImageTasks           = "/v1/images/tasks"
 	EndpointVideosGenerations    = "/v1/videos/generations"
+	EndpointVideosEdits          = "/v1/videos/edits"
+	EndpointVideosExtensions     = "/v1/videos/extensions"
 	EndpointVideos               = "/v1/videos"
-	EndpointGeminiModels         = "/v1beta/models"
-	EndpointSystemOne            = "/v1/systemone"
-	EndpointGeminiCachedContents = "/v1beta/cachedContents"
 	EndpointSeedanceTasks        = "/api/v3/contents/generations/tasks"
+	EndpointGeminiModels         = "/v1beta/models"
+	EndpointGeminiCachedContents = "/v1beta/cachedContents"
 )
 
 const EndpointAntigravityGenerateContent = "/v1internal:streamGenerateContent"
@@ -53,6 +54,7 @@ const (
 //	"/v1/chat/completions"       → "/v1/chat/completions"
 //	"/openai/v1/responses/foo"   → "/v1/responses"
 //	"/v1beta/models/gemini:gen"  → "/v1beta/models"
+//	"/v1beta/cachedContents/abc" → "/v1beta/cachedContents"
 //
 // The OpenAI Responses API is also exposed via a few bare/alias
 // routes that do not carry a "/v1/" prefix (top-level bare route and
@@ -83,14 +85,14 @@ const (
 func NormalizeInboundEndpoint(path string) string {
 	path = strings.TrimSpace(path)
 	switch {
+	case strings.Contains(path, "/contents/generations/tasks"):
+		return EndpointSeedanceTasks
 	case strings.Contains(path, EndpointResponsesInputTokens) || isResponsesInputTokensAliasPath(path):
 		return EndpointResponsesInputTokens
 	case strings.Contains(path, EndpointEmbeddings):
 		return EndpointEmbeddings
 	case strings.Contains(path, EndpointAlphaSearch) || isBareOrSubpathOf(strings.TrimRight(path, "/"), "/alpha/search") || isBareOrSubpathOf(strings.TrimRight(path, "/"), "/backend-api/codex/alpha/search"):
 		return EndpointAlphaSearch
-	case strings.Contains(path, EndpointXSearch) || isBareOrSubpathOf(strings.TrimRight(path, "/"), "/x_search"):
-		return EndpointXSearch
 	case strings.Contains(path, EndpointChatCompletions):
 		return EndpointChatCompletions
 	case strings.Contains(path, EndpointMessages):
@@ -105,6 +107,10 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointImageTasks
 	case strings.Contains(path, EndpointVideosGenerations) || strings.Contains(path, "/videos/generations"):
 		return EndpointVideosGenerations
+	case strings.Contains(path, EndpointVideosEdits) || strings.Contains(path, "/videos/edits"):
+		return EndpointVideosEdits
+	case strings.Contains(path, EndpointVideosExtensions) || strings.Contains(path, "/videos/extensions"):
+		return EndpointVideosExtensions
 	case strings.Contains(path, EndpointVideos) || strings.Contains(path, "/videos/"):
 		return EndpointVideos
 	case strings.Contains(path, EndpointResponsesCompact) || isResponsesCompactAliasPath(path):
@@ -201,7 +207,7 @@ func DeriveUpstreamEndpoint(inbound, rawRequestPath, platform string) string {
 
 	switch platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
-		if inbound == EndpointEmbeddings || inbound == EndpointAlphaSearch || inbound == EndpointXSearch || inbound == EndpointResponsesInputTokens || inbound == EndpointImagesGenerations || inbound == EndpointImagesEdits || inbound == EndpointVideosGenerations || inbound == EndpointVideos {
+		if inbound == EndpointEmbeddings || inbound == EndpointAlphaSearch || inbound == EndpointResponsesInputTokens || inbound == EndpointImagesGenerations || inbound == EndpointImagesEdits || inbound == EndpointVideosGenerations || inbound == EndpointVideosEdits || inbound == EndpointVideosExtensions || inbound == EndpointVideos {
 			return inbound
 		}
 		// OpenAI forwards everything to the Responses API.

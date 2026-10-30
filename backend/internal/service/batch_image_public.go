@@ -57,6 +57,7 @@ type BatchImageSubmitRequest struct {
 	AspectRatio      string                 `json:"aspect_ratio"`
 	ImageSize        string                 `json:"image_size"`
 	Metadata         map[string]string      `json:"metadata"`
+	SessionID        *string                `json:"session_id,omitempty"`
 }
 
 type BatchImageSubmitItem struct {

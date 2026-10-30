@@ -18,9 +18,6 @@ func (*paymentFulfillmentAffiliateRepoStub) BindInviterWithSignupBonus(context.C
 	return nil, nil
 }
 
-func (*emailCacheStub) ConsumePasswordResetToken(context.Context, string, string) (bool, error) {
-	return false, nil
-}
 
 func (*availableGroupModelGroupRepo) DeleteCascadeIfEmpty(context.Context, int64) ([]int64, error) {
 	return nil, nil
@@ -216,13 +213,7 @@ func (*contentModerationTestUserRepo) CreateWithEmailAliasGuard(context.Context,
 	return nil
 }
 
-func (*emailCacheStub) IncrVerificationCodeAttempts(ctx context.Context, email string) (int, error) {
-	panic("test stub")
-}
 
-func (*emailCacheStub) IncrNotifyVerifyCodeAttempts(ctx context.Context, email string) (int, error) {
-	panic("test stub")
-}
 
 func (*opsRepoMock) InsertRetryAttempt(ctx context.Context, input *OpsInsertRetryAttemptInput) (int64, error) {
 	panic("test stub")

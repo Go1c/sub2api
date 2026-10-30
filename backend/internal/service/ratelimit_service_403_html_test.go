@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const openAI403Cloudflare1010Body = "<html><body>error code: 1010</body></html>"
+
 // countingOpenAI403CounterCache 在既有桩的基础上记录递增次数。
 // HTML 403 不仅不能处罚账号，连计数都不能加——否则后续真实的账号级 403
 // 会踩着这些"白涨"的计数提前触发永久禁用。

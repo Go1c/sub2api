@@ -80,7 +80,7 @@ func TestOpenAIUpstreamAccessStateClassification(t *testing.T) {
 			require.True(t, (&OpenAIGatewayService{}).shouldFailoverOpenAIUpstreamResponse(newOpenAIUpstreamErrorTestAccount(), http.StatusForbidden, "", body))
 			require.True(t, shouldFailoverOpenAIPassthroughResponse(&Account{Type: AccountTypeOAuth}, http.StatusForbidden, body))
 
-			err := newOpenAIUpstreamFailoverError(context.Background(), http.StatusForbidden, nil, body, "", true)
+			err := newOpenAIUpstreamFailoverError(http.StatusForbidden, nil, body, "", true)
 			require.True(t, err.IsCredentialFailure())
 			require.Equal(t, GatewayFailureScopeAccount, err.Scope)
 			require.Equal(t, OpenAIUpstreamAccessStateReason, err.Reason)
@@ -108,7 +108,7 @@ func TestOpenAIHTTPAccessStateDoesNotTrustBadRequestMessage(t *testing.T) {
 	require.False(t, svc.shouldFailoverOpenAIUpstreamResponse(newOpenAIUpstreamErrorTestAccount(), http.StatusBadRequest, "", body))
 	require.False(t, shouldFailoverOpenAIPassthroughResponse(&Account{Type: AccountTypeOAuth}, http.StatusBadRequest, body))
 
-	err := newOpenAIUpstreamFailoverError(context.Background(), http.StatusBadRequest, nil, body, "", false)
+	err := newOpenAIUpstreamFailoverError(http.StatusBadRequest, nil, body, "", false)
 	require.False(t, err.IsCredentialFailure())
 }
 
@@ -196,7 +196,7 @@ func TestOpenAICyberPolicyWrapped5xxNeverFailsOver(t *testing.T) {
 func TestOpenAICapacityFailoverCarriesSafeTerminalResponse(t *testing.T) {
 	message := "Our servers are currently overloaded. Please try again later."
 	body := []byte(`{"error":{"code":"server_is_overloaded","message":"` + message + `"}}`)
-	err := newOpenAIUpstreamFailoverError(context.Background(), http.StatusBadRequest, nil, body, message, false)
+	err := newOpenAIUpstreamFailoverError(http.StatusBadRequest, nil, body, message, false)
 
 	require.True(t, err.IsOpenAICapacityShed())
 	require.Equal(t, http.StatusServiceUnavailable, err.ClientStatusCode)

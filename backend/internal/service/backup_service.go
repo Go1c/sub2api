@@ -49,13 +49,13 @@ const (
 )
 
 var (
-	ErrBackupS3NotConfigured = infraerrors.BadRequest("BACKUP_S3_NOT_CONFIGURED", "backup S3 storage is not configured")
-	ErrBackupNotFound        = infraerrors.NotFound("BACKUP_NOT_FOUND", "backup record not found")
-	ErrBackupInProgress      = infraerrors.Conflict("BACKUP_IN_PROGRESS", "a backup is already in progress")
-	ErrRestoreInProgress     = infraerrors.Conflict("RESTORE_IN_PROGRESS", "a restore is already in progress")
-	ErrBackupRecordsCorrupt    = infraerrors.InternalServer("BACKUP_RECORDS_CORRUPT", "backup records data is corrupted")
+	ErrBackupS3NotConfigured  = infraerrors.BadRequest("BACKUP_S3_NOT_CONFIGURED", "backup S3 storage is not configured")
+	ErrBackupNotFound         = infraerrors.NotFound("BACKUP_NOT_FOUND", "backup record not found")
+	ErrBackupInProgress       = infraerrors.Conflict("BACKUP_IN_PROGRESS", "a backup is already in progress")
+	ErrRestoreInProgress      = infraerrors.Conflict("RESTORE_IN_PROGRESS", "a restore is already in progress")
+	ErrBackupRecordsCorrupt   = infraerrors.InternalServer("BACKUP_RECORDS_CORRUPT", "backup records data is corrupted")
 	ErrBackupArchiveProtected = infraerrors.Conflict("BACKUP_ARCHIVE_PROTECTED", "explicit confirmation is required to delete an archived backup")
-	ErrBackupS3ConfigCorrupt = infraerrors.InternalServer("BACKUP_S3_CONFIG_CORRUPT", "backup S3 config data is corrupted")
+	ErrBackupS3ConfigCorrupt  = infraerrors.InternalServer("BACKUP_S3_CONFIG_CORRUPT", "backup S3 config data is corrupted")
 
 	// ErrSecretEncryptionKeyNotConfigured is returned when an S3 SecretAccessKey
 	// would be encrypted with an auto-generated (ephemeral) key. That key is

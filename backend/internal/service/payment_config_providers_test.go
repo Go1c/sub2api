@@ -798,3 +798,8 @@ func validWxpayProviderConfigWithJSAPIAppID(t *testing.T) map[string]string {
 	cfg["mpAppId"] = "wx-mp-app-test"
 	return cfg
 }
+
+// validAirwallexProviderConfig from internal/service/payment_config_providers_test.go
+func validAirwallexProviderConfig(t *testing.T) map[string]string {
+	panic("compile stub")
+}

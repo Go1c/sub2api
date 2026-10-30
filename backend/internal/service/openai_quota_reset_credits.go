@@ -35,6 +35,7 @@ type openAIRateLimitResetCreditDetails struct {
 	AvailableCreditCount int
 	CreditListPresent    bool
 	Credits              []OpenAIRateLimitResetCreditDetail
+	AutoResetCandidates  []openAIAutoResetCreditCandidate
 }
 
 func parseOpenAIRateLimitResetCreditDetails(body []byte) (openAIRateLimitResetCreditDetails, error) {

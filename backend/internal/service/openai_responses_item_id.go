@@ -53,7 +53,6 @@ func shouldStripOpenAIResponsesInputItemID(itemType, id string) bool {
 	return id == "" || len(id) > 64 || !strings.HasPrefix(id, prefix)
 }
 
-
 func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 	input := parseRawJSONView(body).Get("input")
 	if !input.IsArray() {

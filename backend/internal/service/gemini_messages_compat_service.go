@@ -35,9 +35,10 @@ import (
 const geminiStickySessionTTL = time.Hour
 
 const (
-	geminiMaxRetries     = 5
-	geminiRetryBaseDelay = 1 * time.Second
-	geminiRetryMaxDelay  = 16 * time.Second
+	// 未注入配置时的同账号重试次数，与 gateway.max_same_account_retries_gemini 默认值一致
+	geminiDefaultSameAccountRetries = 4
+	geminiRetryBaseDelay            = 1 * time.Second
+	geminiRetryMaxDelay             = 16 * time.Second
 )
 
 const (
@@ -531,6 +532,7 @@ func (s *GeminiMessagesCompatService) HasAntigravityAccounts(ctx context.Context
 
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error) {
 	beginUpstreamResponseModelObservation(c)
+	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
 
 	var req struct {
@@ -551,10 +553,6 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	geminiReq, err := convertClaudeMessagesToGeminiGenerateContent(body)
-	if err != nil {
-		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-	}
-	geminiReq, err = enableMixedGeminiToolInvocations(geminiReq)
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
@@ -717,8 +715,13 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	var resp *http.Response
+	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
+	var checkedPolicy *ErrorPolicyResult
 	signatureRetryStage := 0
-	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
+	maxAttempts := s.geminiMaxAttemptsPerAccount()
+	// 签名降级重发不占用同号重试次数：每进入一个降级阶段，循环上限随之顺延一次。
+	for attempt := 1; attempt <= maxAttempts+signatureRetryStage; attempt++ {
+		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -776,30 +779,28 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 				var strippedClaudeBody []byte
 				stageName := ""
+				// 降级函数会把思考块改写成正文，Gemini 侧先删掉历史思考块再降级。
+				retrySourceBody := dropClaudeHistoryThinkingBlocks(originalClaudeBody)
 				// 路径说明：本处上游是 Gemini，但被剥离的 body 是 Anthropic 格式。传 originalModel
 				// （客户端原 Anthropic model）而非 mappedModel（上游 Gemini model），让剥离逻辑按
 				// 客户端请求的 Anthropic 子协议族判定（详见 ResolveThinkingProtocol 文档）。
 				switch signatureRetryStage {
 				case 0:
 					// Stage 1: disable thinking + thinking->text
-					strippedClaudeBody = FilterThinkingBlocksForRetry(originalClaudeBody, originalModel)
+					strippedClaudeBody = FilterThinkingBlocksForRetry(retrySourceBody, originalModel)
 					stageName = "thinking-only"
 					signatureRetryStage = 1
 				default:
 					// Stage 2: additionally downgrade tool_use/tool_result blocks to text
-					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(originalClaudeBody, originalModel)
+					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(retrySourceBody, originalModel)
 					stageName = "thinking+tools"
 					signatureRetryStage = 2
 				}
 				retryGeminiReq, txErr := convertClaudeMessagesToGeminiGenerateContent(strippedClaudeBody)
 				if txErr == nil {
-					if mixed, mixedErr := enableMixedGeminiToolInvocations(retryGeminiReq); mixedErr == nil {
-						retryGeminiReq = mixed
-					}
 					logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: detected signature-related 400, retrying with downgraded Claude blocks (%s)", account.ID, stageName)
 					// 降级只改写历史块，思考参数沿用客户端原始请求。
 					geminiReq = applyGeminiCompatThinkingConfig(retryGeminiReq, originalClaudeBody, mappedModel, includeThoughts)
-					// Consume one retry budget attempt and continue with the updated request payload.
 					sleepGeminiBackoff(1)
 					continue
 				}
@@ -815,8 +816,10 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 
 		// 错误策略优先：匹配则跳过重试直接处理。
-		if matched, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel); matched {
-			resp = rebuilt
+		checked, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel)
+		resp = rebuilt
+		checkedPolicy = checked
+		if checked != nil && *checked != ErrorPolicyNone {
 			break
 		}
 
@@ -836,7 +839,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				// Apply account-scoped 429 handling early so concurrent requests avoid a rate-limited account.
 				s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
 			}
-			if attempt < geminiMaxRetries {
+			retryAttempt := attempt - signatureRetryStage
+			if retryAttempt < maxAttempts {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -864,8 +868,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 					Detail:             upstreamDetail,
 				})
 
-				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiMaxRetries)
-				sleepGeminiBackoff(attempt)
+				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, retryAttempt, maxAttempts)
+				sleepGeminiBackoff(retryAttempt)
 				continue
 			}
 			// Final attempt: surface the upstream error body (mapped below) instead of a generic retry error.
@@ -885,7 +889,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		respBody := s.readUpstreamErrorBody(resp)
 		// 统一错误策略：自定义错误码 + 临时不可调度
 		if s.rateLimitService != nil {
-			policy := s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel)
+			policy := s.finalErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel, checkedPolicy)
 			switch policy {
 			case ErrorPolicySkipped:
 				upstreamReqID := resp.Header.Get(requestIDHeader)
@@ -1035,7 +1039,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream stream")
 			}
 			collectedBytes, _ := json.Marshal(collected)
-			ensureUpstreamResponseModelObserver(c).ObserveGemini(collectedBytes)
+			upstreamResponseModelObserverFromContext(c).ObserveGemini(collectedBytes)
+			observeGeminiImageOutputs(c, collectedBytes)
 			claudeResp, usageObj2 := convertGeminiToClaudeMessage(collected, originalModel, collectedBytes, false)
 			c.JSON(http.StatusOK, claudeResp)
 			usage = usageObj2
@@ -1061,6 +1066,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 	return &ForwardResult{
 		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
 		Usage:                         *usage,
 		Model:                         originalModel,
 		UpstreamModel:                 mappedModel,
@@ -1071,8 +1077,10 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		FirstTokenMs:                  firstTokenMs,
 		ReasoningEffort:               extractGeminiReasoningEffortFromBody(geminiReq),
 		ClientDisconnect:              clientDisconnect,
+		ImageEndpoint:                 imageCount > 0,
 		ImageCount:                    imageCount,
 		ImageSize:                     imageSize,
+		ImageInputSize:                imageInputSize,
 	}, nil
 }
 
@@ -1086,6 +1094,7 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 
 func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (*ForwardResult, error) {
 	beginUpstreamResponseModelObservation(c)
+	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
 
 	if strings.TrimSpace(originalModel) == "" {
@@ -1261,7 +1270,11 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	}
 
 	var resp *http.Response
-	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
+	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
+	var checkedPolicy *ErrorPolicyResult
+	maxAttempts := s.geminiMaxAttemptsPerAccount()
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -1299,12 +1312,21 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			return nil, transportErr
 		}
 
-		// 错误策略优先：匹配则跳过重试直接处理。
-		if matched, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel); matched {
+		// 引用缓存不存在、上游网关持有缓存的账号不可用先于错误策略识别：错误策略会写临时不可调度，
+		// 重试与换号也无法恢复。
+		if passthrough, rebuilt := s.cachedContentPassthroughInLoop(ctx, account, resp); passthrough {
 			resp = rebuilt
 			break
 		} else {
 			resp = rebuilt
+		}
+
+		// 错误策略优先：匹配则跳过重试直接处理。
+		checked, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel)
+		resp = rebuilt
+		checkedPolicy = checked
+		if checked != nil && *checked != ErrorPolicyNone {
+			break
 		}
 
 		if resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
@@ -1322,7 +1344,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			if resp.StatusCode == 429 {
 				s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
 			}
-			if attempt < geminiMaxRetries {
+			if attempt < maxAttempts {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -1350,7 +1372,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 					Detail:             upstreamDetail,
 				})
 
-				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiMaxRetries)
+				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, maxAttempts)
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -1396,9 +1418,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		if isGeminiCachedContentNotFound(resp.StatusCode, respBody) {
 			return nil, s.writeGeminiCachedContentNotFound(c, account, resp, respBody, requestID, isOAuth)
 		}
-		// 上游网关的限流 / 不可用只针对其持有缓存的账号：不改本账号状态，交由绑定请求的耗尽处理透传。
+		// 上游网关的限流 / 不可用只针对其持有缓存的账号：不改本账号状态，按池模式配置同账号重试，用尽后透传。
 		if isGeminiBoundCacheUpstreamPassthrough(ctx, account, resp.StatusCode) {
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, BoundUpstreamPassthrough: true}
+			return nil, s.boundCacheUpstreamPassthroughError(c, account, resp.StatusCode, respBody, requestID)
 		}
 		// Best-effort fallback for OAuth tokens missing AI Studio scopes when calling countTokens.
 		// This avoids Gemini SDKs failing hard during preflight token counting.
@@ -1420,7 +1442,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 		// 统一错误策略：自定义错误码 + 临时不可调度
 		if s.rateLimitService != nil {
-			policy := s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel)
+			policy := s.finalErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel, checkedPolicy)
 			switch policy {
 			case ErrorPolicySkipped:
 				if failoverErr := s.skippedErrorPolicyFailoverError(c, account, resp.StatusCode, respBody, requestID); failoverErr != nil {
@@ -1553,7 +1575,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			}
 			s.finalizeGeminiSSESignal(c, account, false, requestID, best, stats.dataEvents > 0, stats.fallback)
 			b, _ := json.Marshal(collected)
-			ensureUpstreamResponseModelObserver(c).ObserveGemini(b)
+			upstreamResponseModelObserverFromContext(c).ObserveGemini(b)
+			observeGeminiImageOutputs(c, b)
 			c.Data(http.StatusOK, "application/json", b)
 			usage = usageObj
 		} else {
@@ -1580,50 +1603,32 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	return &ForwardResult{
 		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
 		Usage:                         *usage,
 		Model:                         originalModel,
 		UpstreamModel:                 mappedModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 		Stream:                        stream,
+		ReasoningEffort:               extractGeminiReasoningEffortFromBody(body),
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  firstTokenMs,
 		ClientDisconnect:              clientDisconnect,
+		ImageEndpoint:                 imageCount > 0,
 		ImageCount:                    imageCount,
 		ImageSize:                     imageSize,
+		ImageInputSize:                imageInputSize,
 	}, nil
 }
 
 // checkErrorPolicyInLoop 在重试循环内对上游错误响应检查错误策略，resp 已重建可直接使用。
 // checked 为 nil 表示未检查（非错误响应或未配置限流服务）；否则指向检查结果，
 // 非 ErrorPolicyNone 时调用者应 break 并由循环外的错误处理复用该结果。
-func (s *GeminiMessagesCompatService) writeGeminiCachedContentNotFound(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
-	respBody = unwrapIfNeeded(isOAuth, respBody)
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
-	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, s.upstreamErrorDetail(respBody))
-	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-		ProxyID:            opsUpstreamProxyID(account),
-		ProxyName:          opsUpstreamProxyName(account),
-		Platform:           account.Platform,
-		AccountID:          account.ID,
-		AccountName:        account.Name,
-		UpstreamStatusCode: resp.StatusCode,
-		UpstreamRequestID:  requestID,
-		Kind:               "http_error",
-		Message:            upstreamMsg,
-	})
-	MarkOpsRequestScopedError(c, "permission_error")
-	MarkResponseCommitted(c)
-	c.Data(http.StatusForbidden, "application/json", []byte(GeminiCachedContentNotFoundResponse))
-	return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
-}
-
 func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 	ctx context.Context, account *Account, resp *http.Response, mappedModel string,
-) (matched bool, rebuilt *http.Response) {
+) (checked *ErrorPolicyResult, rebuilt *http.Response) {
 	if resp.StatusCode < 400 || s.rateLimitService == nil {
-		return false, resp
+		return nil, resp
 	}
 	body := s.readUpstreamErrorBody(resp)
 	_ = resp.Body.Close()
@@ -1633,7 +1638,49 @@ func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 		Body:       io.NopCloser(bytes.NewReader(body)),
 	}
 	policy := s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, body, mappedModel)
-	return policy != ErrorPolicyNone, rebuilt
+	return &policy, rebuilt
+}
+
+// finalErrorPolicy 返回循环外处理最终上游错误响应时使用的错误策略。每个上游响应只检查一次：
+// 错误策略检查会触发临时不可调度规则，并据账号上已记录的 401 暂停把 401 升级为 error。
+// checked 非 nil 时它就是重试循环内对同一响应的检查结果，直接复用；否则在此检查。
+// 调用方保证 s.rateLimitService 非 nil。
+func (s *GeminiMessagesCompatService) finalErrorPolicy(
+	ctx context.Context, account *Account, statusCode int, body []byte, mappedModel string, checked *ErrorPolicyResult,
+) ErrorPolicyResult {
+	if checked != nil {
+		return *checked
+	}
+	return s.rateLimitService.CheckErrorPolicy(ctx, account, statusCode, body, mappedModel)
+}
+
+// cachedContentPassthroughInLoop 判断上游响应是否跳过同号重试与错误策略直接处理：引用缓存不存在，
+// 或绑定缓存的请求在上游网关账号上收到的 429 / 5xx。读取过的响应体以内存副本重建。
+func (s *GeminiMessagesCompatService) cachedContentPassthroughInLoop(ctx context.Context, account *Account, resp *http.Response) (passthrough bool, rebuilt *http.Response) {
+	if isGeminiBoundCacheUpstreamPassthrough(ctx, account, resp.StatusCode) {
+		return true, resp
+	}
+	switch resp.StatusCode {
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound:
+	default:
+		return false, resp
+	}
+	body := s.readUpstreamErrorBody(resp)
+	_ = resp.Body.Close()
+	rebuilt = &http.Response{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+	return isGeminiCachedContentNotFound(resp.StatusCode, body), rebuilt
+}
+
+// geminiMaxAttemptsPerAccount 返回可重试上游错误在单个账号上的最大请求次数（首次请求 + 同账号重试）。
+func (s *GeminiMessagesCompatService) geminiMaxAttemptsPerAccount() int {
+	if s == nil || s.cfg == nil {
+		return geminiDefaultSameAccountRetries + 1
+	}
+	return s.cfg.Gateway.MaxSameAccountRetriesGemini + 1
 }
 
 func (s *GeminiMessagesCompatService) shouldRetryGeminiUpstreamError(account *Account, statusCode int) bool {
@@ -1676,6 +1723,8 @@ func (s *GeminiMessagesCompatService) skippedErrorPolicyFailoverError(c *gin.Con
 	upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
 	upstreamDetail := s.upstreamErrorDetail(respBody)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
 		Platform:           account.Platform,
 		AccountID:          account.ID,
 		AccountName:        account.Name,
@@ -1689,6 +1738,36 @@ func (s *GeminiMessagesCompatService) skippedErrorPolicyFailoverError(c *gin.Con
 		StatusCode:             statusCode,
 		ResponseBody:           respBody,
 		RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(statusCode),
+	}
+}
+
+// boundCacheUpstreamPassthroughError 构造绑定显式缓存的请求在上游网关账号上收到 429 / 5xx 时的 failover 错误。
+// 缓存只存在于该账号，handler 不换号；池模式账号对 pool_mode_retry_status_codes 内的状态码按 pool_mode_retry_count
+// 同账号重试，用尽或不可重试时原样回写上游响应。故障在上游网关持有缓存的账号上，与本账号健康无关，
+// 因此可重试的错误标为请求级瞬时故障：重试用尽也不临时封禁本账号。可重试时每次尝试登记一条 retry 事件，
+// 重试成功的请求在 ops 记为恢复。
+func (s *GeminiMessagesCompatService) boundCacheUpstreamPassthroughError(c *gin.Context, account *Account, statusCode int, respBody []byte, upstreamRequestID string) *UpstreamFailoverError {
+	retryable := account.IsPoolMode() && account.IsPoolModeRetryableStatus(statusCode)
+	if retryable {
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: statusCode,
+			UpstreamRequestID:  upstreamRequestID,
+			Kind:               "retry",
+			Message:            sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody))),
+			Detail:             s.upstreamErrorDetail(respBody),
+		})
+	}
+	return &UpstreamFailoverError{
+		StatusCode:               statusCode,
+		ResponseBody:             respBody,
+		BoundUpstreamPassthrough: true,
+		RetryableOnSameAccount:   retryable,
+		RequestScopedTransient:   retryable,
 	}
 }
 
@@ -1717,6 +1796,8 @@ func (s *GeminiMessagesCompatService) writeGeminiCustomCodeSkippedError(c *gin.C
 	upstreamDetail := s.upstreamErrorDetail(body)
 	setOpsUpstreamError(c, upstreamStatus, upstreamMsg, upstreamDetail)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
 		Platform:           account.Platform,
 		AccountID:          account.ID,
 		AccountName:        account.Name,
@@ -1737,23 +1818,7 @@ func (s *GeminiMessagesCompatService) writeGeminiCustomCodeSkippedError(c *gin.C
 // 并记录 ops 错误事件。状态码保真：下游据此区分请求级错误与可重试的链路故障。
 func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
 	respBody = unwrapIfNeeded(isOAuth, respBody)
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
-	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-	upstreamDetail := s.upstreamErrorDetail(respBody)
-	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
-		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] native upstream error %d: %s", resp.StatusCode, truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
-	}
-	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
-	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-		Platform:           account.Platform,
-		AccountID:          account.ID,
-		AccountName:        account.Name,
-		UpstreamStatusCode: resp.StatusCode,
-		UpstreamRequestID:  requestID,
-		Kind:               "http_error",
-		Message:            upstreamMsg,
-		Detail:             upstreamDetail,
-	})
+	upstreamMsg := s.recordGeminiNativeUpstreamError(c, account, resp.StatusCode, respBody, requestID)
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
@@ -1765,6 +1830,41 @@ func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Cont
 		return fmt.Errorf("gemini upstream error: %d", resp.StatusCode)
 	}
 	return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+}
+
+// writeGeminiCachedContentNotFound 记录上游原始错误，并向客户端统一返回缓存不存在的 403：
+// 各上游的响应形态不同，且 Vertex 的文案含上游缓存资源 ID。失败由请求引用的缓存决定，ops 按客户端请求错误统计。
+func (s *GeminiMessagesCompatService) writeGeminiCachedContentNotFound(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
+	respBody = unwrapIfNeeded(isOAuth, respBody)
+	upstreamMsg := s.recordGeminiNativeUpstreamError(c, account, resp.StatusCode, respBody, requestID)
+	MarkOpsRequestScopedError(c, "permission_error")
+	MarkResponseCommitted(c)
+	c.Data(http.StatusForbidden, "application/json", []byte(GeminiCachedContentNotFoundResponse))
+	return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+}
+
+// recordGeminiNativeUpstreamError 把上游错误响应登记到 ops 上下文，返回脱敏后的上游错误文案。
+func (s *GeminiMessagesCompatService) recordGeminiNativeUpstreamError(c *gin.Context, account *Account, statusCode int, respBody []byte, requestID string) string {
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	upstreamDetail := s.upstreamErrorDetail(respBody)
+	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] native upstream error %d: %s", statusCode, truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
+	}
+	setOpsUpstreamError(c, statusCode, upstreamMsg, upstreamDetail)
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
+		Platform:           account.Platform,
+		AccountID:          account.ID,
+		AccountName:        account.Name,
+		UpstreamStatusCode: statusCode,
+		UpstreamRequestID:  requestID,
+		Kind:               "http_error",
+		Message:            upstreamMsg,
+		Detail:             upstreamDetail,
+	})
+	return upstreamMsg
 }
 
 func sleepGeminiBackoff(attempt int) {
@@ -2052,7 +2152,12 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 	}
-	ensureUpstreamResponseModelObserver(c).ObserveGemini(unwrappedBody)
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
+	observer.ObserveGemini(unwrappedBody)
+	observeGeminiImageOutputs(c, unwrappedBody)
 
 	var geminiResp map[string]any
 	if err := json.Unmarshal(unwrappedBody, &geminiResp); err != nil {
@@ -2146,7 +2251,12 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 		if err != nil {
 			continue
 		}
-		ensureUpstreamResponseModelObserver(c).ObserveGemini(unwrappedBytes)
+		observer := upstreamResponseModelObserverFromContext(c)
+		if observer == nil {
+			observer = beginUpstreamResponseModelObservation(c)
+		}
+		observer.ObserveGemini(unwrappedBytes)
+		observeGeminiImageOutputs(c, unwrappedBytes)
 
 		var geminiResp map[string]any
 		if err := json.Unmarshal(unwrappedBytes, &geminiResp); err != nil {
@@ -2210,6 +2320,12 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 				continue
 			}
 			if text, ok := part["text"].(string); ok && text != "" {
+				// Close an open tool_use block before starting text, mirroring
+				// the functionCall branch (which closes open text blocks) and
+				// the chat-completions sibling's closeOpenTool(). Otherwise a
+				// tool→text sequence keeps the tool_use block open while the
+				// text block starts, emitting overlapping Anthropic content
+				// blocks that violate the SSE contract.
 				if openToolIndex >= 0 {
 					writeSSE(c.Writer, "content_block_stop", map[string]any{
 						"type":  "content_block_stop",
@@ -2736,7 +2852,17 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 			respBody = unwrappedBody
 		}
 	}
-	ensureUpstreamResponseModelObserver(c).ObserveGemini(respBody)
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
+	observer.ObserveGemini(respBody)
+	observeGeminiImageOutputs(c, respBody)
+	if sig, ok := detectGeminiResponseSignalInBody(respBody); ok {
+		s.markGeminiResponseSignal(c, account, sig, false, upstreamRequestID)
+	} else if isGeminiEmptyResponseBody(respBody) {
+		s.markGeminiEmptyResponse(c, account, false, upstreamRequestID)
+	}
 
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 
@@ -2829,7 +2955,8 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 					if u := extractGeminiUsage(rawBytes); u != nil {
 						usage = u
 					}
-					ensureUpstreamResponseModelObserver(c).ObserveGemini(rawBytes)
+					observer.ObserveGemini(rawBytes)
+					observeGeminiImageOutputs(c, rawBytes)
 
 					if gjson.GetBytes(rawBytes, "candidates.0.finishReason").String() != "" {
 						finished = true

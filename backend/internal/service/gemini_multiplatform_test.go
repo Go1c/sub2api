@@ -994,3 +994,23 @@ func TestGeminiMessagesCompatService_isModelSupportedByAccount(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockGatewayCacheForGemini) ClaimGrokVideoBilled(_ context.Context, _ string, _ time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (m *mockGatewayCacheForGemini) GetGrokVideoPendingBilling(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockGatewayCacheForGemini) SetGrokVideoPendingBilling(_ context.Context, _ string, _ []byte, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockGatewayCacheForGemini) UpsertGrokVideoPendingBilling(_ context.Context, _ *GrokVideoPendingBilling) error {
+	return nil
+}
+
+func (m *mockGatewayCacheForGemini) ReleaseGrokVideoBilled(_ context.Context, _ string) error {
+	return nil
+}

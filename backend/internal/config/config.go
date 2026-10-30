@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/textproto"
 	"net/url"
 	"os"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"golang.org/x/net/http/httpguts"
 )
 
 const (
@@ -30,7 +32,7 @@ const (
 
 // DefaultCSPPolicy is the default Content-Security-Policy with nonce support
 // __CSP_NONCE__ will be replaced with actual nonce at request time by the SecurityHeaders middleware
-const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com https://data.lumio.games; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+const DefaultCSPPolicy = "default-src 'self'; worker-src 'self' blob:; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://*.alicdn.com https://static.cloudflareinsights.com https://turing.captcha.qcloud.com https://turing.captcha.gtimg.com https://ca.turing.captcha.qcloud.com https://global.turing.captcha.gtimg.com https://www.tycaptcha.com https://cloudcache.tencentcs.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://*.captcha.gtimg.com https://fonts.googleapis.com https://*.alicdn.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://turing.captcha.qcloud.com https://www.tycaptcha.com https://rce.tencentrio.com https:; frame-src 'self' https://challenges.cloudflare.com https://turing.captcha.qcloud.com https://ca.turing.captcha.qcloud.com https://www.tycaptcha.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // UMQ（用户消息队列）模式常量
 const (
@@ -64,48 +66,55 @@ const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
 const DefaultModelsListReadMaxBytes int64 = 8 * 1024 * 1024
 
 type Config struct {
-	Server                        ServerConfig                  `mapstructure:"server"`
-	Log                           LogConfig                     `mapstructure:"log"`
-	CORS                          CORSConfig                    `mapstructure:"cors"`
-	Security                      SecurityConfig                `mapstructure:"security"`
-	Billing                       BillingConfig                 `mapstructure:"billing"`
-	Turnstile                     TurnstileConfig               `mapstructure:"turnstile"`
-	Database                      DatabaseConfig                `mapstructure:"database"`
-	Redis                         RedisConfig                   `mapstructure:"redis"`
-	Ops                           OpsConfig                     `mapstructure:"ops"`
-	JWT                           JWTConfig                     `mapstructure:"jwt"`
-	Totp                          TotpConfig                    `mapstructure:"totp"`
-	WebAuthn                      WebAuthnConfig                `mapstructure:"webauthn"`
-	LinuxDo                       LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
-	WeChat                        WeChatConnectConfig           `mapstructure:"wechat_connect"`
-	OIDC                          OIDCConnectConfig             `mapstructure:"oidc_connect"`
-	DingTalk                      DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
-	GitHubOAuth                   EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
-	GoogleOAuth                   EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
-	Default                       DefaultConfig                 `mapstructure:"default"`
-	RateLimit                     RateLimitConfig               `mapstructure:"rate_limit"`
-	Pricing                       PricingConfig                 `mapstructure:"pricing"`
-	Gateway                       GatewayConfig                 `mapstructure:"gateway"`
-	APIKeyAuth                    APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
-	APIKeyCreate                  APIKeyCreateConfig            `mapstructure:"api_key_create"`
-	SubscriptionCache             SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
-	SubscriptionMaintenance       SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
-	Dashboard                     DashboardCacheConfig          `mapstructure:"dashboard_cache"`
-	DashboardAgg                  DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
-	UsageCleanup                  UsageCleanupConfig            `mapstructure:"usage_cleanup"`
-	Concurrency                   ConcurrencyConfig             `mapstructure:"concurrency"`
-	TokenRefresh                  TokenRefreshConfig            `mapstructure:"token_refresh"`
-	SimpleMode                    SimpleModeConfig              `mapstructure:"simple_mode" yaml:"simple_mode"`
-	RunMode                       string                        `mapstructure:"run_mode" yaml:"run_mode"`
-	SimpleModeKeyRateLimitEnabled bool                          `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
-	Timezone                      string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
-	Gemini                        GeminiConfig                  `mapstructure:"gemini"`
-	Update                        UpdateConfig                  `mapstructure:"update"`
-	Idempotency                   IdempotencyConfig             `mapstructure:"idempotency"`
-	GeoBlock                      GeoBlockConfig                `mapstructure:"geo_block"`
-	BatchImage                    BatchImageConfig              `mapstructure:"batch_image"`
-	ImageStorage                  ImageStorageConfig            `mapstructure:"image_storage"`
-	Plugins                       PluginConfig                  `mapstructure:"plugins"`
+	Server                  ServerConfig                  `mapstructure:"server"`
+	Log                     LogConfig                     `mapstructure:"log"`
+	CORS                    CORSConfig                    `mapstructure:"cors"`
+	Security                SecurityConfig                `mapstructure:"security"`
+	Billing                 BillingConfig                 `mapstructure:"billing"`
+	Turnstile               TurnstileConfig               `mapstructure:"turnstile"`
+	Database                DatabaseConfig                `mapstructure:"database"`
+	Redis                   RedisConfig                   `mapstructure:"redis"`
+	Ops                     OpsConfig                     `mapstructure:"ops"`
+	JWT                     JWTConfig                     `mapstructure:"jwt"`
+	Totp                    TotpConfig                    `mapstructure:"totp"`
+	WebAuthn                WebAuthnConfig                `mapstructure:"webauthn"`
+	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
+	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
+	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
+	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
+	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
+	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
+	Default                 DefaultConfig                 `mapstructure:"default"`
+	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
+	Pricing                 PricingConfig                 `mapstructure:"pricing"`
+	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
+	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
+	APIKeyCreate            APIKeyCreateConfig            `mapstructure:"api_key_create"`
+	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
+	SubscriptionMaintenance SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
+	Dashboard               DashboardCacheConfig          `mapstructure:"dashboard_cache"`
+	DashboardAgg            DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
+	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
+	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
+	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
+	SimpleMode              SimpleModeConfig              `mapstructure:"simple_mode" yaml:"simple_mode"`
+	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
+	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
+	Update                  UpdateConfig                  `mapstructure:"update"`
+	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	GeoBlock                GeoBlockConfig                `mapstructure:"geo_block"`
+	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
+	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
+	Plugins                 PluginConfig                  `mapstructure:"plugins"`
+
+	// Enforce only API-key spending windows in simple mode.
+	SimpleModeKeyRateLimitEnabled bool `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
+}
+
+// SimpleModeConfig controls startup behavior in simple mode.
+type SimpleModeConfig struct {
+	AutoCreateDefaultGroups bool `mapstructure:"auto_create_default_groups" yaml:"auto_create_default_groups"`
 }
 
 // PluginConfig 控制管理员手动上传的本地进程插件。
@@ -117,62 +126,6 @@ type PluginConfig struct {
 	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
 	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
 	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
-}
-
-// GeoBlockConfig 控制按地区拦截「网页前端」访问的合规开关。
-// 仅作用于浏览器网页请求；中转 API（/v1 等）与管理 API（/api/）不受影响。
-type GeoBlockConfig struct {
-	// Enabled 为 true 时启用地区拦截，默认 false。
-	Enabled bool `mapstructure:"enabled"`
-	// Countries 为需要拦截的 ISO 3166-1 alpha-2 国家码列表，默认 ["CN"]（中国大陆）。
-	Countries []string `mapstructure:"countries"`
-	// Whitelist 为豁免拦截的 IP 或 CIDR 列表（如管理员/办公室出口 IP）。
-	// 命中白名单的客户端即使地处受限地区也始终放行。默认为空。
-	Whitelist []string `mapstructure:"whitelist"`
-}
-
-// ImageStorageConfig 配置异步图片任务结果上传的 S3 兼容对象存储。
-// Enabled 同时作为异步图片任务功能的总开关：未启用或未配置完整凭证时，
-// 异步生图接口整体禁用，避免把上游返回的大 base64 结果塞进 Redis。
-type ImageStorageConfig struct {
-	Enabled         bool   `mapstructure:"enabled"`
-	Endpoint        string `mapstructure:"endpoint"` // e.g. https://<account_id>.r2.cloudflarestorage.com
-	Region          string `mapstructure:"region"`   // R2 用 "auto"
-	Bucket          string `mapstructure:"bucket"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Prefix          string `mapstructure:"prefix"`               // S3 key 前缀，如 "images/"
-	ForcePathStyle  bool   `mapstructure:"force_path_style"`     // MinIO/路径风格桶
-	PublicBaseURL   string `mapstructure:"public_base_url"`      // 配了则返回 public_base_url/key 直链；否则 presigned
-	PresignExpiry   int    `mapstructure:"presign_expiry_hours"` // public_base_url 为空时的 presigned 过期时长(小时)
-	MaxDownloadByte int64  `mapstructure:"max_download_bytes"`   // 下载上游 url 图片的字节上限
-}
-
-// IsConfigured 检查对象存储必要字段是否已配置
-func (c *ImageStorageConfig) IsConfigured() bool {
-	return c.Bucket != "" && c.AccessKeyID != "" && c.SecretAccessKey != ""
-}
-
-// Active 返回异步图片任务是否可用：开关打开且凭证齐全
-func (c *ImageStorageConfig) Active() bool {
-	return c.Enabled && c.IsConfigured()
-}
-
-func (c *ImageStorageConfig) MissingCredentialKeys() []string {
-	if c == nil {
-		return []string{"image_storage.bucket", "image_storage.access_key_id", "image_storage.secret_access_key"}
-	}
-	var missing []string
-	if c.Bucket == "" {
-		missing = append(missing, "image_storage.bucket")
-	}
-	if c.AccessKeyID == "" {
-		missing = append(missing, "image_storage.access_key_id")
-	}
-	if c.SecretAccessKey == "" {
-		missing = append(missing, "image_storage.secret_access_key")
-	}
-	return missing
 }
 
 type LogConfig struct {
@@ -303,6 +256,60 @@ type BatchImageConfig struct {
 	VertexOutputRetentionHours   int    `mapstructure:"vertex_output_retention_hours"`
 	VertexBatchPredictionBaseURL string `mapstructure:"vertex_batch_prediction_base_url"`
 	VertexGCSBaseURL             string `mapstructure:"vertex_gcs_base_url"`
+}
+
+// GeoBlockConfig 配置按地区拦截「网页前端」访问的合规开关。
+type GeoBlockConfig struct {
+	// Enabled 为 true 时启用地区拦截，默认 false。
+	Enabled bool `mapstructure:"enabled"`
+	// Countries 为需要拦截的 ISO 3166-1 alpha-2 国家码列表，默认 ["CN"]（中国大陆）。
+	Countries []string `mapstructure:"countries"`
+	// Whitelist 为豁免拦截的 IP 或 CIDR 列表（如管理员/办公室出口 IP）。
+	// 命中白名单的客户端即使地处受限地区也始终放行。默认为空。
+	Whitelist []string `mapstructure:"whitelist"`
+}
+
+// ImageStorageConfig 配置异步图片任务结果上传的 S3 兼容对象存储。
+// Enabled 同时作为异步图片任务功能的总开关：未启用或未配置完整凭证时，
+// 异步生图接口整体禁用，避免把上游返回的大 base64 结果塞进 Redis。
+type ImageStorageConfig struct {
+	Enabled         bool   `mapstructure:"enabled"`
+	Endpoint        string `mapstructure:"endpoint"` // e.g. https://<account_id>.r2.cloudflarestorage.com
+	Region          string `mapstructure:"region"`   // R2 用 "auto"
+	Bucket          string `mapstructure:"bucket"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	Prefix          string `mapstructure:"prefix"`               // S3 key 前缀，如 "images/"
+	ForcePathStyle  bool   `mapstructure:"force_path_style"`     // MinIO/路径风格桶
+	PublicBaseURL   string `mapstructure:"public_base_url"`      // 配了则返回 public_base_url/key 直链；否则 presigned
+	PresignExpiry   int    `mapstructure:"presign_expiry_hours"` // public_base_url 为空时的 presigned 过期时长(小时)
+	MaxDownloadByte int64  `mapstructure:"max_download_bytes"`   // 下载上游 url 图片的字节上限
+}
+
+// IsConfigured 检查对象存储必要字段是否已配置
+func (c *ImageStorageConfig) IsConfigured() bool {
+	return c.Bucket != "" && c.AccessKeyID != "" && c.SecretAccessKey != ""
+}
+
+// Active 返回异步图片任务是否可用：开关打开且凭证齐全
+func (c *ImageStorageConfig) Active() bool {
+	return c.Enabled && c.IsConfigured()
+}
+
+// MissingCredentialKeys 返回 IsConfigured 所缺的配置键名。
+// 用于启动日志：只说"凭证不完整"会让运维以为自己漏填了，而实际可能是值填了却没被读到。
+func (c *ImageStorageConfig) MissingCredentialKeys() []string {
+	var missing []string
+	if c.Bucket == "" {
+		missing = append(missing, "image_storage.bucket")
+	}
+	if c.AccessKeyID == "" {
+		missing = append(missing, "image_storage.access_key_id")
+	}
+	if c.SecretAccessKey == "" {
+		missing = append(missing, "image_storage.secret_access_key")
+	}
+	return missing
 }
 
 type LinuxDoConnectConfig struct {
@@ -682,7 +689,10 @@ type PricingConfig struct {
 	DataDir string `mapstructure:"data_dir"`
 	// 回退文件路径
 	FallbackFile string `mapstructure:"fallback_file"`
-	// 本地模型价格覆盖文件：仅列出的模型覆盖远程价，其它模型仍跟随远程更新
+	// 覆盖补丁文件路径（可选）：条目按字段浅合并覆盖目录/回退数据，优先级最高
+	OverrideFile string `mapstructure:"override_file"`
+	// OverridesFile 为 fork 旧字段名兼容别名：老配置写 overrides_file 时迁移到
+	// OverrideFile，避免升级后静默丢失自定义覆盖价。
 	OverridesFile string `mapstructure:"overrides_file"`
 	// 更新间隔（小时）
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`
@@ -691,17 +701,18 @@ type PricingConfig struct {
 }
 
 type ServerConfig struct {
-	Host               string    `mapstructure:"host"`
-	Port               int       `mapstructure:"port"`
-	Mode               string    `mapstructure:"mode"`                  // debug/release
-	EnableServerTiming bool      `mapstructure:"enable_server_timing"`  // Admin UI Server-Timing response header
-	FrontendURL        string    `mapstructure:"frontend_url"`          // 前端基础 URL，用于生成邮件中的外部链接
-	ReadHeaderTimeout  int       `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
-	MaxHeaderBytes     int       `mapstructure:"max_header_bytes"`      // 请求头最大字节数（HTTP/2 映射为 header-list 上限）
-	IdleTimeout        int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
-	TrustedProxies     []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
-	MaxRequestBodySize int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
-	H2C                H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+	Host                     string    `mapstructure:"host"`
+	Port                     int       `mapstructure:"port"`
+	Mode                     string    `mapstructure:"mode"`                  // debug/release
+	EnableServerTiming       bool      `mapstructure:"enable_server_timing"`  // Admin UI Server-Timing response header
+	FrontendURL              string    `mapstructure:"frontend_url"`          // 前端基础 URL，用于生成邮件中的外部链接
+	ReadHeaderTimeout        int       `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
+	MaxHeaderBytes           int       `mapstructure:"max_header_bytes"`      // 请求头最大字节数（HTTP/2 映射为 header-list 上限）
+	IdleTimeout              int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
+	TrustedProxies           []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
+	TrustedProxiesConfigured bool      `mapstructure:"-" json:"-" yaml:"-"`   // 是否显式配置了可信代理列表
+	MaxRequestBodySize       int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
+	H2C                      H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -737,35 +748,95 @@ type ForwardedClientIPSettings struct {
 }
 
 type SecurityConfig struct {
-	URLAllowlist                     URLAllowlistConfig   `mapstructure:"url_allowlist"`
-	ResponseHeaders                  ResponseHeaderConfig `mapstructure:"response_headers"`
-	CSP                              CSPConfig            `mapstructure:"csp"`
-	ProxyFallback                    ProxyFallbackConfig  `mapstructure:"proxy_fallback"`
-	ProxyProbe                       ProxyProbeConfig     `mapstructure:"proxy_probe"`
-	TrustForwardedIPForAPIKeyACL     bool                 `mapstructure:"trust_forwarded_ip_for_api_key_acl"`
-	trustForwardedIPForAPIKeyACLLive *atomic.Bool         `mapstructure:"-"`
+	URLAllowlist    URLAllowlistConfig   `mapstructure:"url_allowlist"`
+	ResponseHeaders ResponseHeaderConfig `mapstructure:"response_headers"`
+	CSP             CSPConfig            `mapstructure:"csp"`
+	ProxyFallback   ProxyFallbackConfig  `mapstructure:"proxy_fallback"`
+	ProxyProbe      ProxyProbeConfig     `mapstructure:"proxy_probe"`
+	// TrustForwardedIPForAPIKeyACL enables legacy raw forwarded-header takeover.
+	// When disabled, server.trusted_proxies is authoritative for all client-IP consumers.
+	TrustForwardedIPForAPIKeyACL  bool                                       `mapstructure:"trust_forwarded_ip_for_api_key_acl"`
+	ForwardedClientIPHeaders      []string                                   `mapstructure:"forwarded_client_ip_headers" json:"forwarded_client_ip_headers" yaml:"forwarded_client_ip_headers"`
+	forwardedClientIPSettingsLive *atomic.Pointer[ForwardedClientIPSettings] `mapstructure:"-" json:"-" yaml:"-"`
+}
+
+func NormalizeForwardedClientIPHeaders(headers []string) ([]string, error) {
+	normalized := make([]string, 0, len(headers))
+	seen := make(map[string]struct{}, len(headers))
+	for _, header := range headers {
+		header = strings.TrimSpace(header)
+		if !httpguts.ValidHeaderFieldName(header) {
+			return nil, fmt.Errorf("invalid HTTP header field name %q", header)
+		}
+		canonical := textproto.CanonicalMIMEHeaderKey(header)
+		key := strings.ToLower(canonical)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		if len(normalized) == MaxForwardedClientIPHeaders {
+			return nil, fmt.Errorf("forwarded client IP headers must contain at most %d unique names", MaxForwardedClientIPHeaders)
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, canonical)
+	}
+	return normalized, nil
+}
+
+func cloneForwardedClientIPHeaders(headers []string) []string {
+	if len(headers) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), headers...)
+}
+
+func (c *Config) ForwardedClientIPSettings() ForwardedClientIPSettings {
+	if c == nil {
+		return ForwardedClientIPSettings{Headers: []string{}}
+	}
+	live := c.Security.forwardedClientIPSettingsLive
+	if live != nil {
+		if snapshot := live.Load(); snapshot != nil {
+			return ForwardedClientIPSettings{
+				TrustForwardedIP: snapshot.TrustForwardedIP,
+				Headers:          cloneForwardedClientIPHeaders(snapshot.Headers),
+			}
+		}
+	}
+	return ForwardedClientIPSettings{
+		TrustForwardedIP: c.Security.TrustForwardedIPForAPIKeyACL,
+		Headers:          cloneForwardedClientIPHeaders(c.Security.ForwardedClientIPHeaders),
+	}
 }
 
 func (c *Config) TrustForwardedIPForAPIKeyACL() bool {
+	return c.ForwardedClientIPSettings().TrustForwardedIP
+}
+
+// ForwardedClientIPTrustEnabled reports whether the legacy forwarded-header
+// compatibility mode currently overrides server.trusted_proxies.
+func (c *Config) ForwardedClientIPTrustEnabled() bool {
+	return c != nil && c.TrustForwardedIPForAPIKeyACL()
+}
+
+func (c *Config) SetForwardedClientIPSettings(enabled bool, headers []string) {
 	if c == nil {
-		return false
+		return
 	}
-	live := c.Security.trustForwardedIPForAPIKeyACLLive
-	if live == nil {
-		return c.Security.TrustForwardedIPForAPIKeyACL
+	headers = cloneForwardedClientIPHeaders(headers)
+	if c.Security.forwardedClientIPSettingsLive == nil {
+		c.Security.forwardedClientIPSettingsLive = &atomic.Pointer[ForwardedClientIPSettings]{}
 	}
-	return live.Load()
+	c.Security.forwardedClientIPSettingsLive.Store(&ForwardedClientIPSettings{
+		TrustForwardedIP: enabled,
+		Headers:          headers,
+	})
 }
 
 func (c *Config) SetTrustForwardedIPForAPIKeyACL(enabled bool) {
 	if c == nil {
 		return
 	}
-	c.Security.TrustForwardedIPForAPIKeyACL = enabled
-	if c.Security.trustForwardedIPForAPIKeyACLLive == nil {
-		c.Security.trustForwardedIPForAPIKeyACLLive = &atomic.Bool{}
-	}
-	c.Security.trustForwardedIPForAPIKeyACLLive.Store(enabled)
+	c.SetForwardedClientIPSettings(enabled, c.ForwardedClientIPSettings().Headers)
 }
 
 type URLAllowlistConfig struct {
@@ -803,7 +874,7 @@ type ProxyFallbackConfig struct {
 type ProxyProbeConfig struct {
 	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"` // 已禁用：禁止跳过 TLS 证书验证
 	// URLs 按优先级排列的自定义探测 URL 列表。
-	// 留空时使用内置默认列表（ip-api → httpbin）。
+	// 留空时使用内置默认列表（ip-api → ipify）。
 	// 某些 AI API 专用代理只允许访问特定域名，配置多个备选可提高探测成功率。
 	URLs []ProbeURLConfig `mapstructure:"urls"`
 }
@@ -811,7 +882,7 @@ type ProxyProbeConfig struct {
 // ProbeURLConfig 描述一个探测端点及其响应解析方式。
 type ProbeURLConfig struct {
 	URL    string `mapstructure:"url"`
-	Parser string `mapstructure:"parser"` // "ip-api" / "httpbin" / "ipify" / "chatgpt-trace"
+	Parser string `mapstructure:"parser"` // "ip-api" / "ipify" / "chatgpt-trace"
 }
 
 func normalizeProxyProbeURLs(targets []ProbeURLConfig) ([]ProbeURLConfig, error) {
@@ -830,7 +901,7 @@ func normalizeProxyProbeURLs(targets []ProbeURLConfig) ([]ProbeURLConfig, error)
 			return nil, fmt.Errorf("entry %d: parser is required", i)
 		}
 		switch parser {
-		case "ip-api", "httpbin", "ipify", "chatgpt-trace":
+		case "ip-api", "ipify", "chatgpt-trace":
 		default:
 			return nil, fmt.Errorf("entry %d: unsupported parser %q", i, target.Parser)
 		}
@@ -871,9 +942,9 @@ type BillingConfig struct {
 }
 
 // InflightReservationConfig 余额模式在途预留配置。
-// 准入时按输入估算 + 输出单价 × max_tokens 估算单请求费用，在 Redis 中原子地
-// 校验缓存余额减去在途预留合计后登记预留，请求结束释放。
-// 估算失败或 Redis 不可用时 fail-open，退回旧的仅余额阈值检查。
+// 准入时按 输入估算 + 输出单价 × max_tokens 估算单请求费用，在 Redis 中原子地
+// 校验 缓存余额 - 在途预留合计 >= 估算 后登记预留，请求结束（任意路径）释放。
+// 估算失败或 Redis 不可用时 fail-open，退回旧的仅余额 > 阈值检查。
 type InflightReservationConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 	// TTLSeconds 单条预留的最长存活时间；进程崩溃等泄漏的预留到期自动失效。
@@ -886,7 +957,8 @@ type InflightReservationConfig struct {
 	MaxInputTokens int `mapstructure:"max_input_tokens"`
 	// MaxReservationUSD 单请求预留金额上限；0 表示不设上限。
 	MaxReservationUSD float64 `mapstructure:"max_reservation_usd"`
-	// FailClosedOnUnpriced 无法为请求估算费用时是否拒绝请求。默认 false：放行且不预留。
+	// FailClosedOnUnpriced 无法为请求估算费用（模型/分组/渠道均无定价）时是否拒绝请求。
+	// 默认 false：放行且不预留（fail-open，节流告警日志）。
 	FailClosedOnUnpriced bool `mapstructure:"fail_closed_on_unpriced"`
 }
 
@@ -931,6 +1003,9 @@ type GatewayConfig struct {
 	// OpenAIResponseHeaderTimeout: OpenAI/Codex 上游等待响应头的超时时间（秒），0表示无超时
 	// OpenAI/Codex 请求可能在上游排队较久；默认不使用通用响应头超时截断。
 	OpenAIResponseHeaderTimeout int `mapstructure:"openai_response_header_timeout"`
+	// GrokResponseHeaderTimeout bounds the pre-first-byte wait for xAI/Grok.
+	// A zero value uses the provider-safe default instead of the generic gateway timeout.
+	GrokResponseHeaderTimeout int `mapstructure:"grok_response_header_timeout"`
 	// OpenAIFirstOutputTimeoutSeconds: native HTTP Responses 首个语义输出超时（秒），0表示禁用。
 	OpenAIFirstOutputTimeoutSeconds int `mapstructure:"openai_first_output_timeout_seconds"`
 	// OpenAIHighEffortFirstOutputTimeoutSeconds: high/xhigh/max 推理的首个语义输出超时（秒）。
@@ -957,15 +1032,17 @@ type GatewayConfig struct {
 	// ForceCodexCLI: 强制将 OpenAI `/v1/responses` 请求按 Codex CLI 处理。
 	// 用于网关未透传/改写 User-Agent 时的兼容兜底（默认关闭，避免影响其他客户端）。
 	ForceCodexCLI bool `mapstructure:"force_codex_cli"`
-	// DisableCodexIdentityEnforcement 关闭强制统一 Codex 出站身份。零值为开启强制统一。
-	DisableCodexIdentityEnforcement bool `mapstructure:"disable_codex_identity_enforcement"`
-	// DisableCodexOriginatorNormalization: 关闭「把落在上游降载桶的 Codex originator 改写为
-	// 官方 CLI 身份」。上游 /backend-api/codex 按 originator 分桶调度容量，命中降载桶的请求会被回
-	// server_is_overloaded，网关据此冷却账号，表现为账号频繁过载不可用。
+	// DisableCodexIdentityEnforcement: 关闭「强制统一 Codex 出站身份」。上游 /backend-api/codex
+	// 在容量紧张时按客户端身份分优先级降载，被降载的请求会拿到 HTTP 200 + 流内
+	// server_is_overloaded，该次请求失败。默认强制统一出口：所有 OAuth 出站的
+	// User-Agent / originator / version 都改写为网关规范身份，确保没有请求带着第三方或陈旧身份
+	// 出站。置 true 后退回「仅按最终 User-Agent 配对 originator」的收口语义，供上游策略变动时回滚。
 	//
 	// 取反义命名是为了让零值安全：该开关会发布为进程级快照，未经 viper 加载而手工构造的
-	// Config（测试、工具）其零值必须落在「归一化开启」这一侧，否则会静默丢掉这层保护。
-	// 仅当上游调整分桶、使归一化反而落入降载桶时才置 true。
+	// Config（测试、工具）其零值必须落在「强制统一开启」这一侧，否则会静默丢掉这层保护。
+	DisableCodexIdentityEnforcement bool `mapstructure:"disable_codex_identity_enforcement"`
+	// DisableCodexOriginatorNormalization: 已废弃，等价于 DisableCodexIdentityEnforcement。
+	// 保留以兼容既有配置文件；加载时会折叠进新键，不要在新代码里直接读取。
 	DisableCodexOriginatorNormalization bool `mapstructure:"disable_codex_originator_normalization"`
 	// CodexImageGenerationBridgeEnabled: 是否为 Codex `/v1/responses` 自动注入 image_generation 工具和桥接指令。
 	// 默认关闭，避免纯文本 Codex 请求被意外改写；显式携带 image_generation 工具的请求仍按分组能力转发。
@@ -984,10 +1061,14 @@ type GatewayConfig struct {
 	OpenAICompactModel string `mapstructure:"openai_compact_model"`
 	// OpenAIWS: OpenAI Responses WebSocket 配置（默认开启，可按需回滚到 HTTP）
 	OpenAIWS GatewayOpenAIWSConfig `mapstructure:"openai_ws"`
+	// Live: ChatGPT Frameless Live 会话配置。
+	Live GatewayLiveConfig `mapstructure:"live"`
 	// OpenAIScheduler: OpenAI 高级调度器粘性逃逸配置
 	OpenAIScheduler GatewayOpenAISchedulerConfig `mapstructure:"openai_scheduler"`
 	// OpenAIHTTP2: OpenAI HTTP 上游协议策略（默认启用 HTTP/2，可按代理能力回退 HTTP/1.1）
 	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
+	// OpenAIProxyStreamCircuit: Responses SSE 代理断流熔断策略。
+	OpenAIProxyStreamCircuit GatewayOpenAIProxyStreamCircuitConfig `mapstructure:"openai_proxy_stream_circuit"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
 
@@ -1045,6 +1126,8 @@ type GatewayConfig struct {
 	MaxAccountSwitches int `mapstructure:"max_account_switches"`
 	// Gemini 账户切换最大次数（Gemini 平台单独配置，因 API 限制更严格）
 	MaxAccountSwitchesGemini int `mapstructure:"max_account_switches_gemini"`
+	// Gemini 同账号重试次数（429/5xx 等可重试错误在换号前对同一账号的重发次数，不含首次请求）
+	MaxSameAccountRetriesGemini int `mapstructure:"max_same_account_retries_gemini"`
 
 	// Antigravity 429 fallback 限流时间（分钟），解析重置时间失败时使用
 	AntigravityFallbackCooldownMinutes int `mapstructure:"antigravity_fallback_cooldown_minutes"`
@@ -1067,28 +1150,12 @@ type GatewayConfig struct {
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
 
-	// Grok: Grok 调度软闸与 OAuth 密码登录开关。
+	// Grok: Grok/xAI gateway scheduling and free-tier soft-gate settings.
 	Grok GatewayGrokConfig `mapstructure:"grok"`
 
 	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
 	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
 	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
-
-	// Live: ChatGPT Frameless Live 会话配置。
-	Live GatewayLiveConfig `mapstructure:"live"`
-
-	OpenAIProxyStreamCircuit GatewayOpenAIProxyStreamCircuitConfig `mapstructure:"openai_proxy_stream_circuit"`
-}
-
-type GatewayOpenAIProxyStreamCircuitConfig struct {
-	Disabled         bool `mapstructure:"disabled"`
-	FailureThreshold int  `mapstructure:"failure_threshold"`
-	WindowSeconds    int  `mapstructure:"window_seconds"`
-	TTLSeconds       int  `mapstructure:"ttl_seconds"`
-}
-
-type GatewayLiveConfig struct {
-	MaxSessionDurationSeconds int `mapstructure:"max_session_duration_seconds"`
 }
 
 // GatewayGrokConfig holds Grok-specific gateway scheduling knobs.
@@ -1103,12 +1170,22 @@ type GatewayLiveConfig struct {
 //   - free_quota_stats_cache_seconds: cache TTL for free-tier usage stats
 //     (hot path never blocks on DB; misses fail open and refresh in background).
 type GatewayGrokConfig struct {
-	PasswordAuthEnabled        bool  `mapstructure:"password_auth_enabled"`
-	FreeQuotaSoftGateEnabled   bool  `mapstructure:"free_quota_soft_gate_enabled"`
-	FreeQuotaTokenLimit        int64 `mapstructure:"free_quota_token_limit"`
-	FreeQuotaSoftGatePercent   int   `mapstructure:"free_quota_soft_gate_percent"`
-	FreeQuotaWindowHours       int   `mapstructure:"free_quota_window_hours"`
-	FreeQuotaStatsCacheSeconds int   `mapstructure:"free_quota_stats_cache_seconds"`
+	// PasswordAuthEnabled controls the optional password-to-SSO OAuth flow.
+	// It defaults to false and must be explicitly enabled by the operator.
+	// When true, POST /admin/grok/oauth/password is functional (not ignored).
+	PasswordAuthEnabled bool `mapstructure:"password_auth_enabled"`
+	// FreeQuotaSoftGateEnabled enables a local rolling-window scheduling guard
+	// for explicitly free Grok OAuth accounts only.
+	FreeQuotaSoftGateEnabled bool `mapstructure:"free_quota_soft_gate_enabled"`
+	// FreeQuotaTokenLimit is the nominal rolling-window allowance.
+	FreeQuotaTokenLimit int64 `mapstructure:"free_quota_token_limit"`
+	// FreeQuotaSoftGatePercent stops new scheduling before the nominal limit.
+	FreeQuotaSoftGatePercent int `mapstructure:"free_quota_soft_gate_percent"`
+	// FreeQuotaWindowHours controls the local rolling usage window.
+	FreeQuotaWindowHours int `mapstructure:"free_quota_window_hours"`
+	// FreeQuotaStatsCacheSeconds is the soft-gate stats cache TTL. Hot path never
+	// waits on usage_logs; misses fail open and refresh asynchronously.
+	FreeQuotaStatsCacheSeconds int `mapstructure:"free_quota_stats_cache_seconds"`
 }
 
 // GatewayCNProvidersConfig 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
@@ -1121,6 +1198,11 @@ type GatewayCNProvidersConfig struct {
 	BalanceCheckEnabled         bool    `mapstructure:"balance_check_enabled"`
 	BalanceThreshold            float64 `mapstructure:"balance_threshold"`
 	BalanceCheckIntervalMinutes int     `mapstructure:"balance_check_interval_minutes"`
+}
+
+type GatewayLiveConfig struct {
+	// MaxSessionDurationSeconds 是 Live 会话的硬上限。
+	MaxSessionDurationSeconds int `mapstructure:"max_session_duration_seconds"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
@@ -1136,6 +1218,19 @@ type GatewayOpenAIHTTP2Config struct {
 	FallbackWindowSeconds int `mapstructure:"fallback_window_seconds"`
 	// FallbackTTLSeconds: 触发后回退 HTTP/1.1 的持续时间（秒）
 	FallbackTTLSeconds int `mapstructure:"fallback_ttl_seconds"`
+}
+
+// GatewayOpenAIProxyStreamCircuitConfig controls the bounded, in-process
+// proxy-ID circuit used for incomplete OpenAI Responses SSE streams.
+type GatewayOpenAIProxyStreamCircuitConfig struct {
+	// Disabled: 完全关闭代理断流熔断（默认开启）。
+	Disabled bool `mapstructure:"disabled"`
+	// FailureThreshold: 统计窗口内多少次断流后隔离代理。
+	FailureThreshold int `mapstructure:"failure_threshold"`
+	// WindowSeconds: 断流统计窗口（秒）。
+	WindowSeconds int `mapstructure:"window_seconds"`
+	// TTLSeconds: 代理隔离持续时间（秒）。
+	TTLSeconds int `mapstructure:"ttl_seconds"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -1649,6 +1744,14 @@ type APIKeyAuthCacheConfig struct {
 	InvalidAbuse       InvalidAuthAbuseConfig `mapstructure:"invalid_abuse"`
 }
 
+// APIKeyCreateConfig 用户创建 API Key 的防滥用限制（0 表示不限制）
+type APIKeyCreateConfig struct {
+	// MaxActivePerUser 单个用户同时存在（未删除）的 API Key 上限
+	MaxActivePerUser int `mapstructure:"max_active_per_user"`
+	// MaxPerUserPerHour 单个用户每小时可创建的 API Key 次数（删除不返还次数）
+	MaxPerUserPerHour int `mapstructure:"max_per_user_per_hour"`
+}
+
 type InvalidAuthAbuseConfig struct {
 	Enabled       bool `mapstructure:"enabled"`
 	Threshold     int  `mapstructure:"threshold"`
@@ -1658,17 +1761,6 @@ type InvalidAuthAbuseConfig struct {
 }
 
 // SubscriptionCacheConfig 订阅认证 L1 缓存配置
-// APIKeyCreateConfig 用户创建 API Key 的防滥用限制（0 表示不限制）。
-type APIKeyCreateConfig struct {
-	MaxActivePerUser  int `mapstructure:"max_active_per_user"`
-	MaxPerUserPerHour int `mapstructure:"max_per_user_per_hour"`
-}
-
-// SimpleModeConfig controls startup behavior in simple mode.
-type SimpleModeConfig struct {
-	AutoCreateDefaultGroups bool `mapstructure:"auto_create_default_groups" yaml:"auto_create_default_groups"`
-}
-
 type SubscriptionCacheConfig struct {
 	L1Size        int `mapstructure:"l1_size"`
 	L1TTLSeconds  int `mapstructure:"l1_ttl_seconds"`
@@ -1784,6 +1876,9 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		// 配置文件不存在时使用默认值
 	}
 	trustedProxiesEnv, trustedProxiesEnvConfigured := os.LookupEnv("SERVER_TRUSTED_PROXIES")
+	forwardedClientIPHeadersEnv, forwardedClientIPHeadersEnvConfigured := os.LookupEnv("SECURITY_FORWARDED_CLIENT_IP_HEADERS")
+	trustedProxiesConfigured := viper.InConfig("server.trusted_proxies") ||
+		viper.IsSet("server.trusted_proxies") || trustedProxiesEnvConfigured
 
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
@@ -1792,12 +1887,23 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if trustedProxiesEnvConfigured {
 		cfg.Server.TrustedProxies = normalizeStringSlice(strings.Split(trustedProxiesEnv, ","))
 	}
+	if forwardedClientIPHeadersEnvConfigured {
+		cfg.Security.ForwardedClientIPHeaders = normalizeStringSlice(strings.Split(forwardedClientIPHeadersEnv, ","))
+	}
+	cfg.Server.TrustedProxiesConfigured = trustedProxiesConfigured
+	// fork 旧字段名迁移：老配置写 pricing.overrides_file，上游字段名为 override_file。
+	if strings.TrimSpace(cfg.Pricing.OverrideFile) == "" && strings.TrimSpace(cfg.Pricing.OverridesFile) != "" {
+		cfg.Pricing.OverrideFile = cfg.Pricing.OverridesFile
+	}
 	if cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs == 0 {
 		cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
 	}
 	if cfg.Gateway.OpenAIScheduler.StickyEscapeErrorRate == 0 {
 		cfg.Gateway.OpenAIScheduler.StickyEscapeErrorRate = 0.5
 	}
+	// Kept as a backstop: setEnvReachableDefaults now registers this key with its
+	// effective default (true), so IsSet always reports true and this branch no
+	// longer fires. It still guards the default if that registration is dropped.
 	if !cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled && !viper.IsSet("gateway.openai_scheduler.sticky_escape_enabled") {
 		cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = true
 	}
@@ -1847,7 +1953,12 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
 	cfg.Security.ResponseHeaders.ForceRemove = normalizeStringSlice(cfg.Security.ResponseHeaders.ForceRemove)
 	cfg.Security.CSP.Policy = strings.TrimSpace(cfg.Security.CSP.Policy)
-	cfg.SetTrustForwardedIPForAPIKeyACL(cfg.Security.TrustForwardedIPForAPIKeyACL)
+	forwardedClientIPHeaders, err := NormalizeForwardedClientIPHeaders(cfg.Security.ForwardedClientIPHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("security.forwarded_client_ip_headers: %w", err)
+	}
+	cfg.Security.ForwardedClientIPHeaders = forwardedClientIPHeaders
+	cfg.SetForwardedClientIPSettings(cfg.Security.TrustForwardedIPForAPIKeyACL, forwardedClientIPHeaders)
 	cfg.Log.Level = strings.ToLower(strings.TrimSpace(cfg.Log.Level))
 	cfg.Log.Format = strings.ToLower(strings.TrimSpace(cfg.Log.Format))
 	cfg.Log.ServiceName = strings.TrimSpace(cfg.Log.ServiceName)
@@ -1963,7 +2074,6 @@ func setDefaults() {
 	viper.SetDefault("server.read_header_timeout", 10) // 10秒读取请求头
 	viper.SetDefault("server.max_header_bytes", 64*1024)
 	viper.SetDefault("server.idle_timeout", 120) // 120秒空闲超时
-	viper.SetDefault("server.trusted_proxies", []string{})
 	viper.SetDefault("server.max_request_body_size", int64(256*1024*1024))
 	// H2C 默认配置
 	viper.SetDefault("server.h2c.enabled", false)
@@ -2009,6 +2119,7 @@ func setDefaults() {
 		"api.openai.com",
 		"api.anthropic.com",
 		"api.kimi.com",
+		"api.kimi.ai",
 		"api.moonshot.ai",
 		"api.moonshot.cn",
 		"open.bigmodel.cn",
@@ -2031,7 +2142,7 @@ func setDefaults() {
 	viper.SetDefault("security.csp.enabled", true)
 	viper.SetDefault("security.csp.policy", DefaultCSPPolicy)
 	viper.SetDefault("security.proxy_probe.insecure_skip_verify", false)
-	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", false)
+	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", true)
 
 	// Security - disable direct fallback on proxy error
 	viper.SetDefault("security.proxy_fallback.allow_direct_on_error", false)
@@ -2044,6 +2155,13 @@ func setDefaults() {
 	viper.SetDefault("billing.minimum_balance_reserve", 0.000001)
 	viper.SetDefault("billing.user_platform_quota_cache_ttl_seconds", 86400)
 	viper.SetDefault("billing.user_platform_quota_sentinel_ttl_seconds", 3600)
+	viper.SetDefault("billing.inflight_reservation.enabled", true)
+	viper.SetDefault("billing.inflight_reservation.ttl_seconds", 900)
+	viper.SetDefault("billing.inflight_reservation.default_max_tokens", 8192)
+	viper.SetDefault("billing.inflight_reservation.max_output_tokens", 128000)
+	viper.SetDefault("billing.inflight_reservation.max_input_tokens", 200000)
+	viper.SetDefault("billing.inflight_reservation.max_reservation_usd", 0)
+	viper.SetDefault("billing.inflight_reservation.fail_closed_on_unpriced", false)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -2201,9 +2319,10 @@ func setDefaults() {
 	viper.SetDefault("image_storage.force_path_style", false)
 	viper.SetDefault("image_storage.presign_expiry_hours", 24)
 	viper.SetDefault("image_storage.max_download_bytes", 33554432)
-	// Empty-string defaults keep IMAGE_STORAGE_* keys reachable via AllKeys()/env
-	// even when only set through the environment (not config.yaml). Without these,
-	// viper may drop unbound env keys before Unmarshal.
+	// Registered with empty defaults so AutomaticEnv can reach them: viper only
+	// decodes keys present in AllKeys(), so a credential that is supplied purely
+	// via IMAGE_STORAGE_* and never appears in config.yaml would be dropped and
+	// silently disable the whole async image feature.
 	viper.SetDefault("image_storage.endpoint", "")
 	viper.SetDefault("image_storage.bucket", "")
 	viper.SetDefault("image_storage.access_key_id", "")
@@ -2254,8 +2373,7 @@ func setDefaults() {
 	viper.SetDefault("pricing.hash_url", "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.sha256")
 	viper.SetDefault("pricing.data_dir", "./data")
 	viper.SetDefault("pricing.fallback_file", "./resources/model-pricing/model_prices_and_context_window.json")
-	// 默认启用仓库内置覆盖表（仅 pin 需要策略价的模型；空文件/缺文件则等同未配置）
-	viper.SetDefault("pricing.overrides_file", "./resources/model-pricing/pricing_overrides.json")
+	viper.SetDefault("pricing.override_file", "")
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
 
@@ -2283,6 +2401,8 @@ func setDefaults() {
 	viper.SetDefault("api_key_auth_cache.invalid_abuse.window_seconds", 60)
 	viper.SetDefault("api_key_auth_cache.invalid_abuse.block_seconds", 60)
 	viper.SetDefault("api_key_auth_cache.invalid_abuse.capacity", 16384)
+	viper.SetDefault("api_key_create.max_active_per_user", 200)
+	viper.SetDefault("api_key_create.max_per_user_per_hour", 60)
 
 	// Subscription auth L1 cache
 	viper.SetDefault("subscription_cache.l1_size", 16384)
@@ -2328,6 +2448,7 @@ func setDefaults() {
 	// Gateway
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.openai_response_header_timeout", 0)
+	viper.SetDefault("gateway.grok_response_header_timeout", 120)
 	viper.SetDefault("gateway.openai_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.openai_high_effort_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.log_upstream_error_body", true)
@@ -2336,11 +2457,14 @@ func setDefaults() {
 	viper.SetDefault("gateway.failover_on_400", false)
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
+	viper.SetDefault("gateway.max_same_account_retries_gemini", 4)
 	viper.SetDefault("gateway.force_codex_cli", false)
+	viper.SetDefault("gateway.disable_codex_identity_enforcement", false)
 	viper.SetDefault("gateway.disable_codex_originator_normalization", false)
 	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
-	viper.SetDefault("gateway.openai_compact_model", "gpt-5.4")
+	viper.SetDefault("gateway.openai_compact_model", "gpt-5.5")
+	viper.SetDefault("gateway.live.max_session_duration_seconds", 3600)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
 	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)
@@ -2404,6 +2528,23 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_http2.fallback_error_threshold", 2)
 	viper.SetDefault("gateway.openai_http2.fallback_window_seconds", 60)
 	viper.SetDefault("gateway.openai_http2.fallback_ttl_seconds", 600)
+	viper.SetDefault("gateway.openai_proxy_stream_circuit.disabled", false)
+	viper.SetDefault("gateway.openai_proxy_stream_circuit.failure_threshold", 2)
+	viper.SetDefault("gateway.openai_proxy_stream_circuit.window_seconds", 60)
+	viper.SetDefault("gateway.openai_proxy_stream_circuit.ttl_seconds", 600)
+	// Grok free-tier local soft gate (scheduler-only; admin QueryQuota does not use this).
+	// Enabled by default because free detection requires an explicit free tier marker.
+	viper.SetDefault("gateway.grok.free_quota_soft_gate_enabled", true)
+	viper.SetDefault("gateway.grok.password_auth_enabled", false)
+	// Free soft-gate nominal limit: 500k tokens / rolling 24h (operator policy).
+	viper.SetDefault("gateway.grok.free_quota_token_limit", int64(500_000))
+	viper.SetDefault("gateway.grok.free_quota_soft_gate_percent", 95)
+	viper.SetDefault("gateway.grok.free_quota_window_hours", 24)
+	viper.SetDefault("gateway.grok.free_quota_stats_cache_seconds", 60)
+	// 国产供应商余额检测（kimi/deepseek payg；zhipu 无余额端点，仅靠响应式 429/402）。
+	viper.SetDefault("gateway.cn_providers.balance_check_enabled", true)
+	viper.SetDefault("gateway.cn_providers.balance_threshold", 0.5)
+	viper.SetDefault("gateway.cn_providers.balance_check_interval_minutes", 10)
 	viper.SetDefault("gateway.image_concurrency.enabled", false)
 	viper.SetDefault("gateway.image_concurrency.max_concurrent_requests", 0)
 	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
@@ -2474,17 +2615,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.models_list_cache_ttl_seconds", 15)
 	// TLS指纹伪装配置（默认关闭，需要账号级别单独启用）
 	// 用户消息串行队列默认值
-	// 国产供应商余额检测（kimi/deepseek payg；zhipu 无余额端点，仅靠响应式 429/402）。
-	viper.SetDefault("gateway.grok.password_auth_enabled", false)
-	viper.SetDefault("gateway.grok.free_quota_soft_gate_enabled", true)
-	viper.SetDefault("gateway.grok.free_quota_token_limit", int64(500_000))
-	viper.SetDefault("gateway.grok.free_quota_soft_gate_percent", 95)
-	viper.SetDefault("gateway.grok.free_quota_window_hours", 24)
-	viper.SetDefault("gateway.grok.free_quota_stats_cache_seconds", 60)
-	viper.SetDefault("gateway.cn_providers.balance_check_enabled", true)
-	viper.SetDefault("gateway.cn_providers.balance_threshold", 0.5)
-	viper.SetDefault("gateway.cn_providers.balance_check_interval_minutes", 10)
-
 	viper.SetDefault("gateway.user_message_queue.enabled", false)
 	viper.SetDefault("gateway.user_message_queue.lock_ttl_ms", 120000)
 	viper.SetDefault("gateway.user_message_queue.wait_timeout_ms", 30000)
@@ -2605,6 +2735,29 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	if c.Gateway.MinOutputTokens < 16 {
+		return fmt.Errorf("gateway.min_output_tokens must be at least 16")
+	}
+	forwardedClientIPHeaders, err := NormalizeForwardedClientIPHeaders(c.Security.ForwardedClientIPHeaders)
+	if err != nil {
+		return fmt.Errorf("security.forwarded_client_ip_headers: %w", err)
+	}
+	c.Security.ForwardedClientIPHeaders = forwardedClientIPHeaders
+	c.SetForwardedClientIPSettings(c.Security.TrustForwardedIPForAPIKeyACL, forwardedClientIPHeaders)
+	proxyProbeURLs, err := normalizeProxyProbeURLs(c.Security.ProxyProbe.URLs)
+	if err != nil {
+		return fmt.Errorf("security.proxy_probe.urls: %w", err)
+	}
+	c.Security.ProxyProbe.URLs = proxyProbeURLs
+	if c.Plugins.MaxUploadBytes <= 0 || c.Plugins.MaxUploadBytes > 1024*1024*1024 {
+		return fmt.Errorf("plugins.max_upload_bytes must be between 1 and 1073741824")
+	}
+	if c.Plugins.MaxUncompressedBytes < c.Plugins.MaxUploadBytes || c.Plugins.MaxUncompressedBytes > 2*1024*1024*1024 {
+		return fmt.Errorf("plugins.max_uncompressed_bytes must be between max_upload_bytes and 2147483648")
+	}
+	if c.Plugins.StartTimeoutSeconds < 1 || c.Plugins.StartTimeoutSeconds > 120 {
+		return fmt.Errorf("plugins.start_timeout_seconds must be between 1 and 120")
+	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")
 	}
@@ -2633,6 +2786,12 @@ func (c *Config) Validate() error {
 		if c.Server.H2C.MaxUploadBufferPerStream <= 0 {
 			return fmt.Errorf("server.h2c.max_upload_buffer_per_stream must be positive")
 		}
+	}
+	if c.APIKeyCreate.MaxActivePerUser < 0 {
+		return fmt.Errorf("api_key_create.max_active_per_user must be non-negative")
+	}
+	if c.APIKeyCreate.MaxPerUserPerHour < 0 {
+		return fmt.Errorf("api_key_create.max_per_user_per_hour must be non-negative")
 	}
 	if c.APIKeyAuth.InvalidAbuse.Enabled {
 		if c.APIKeyAuth.InvalidAbuse.Threshold < 10 {
@@ -2985,6 +3144,11 @@ func (c *Config) Validate() error {
 	if c.Billing.MinimumBalanceReserve < 0 {
 		return fmt.Errorf("billing.minimum_balance_reserve must be non-negative")
 	}
+	if c.Billing.InflightReservation.TTLSeconds < 0 || c.Billing.InflightReservation.DefaultMaxTokens < 0 ||
+		c.Billing.InflightReservation.MaxOutputTokens < 0 || c.Billing.InflightReservation.MaxInputTokens < 0 ||
+		c.Billing.InflightReservation.MaxReservationUSD < 0 {
+		return fmt.Errorf("billing.inflight_reservation values must be non-negative")
+	}
 	if c.Database.MaxOpenConns <= 0 {
 		return fmt.Errorf("database.max_open_conns must be positive")
 	}
@@ -3222,16 +3386,17 @@ func (c *Config) Validate() error {
 	if c.Gateway.ProxyProbeResponseReadMaxBytes <= 0 {
 		return fmt.Errorf("gateway.proxy_probe_response_read_max_bytes must be positive")
 	}
-	proxyProbeURLs, err := normalizeProxyProbeURLs(c.Security.ProxyProbe.URLs)
-	if err != nil {
-		return fmt.Errorf("security.proxy_probe.urls: %w", err)
-	}
-	c.Security.ProxyProbe.URLs = proxyProbeURLs
 	if c.Gateway.ResponseHeaderTimeout < 0 {
 		return fmt.Errorf("gateway.response_header_timeout must be non-negative")
 	}
 	if c.Gateway.OpenAIResponseHeaderTimeout < 0 {
 		return fmt.Errorf("gateway.openai_response_header_timeout must be non-negative")
+	}
+	if c.Gateway.GrokResponseHeaderTimeout < 0 || c.Gateway.GrokResponseHeaderTimeout > 1800 {
+		return fmt.Errorf("gateway.grok_response_header_timeout must be between 0-1800 seconds")
+	}
+	if c.Gateway.MaxSameAccountRetriesGemini < 0 || c.Gateway.MaxSameAccountRetriesGemini > 10 {
+		return fmt.Errorf("gateway.max_same_account_retries_gemini must be between 0-10")
 	}
 	if c.Gateway.OpenAIFirstOutputTimeoutSeconds < 0 || c.Gateway.OpenAIFirstOutputTimeoutSeconds > 600 ||
 		(c.Gateway.OpenAIFirstOutputTimeoutSeconds > 0 && c.Gateway.OpenAIFirstOutputTimeoutSeconds < 30) {
@@ -3240,6 +3405,9 @@ func (c *Config) Validate() error {
 	if c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds < 0 || c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds > 1800 ||
 		(c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds > 0 && c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds < 30) {
 		return fmt.Errorf("gateway.openai_high_effort_first_output_timeout_seconds must be 0 or between 30-1800 seconds")
+	}
+	if c.Gateway.Live.MaxSessionDurationSeconds <= 0 {
+		c.Gateway.Live.MaxSessionDurationSeconds = 3600
 	}
 	if strings.TrimSpace(c.Gateway.ConnectionPoolIsolation) != "" {
 		switch c.Gateway.ConnectionPoolIsolation {
@@ -3448,6 +3616,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.OpenAIHTTP2.FallbackTTLSeconds < 0 {
 		return fmt.Errorf("gateway.openai_http2.fallback_ttl_seconds must be non-negative")
+	}
+	if c.Gateway.OpenAIProxyStreamCircuit.FailureThreshold < 0 {
+		return fmt.Errorf("gateway.openai_proxy_stream_circuit.failure_threshold must be non-negative")
+	}
+	if c.Gateway.OpenAIProxyStreamCircuit.WindowSeconds < 0 {
+		return fmt.Errorf("gateway.openai_proxy_stream_circuit.window_seconds must be non-negative")
+	}
+	if c.Gateway.OpenAIProxyStreamCircuit.TTLSeconds < 0 {
+		return fmt.Errorf("gateway.openai_proxy_stream_circuit.ttl_seconds must be non-negative")
 	}
 	weights := c.Gateway.OpenAIWS.SchedulerScoreWeights
 	for _, weight := range []float64{

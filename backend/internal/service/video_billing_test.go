@@ -115,7 +115,6 @@ func TestVideoModelPriceMissingTierFallsBackToFlatTierPrice(t *testing.T) {
 
 	result := service.CalculateVideoCost("grok-imagine-video", "720p", 1, 1, &VideoPriceConfig{
 		Price720P: &flat720P,
-		
 	}, 1)
 
 	require.InDelta(t, flat720P, result.TotalCost, 1e-9)

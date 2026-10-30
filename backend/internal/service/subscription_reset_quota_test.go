@@ -222,7 +222,7 @@ func TestAdminResetQuota_BeforeStartsAtSameDayPreservesAutomaticBoundary(t *test
 		sub: &UserSubscription{
 			ID:        10,
 			UserID:    10,
-			GroupID:   20,
+			GroupID:   int64Ptr(20),
 			StartsAt:  startsAt,
 			ExpiresAt: startsAt.Add(45 * 24 * time.Hour),
 		},

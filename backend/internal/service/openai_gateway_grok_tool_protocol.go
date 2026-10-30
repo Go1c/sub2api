@@ -54,25 +54,6 @@ func adaptGrokResponsesClientTools(body []byte) ([]byte, apicompat.ResponsesClie
 	return adaptResponsesClientToolsForFunctionUpstream(body, "Grok")
 }
 
-func patchGrokResponsesBodyWithClientTools(body []byte, upstreamModel string) ([]byte, apicompat.ResponsesClientToolMapping, error) {
-	if !json.Valid(body) {
-		return nil, apicompat.ResponsesClientToolMapping{}, fmt.Errorf("invalid json request body")
-	}
-	promoted, err := sanitizeGrokResponsesInput(body)
-	if err != nil {
-		return nil, apicompat.ResponsesClientToolMapping{}, err
-	}
-	adapted, mapping, err := adaptGrokResponsesClientTools(promoted)
-	if err != nil {
-		return nil, apicompat.ResponsesClientToolMapping{}, err
-	}
-	patched, err := patchGrokResponsesBody(adapted, upstreamModel)
-	if err != nil {
-		return nil, apicompat.ResponsesClientToolMapping{}, err
-	}
-	return patched, mapping, nil
-}
-
 func hasResponsesClientToolMapping(mapping apicompat.ResponsesClientToolMapping) bool {
 	return len(mapping.CustomTools) > 0 || mapping.ToolSearch || len(mapping.NamespaceTools) > 0
 }

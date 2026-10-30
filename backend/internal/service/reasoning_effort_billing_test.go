@@ -68,9 +68,9 @@ func TestReasoningEffortBillingStacksWithContextTierServiceTierAndTimePricing(t 
 					InputPricePerToken: 1e-6, ImageInputPricePerToken: 2e-6,
 					OutputPricePerToken: 3e-6, ImageOutputPricePerToken: 4e-6,
 					CacheCreationPricePerToken: 5e-6, CacheReadPricePerToken: 6e-6,
-					FastMultiplier:             testPtrFloat64(2.5),
-					
-					LongContextInputThreshold:  100, LongContextInputMultiplier: 2, LongContextOutputMultiplier: 3,
+					FastMultiplier: testPtrFloat64(2.5),
+
+					LongContextInputThreshold: 100, LongContextInputMultiplier: 2, LongContextOutputMultiplier: 3,
 				},
 				longContextPricingEnabled: true,
 				channelPricing: &ChannelModelPricing{TimePricing: &ChannelTimePricing{

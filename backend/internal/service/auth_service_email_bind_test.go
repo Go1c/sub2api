@@ -1096,6 +1096,12 @@ func (s *emailBindUserRepoStub) UpdateBalanceNoStat(context.Context, int64, floa
 	return nil
 }
 func (s *emailBindUserRepoStub) DeductBalance(context.Context, int64, float64) error { return nil }
+func (s *emailBindUserRepoStub) AdjustBalance(context.Context, int64, float64) (service.BalanceChange, error) {
+	return service.BalanceChange{}, nil
+}
+func (s *emailBindUserRepoStub) SetBalance(context.Context, int64, float64) (service.BalanceChange, error) {
+	return service.BalanceChange{}, nil
+}
 func (s *emailBindUserRepoStub) UpdateConcurrency(context.Context, int64, int) error { return nil }
 
 func (s *emailBindUserRepoStub) ExistsByEmail(_ context.Context, email string) (bool, error) {
@@ -1103,6 +1109,10 @@ func (s *emailBindUserRepoStub) ExistsByEmail(_ context.Context, email string) (
 	defer s.mu.Unlock()
 	_, ok := s.usersByEmail[email]
 	return ok, nil
+}
+
+func (s *emailBindUserRepoStub) ExistsByEmailAlias(ctx context.Context, email string) (bool, error) {
+	return s.ExistsByEmail(ctx, email)
 }
 
 func (s *emailBindUserRepoStub) BatchSetConcurrency(context.Context, []int64, int) (int, error) {

@@ -1,18 +1,14 @@
 package admin
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -24,138 +20,26 @@ import (
 	"github.com/gin-gonic/gin/binding"
 )
 
-const (
-	adminSettingsUpdateIdempotencyScope = "admin.settings.update"
-	adminSettingsUpdateDedupeTTL        = time.Minute
-)
-
-type capturedSettingsUpdateResponseError struct {
-	status int
-	header http.Header
-	body   []byte
-}
-
-func (e *capturedSettingsUpdateResponseError) Error() string {
-	return fmt.Sprintf("settings update returned HTTP %d", e.status)
-}
-
-type settingsUpdateResponseCapture struct {
-	gin.ResponseWriter
-	header  http.Header
-	body    bytes.Buffer
-	status  int
-	size    int
-	written bool
-}
-
-func newSettingsUpdateResponseCapture(base gin.ResponseWriter) *settingsUpdateResponseCapture {
-	return &settingsUpdateResponseCapture{
-		ResponseWriter: base,
-		header:         http.Header{},
-		status:         http.StatusOK,
-		size:           -1,
-	}
-}
-
-func (w *settingsUpdateResponseCapture) Header() http.Header { return w.header }
-func (w *settingsUpdateResponseCapture) WriteHeader(code int) {
-	if code <= 0 || w.written {
-		return
-	}
-	w.status = code
-}
-func (w *settingsUpdateResponseCapture) WriteHeaderNow() {
-	if w.written {
-		return
-	}
-	w.written = true
-	if w.size < 0 {
-		w.size = 0
-	}
-}
-func (w *settingsUpdateResponseCapture) Write(data []byte) (int, error) {
-	w.WriteHeaderNow()
-	n, err := w.body.Write(data)
-	w.size += n
-	return n, err
-}
-func (w *settingsUpdateResponseCapture) WriteString(data string) (int, error) {
-	w.WriteHeaderNow()
-	n, err := w.body.WriteString(data)
-	w.size += n
-	return n, err
-}
-func (w *settingsUpdateResponseCapture) Status() int   { return w.status }
-func (w *settingsUpdateResponseCapture) Size() int     { return w.size }
-func (w *settingsUpdateResponseCapture) Written() bool { return w.written }
-
-type adminSettingsIdempotencyPayload struct {
-	Settings         UpdateSettingsRequest `json:"settings"`
-	StatusBannerOnly bool                  `json:"status_banner_only"`
-}
-
-func adminSettingsImplicitIdempotencyKey(actorScope string, payload adminSettingsIdempotencyPayload) (string, error) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("marshal settings idempotency payload: %w", err)
-	}
-	sum := sha256.Sum256([]byte(actorScope + "\n" + string(raw)))
-	return "admin-settings:" + hex.EncodeToString(sum[:]), nil
-}
-
-func adminIdempotencyActorScope(c *gin.Context) string {
-	if subject, ok := middleware.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
-		return fmt.Sprintf("user:%d", subject.UserID)
-	}
-	return "anonymous"
-}
-
-func captureSettingsUpdateResponse(c *gin.Context, run func()) (any, error) {
-	orig := c.Writer
-	capture := newSettingsUpdateResponseCapture(orig)
-	c.Writer = capture
-	defer func() { c.Writer = orig }()
-	run()
-	if capture.status >= 400 {
-		h := capture.header.Clone()
-		return nil, &capturedSettingsUpdateResponseError{status: capture.status, header: h, body: append([]byte(nil), capture.body.Bytes()...)}
-	}
-	var resp response.Response
-	if capture.body.Len() > 0 {
-		_ = json.Unmarshal(capture.body.Bytes(), &resp)
-	}
-	return resp.Data, nil
-}
-
-func writeCapturedSettingsUpdateResponse(c *gin.Context, captured *capturedSettingsUpdateResponseError) {
-	for k, vals := range captured.header {
-		for _, v := range vals {
-			c.Writer.Header().Add(k, v)
-		}
-	}
-	c.Writer.WriteHeader(captured.status)
-	_, _ = c.Writer.Write(captured.body)
-}
-
 // UpdateSettingsRequest 更新设置请求
 type UpdateSettingsRequest struct {
 	// 注册设置
-	RegistrationEnabled              bool                         `json:"registration_enabled"`
-	EmailVerifyEnabled               bool                         `json:"email_verify_enabled"`
-	RegistrationEmailSuffixWhitelist []string                     `json:"registration_email_suffix_whitelist"`
-	PromoCodeEnabled                 bool                         `json:"promo_code_enabled"`
-	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
-	FrontendURL                      string                       `json:"frontend_url"`
-	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
-	InvitationRegistrationMode       string                       `json:"invitation_registration_mode"`
-	TotpEnabled                      bool                         `json:"totp_enabled"`             // TOTP 双因素认证
-	SessionBindingEnabled            *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
-	StepUpEnabled                    *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
-	AuditLogRetentionDays            int                          `json:"audit_log_retention_days"` // 审计日志保留天数
-	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
-	LoginAgreementMode               string                       `json:"login_agreement_mode"`
-	LoginAgreementUpdatedAt          string                       `json:"login_agreement_updated_at"`
-	LoginAgreementDocuments          []dto.LoginAgreementDocument `json:"login_agreement_documents"`
+	RegistrationEnabled                 bool                         `json:"registration_enabled"`
+	EmailVerifyEnabled                  bool                         `json:"email_verify_enabled"`
+	RegistrationEmailSuffixWhitelist    []string                     `json:"registration_email_suffix_whitelist"`
+	RegistrationEmailDomainQuotaEnabled *bool                        `json:"registration_email_domain_quota_enabled"` // 非白名单域名限量注册开关（省略=保持现值）
+	PromoCodeEnabled                    bool                         `json:"promo_code_enabled"`
+	PasswordResetEnabled                bool                         `json:"password_reset_enabled"`
+	FrontendURL                         string                       `json:"frontend_url"`
+	InvitationCodeEnabled               bool                         `json:"invitation_code_enabled"`
+	TotpEnabled                         bool                         `json:"totp_enabled"`             // TOTP 双因素认证
+	PasskeyEnabled                      *bool                        `json:"passkey_enabled"`          // Passkey 登录（省略=保持现值）
+	SessionBindingEnabled               *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
+	StepUpEnabled                       *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
+	AuditLogRetentionDays               int                          `json:"audit_log_retention_days"` // 审计日志保留天数
+	LoginAgreementEnabled               bool                         `json:"login_agreement_enabled"`
+	LoginAgreementMode                  string                       `json:"login_agreement_mode"`
+	LoginAgreementUpdatedAt             string                       `json:"login_agreement_updated_at"`
+	LoginAgreementDocuments             []dto.LoginAgreementDocument `json:"login_agreement_documents"`
 
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
@@ -171,8 +55,25 @@ type UpdateSettingsRequest struct {
 	TurnstileSiteKey   string `json:"turnstile_site_key"`
 	TurnstileSecretKey string `json:"turnstile_secret_key"`
 
+	// 腾讯天御验证码设置
+	TencentCaptchaEnabled        bool   `json:"tencent_captcha_enabled"`
+	TencentCaptchaAppID          string `json:"tencent_captcha_app_id"`
+	TencentCaptchaAppSecretKey   string `json:"tencent_captcha_app_secret_key"`
+	TencentCaptchaCloudSecretID  string `json:"tencent_captcha_cloud_secret_id"`
+	TencentCaptchaCloudSecretKey string `json:"tencent_captcha_cloud_secret_key"`
+	TencentCaptchaRegion         string `json:"tencent_captcha_region"`
+
+	// 阿里云验证码 2.0 设置
+	AliyunCaptchaEnabled         bool   `json:"aliyun_captcha_enabled"`
+	AliyunCaptchaAccessKeyID     string `json:"aliyun_captcha_access_key_id"`
+	AliyunCaptchaAccessKeySecret string `json:"aliyun_captcha_access_key_secret"`
+	AliyunCaptchaSceneID         string `json:"aliyun_captcha_scene_id"`
+	AliyunCaptchaPrefix          string `json:"aliyun_captcha_prefix"`
+	AliyunCaptchaRegion          string `json:"aliyun_captcha_region"`
+
 	// API Key IP 访问控制设置
-	APIKeyACLTrustForwardedIP *bool `json:"api_key_acl_trust_forwarded_ip"`
+	APIKeyACLTrustForwardedIP *bool     `json:"api_key_acl_trust_forwarded_ip"`
+	ForwardedClientIPHeaders  *[]string `json:"forwarded_client_ip_headers"`
 
 	// LinuxDo Connect OAuth 登录
 	LinuxDoConnectEnabled      bool   `json:"linuxdo_connect_enabled"`
@@ -208,9 +109,9 @@ type UpdateSettingsRequest struct {
 	WeChatConnectMPAppSecret         string `json:"wechat_connect_mp_app_secret"`
 	WeChatConnectMobileAppID         string `json:"wechat_connect_mobile_app_id"`
 	WeChatConnectMobileAppSecret     string `json:"wechat_connect_mobile_app_secret"`
-	WeChatConnectOpenEnabled         *bool  `json:"wechat_connect_open_enabled"`
-	WeChatConnectMPEnabled           *bool  `json:"wechat_connect_mp_enabled"`
-	WeChatConnectMobileEnabled       *bool  `json:"wechat_connect_mobile_enabled"`
+	WeChatConnectOpenEnabled         bool   `json:"wechat_connect_open_enabled"`
+	WeChatConnectMPEnabled           bool   `json:"wechat_connect_mp_enabled"`
+	WeChatConnectMobileEnabled       bool   `json:"wechat_connect_mobile_enabled"`
 	WeChatConnectMode                string `json:"wechat_connect_mode"`
 	WeChatConnectScopes              string `json:"wechat_connect_scopes"`
 	WeChatConnectRedirectURL         string `json:"wechat_connect_redirect_url"`
@@ -253,13 +154,13 @@ type UpdateSettingsRequest struct {
 
 	// OEM设置
 	SiteName                    string                `json:"site_name"`
-	SiteLogo                    *string               `json:"site_logo"`
+	SiteLogo                    string                `json:"site_logo"`
 	SiteSubtitle                string                `json:"site_subtitle"`
 	APIBaseURL                  string                `json:"api_base_url"`
 	ContactInfo                 string                `json:"contact_info"`
 	DocURL                      string                `json:"doc_url"`
-	SitePages                   *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                 string                `json:"home_content"`
+	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
@@ -268,16 +169,14 @@ type UpdateSettingsRequest struct {
 	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
-	LumioDesktopConfig *service.LumioDesktopConfig `json:"lumio_desktop_config"`
-
 	// 默认配置
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
 	DefaultBalance                            float64                           `json:"default_balance"`
 	AffiliateRebateRate                       *float64                          `json:"affiliate_rebate_rate"`
-	AffiliateRebateTiers                      *[]service.AffiliateRebateTier    `json:"affiliate_rebate_tiers"`
 	AffiliateRebateFreezeHours                *int                              `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays               *int                              `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap              *float64                          `json:"affiliate_rebate_per_invitee_cap"`
+	AdminRechargeRebateEnabled                *bool                             `json:"affiliate_admin_recharge_enabled"`
 	DefaultUserRPMLimit                       int                               `json:"default_user_rpm_limit"`
 	DefaultSubscriptions                      []dto.DefaultSubscriptionSetting  `json:"default_subscriptions"`
 	AuthSourceDefaultEmailBalance             *float64                          `json:"auth_source_default_email_balance"`
@@ -344,6 +243,7 @@ type UpdateSettingsRequest struct {
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
 
 	// Gateway forwarding behavior
+	OpenAITTFTMode                         *string `json:"openai_ttft_mode"`
 	EnableFingerprintUnification           *bool   `json:"enable_fingerprint_unification"`
 	EnableMetadataPassthrough              *bool   `json:"enable_metadata_passthrough"`
 	EnableCCHSigning                       *bool   `json:"enable_cch_signing"`
@@ -355,6 +255,10 @@ type UpdateSettingsRequest struct {
 	EnableClientDatelineNormalization      *bool   `json:"enable_client_dateline_normalization"`
 	AntigravityUserAgentVersion            *string `json:"antigravity_user_agent_version"`
 	OpenAICodexUserAgent                   *string `json:"openai_codex_user_agent"`
+	OpenAICodexClientVersion               *string `json:"openai_codex_client_version"`
+	OpenAICodexVersionAutoSyncEnabled      *bool   `json:"openai_codex_version_auto_sync_enabled"`
+	ClaudeCodeClientVersion                *string `json:"claude_code_client_version"`
+	ClaudeCodeVersionAutoSyncEnabled       *bool   `json:"claude_code_version_auto_sync_enabled"`
 
 	// codex_cli_only 加固（global-only）
 	MinCodexVersion                      string `json:"min_codex_version"`
@@ -408,11 +312,15 @@ type UpdateSettingsRequest struct {
 	PaymentBalanceRechargeMultiplier *float64 `json:"payment_balance_recharge_multiplier"`
 	PaymentSubscriptionUSDToCNYRate  *float64 `json:"payment_subscription_usd_to_cny_rate"`
 	PaymentRechargeFeeRate           *float64 `json:"payment_recharge_fee_rate"`
-	PaymentLoadBalanceStrat          *string  `json:"payment_load_balance_strategy"`
-	PaymentProductNamePrefix         *string  `json:"payment_product_name_prefix"`
-	PaymentProductNameSuffix         *string  `json:"payment_product_name_suffix"`
-	PaymentHelpImageURL              *string  `json:"payment_help_image_url"`
-	PaymentHelpText                  *string  `json:"payment_help_text"`
+	// nil 表示不更新；空数组表示清空阶梯
+	PaymentRechargeBonusTiers  *[]dto.RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
+	PaymentRechargeBonusMode   *string                  `json:"payment_recharge_bonus_mode"`
+	PaymentRechargeBonusNotice *string                  `json:"payment_recharge_bonus_notice"`
+	PaymentLoadBalanceStrat    *string                  `json:"payment_load_balance_strategy"`
+	PaymentProductNamePrefix   *string                  `json:"payment_product_name_prefix"`
+	PaymentProductNameSuffix   *string                  `json:"payment_product_name_suffix"`
+	PaymentHelpImageURL        *string                  `json:"payment_help_image_url"`
+	PaymentHelpText            *string                  `json:"payment_help_text"`
 
 	// Cancel rate limit
 	PaymentCancelRateLimitEnabled *bool   `json:"payment_cancel_rate_limit_enabled"`
@@ -423,23 +331,35 @@ type UpdateSettingsRequest struct {
 
 	// Force Alipay mobile clients to use QR code payment instead of mobile redirect
 	PaymentAlipayForceQRCode *bool `json:"payment_alipay_force_qrcode"`
-
-	// 充值满赠（tiers 非 nil 才写，与 PaymentEnabledTypes 同语义）
-	PaymentRechargeBonusEnabled *bool                       `json:"payment_recharge_bonus_enabled"`
-	PaymentRechargeBonusTiers   []service.RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
+	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
+	PaymentAlipayMobilePrecreateDeepLink *bool `json:"payment_alipay_mobile_precreate_deep_link"`
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                *bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   *string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds *int    `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorStatusBanner           *string `json:"channel_monitor_status_banner"`
+	ChannelMonitorHideThroughput         *bool   `json:"channel_monitor_hide_throughput"`
 	ChannelMonitorShowQuota              *bool   `json:"channel_monitor_show_quota"`
+	ChannelMonitorHideUserRanking        *bool   `json:"channel_monitor_hide_user_ranking"`
 
 	// Grok model mapping policy
 	GrokDefaultTextModel           *string `json:"grok_default_text_model"`
 	GrokCrossClientModelMapEnabled *bool   `json:"grok_cross_client_model_map_enabled"`
+	GrokDefaultBaseURLMode         *string `json:"grok_default_base_url_mode"`
 
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
+
+	// Subscription feature switch (user-facing subscription surface; see SettingKeySubscriptionEnabled)
+	SubscriptionEnabled *bool `json:"subscription_enabled"`
+
+	// Model Plaza feature switches + description
+	ModelPlazaEnabled     *bool   `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth *bool   `json:"model_plaza_require_auth"`
+	ModelPlazaDescription *string `json:"model_plaza_description"`
+
+	// Plugin management menu visibility switch; plugin runtime is unaffected.
+	PluginManagementEnabled *bool `json:"plugin_management_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -448,14 +368,18 @@ type UpdateSettingsRequest struct {
 	RiskControlEnabled *bool `json:"risk_control_enabled"`
 
 	// cyber 会话屏蔽开关 + TTL
-	CyberSessionBlockEnabled    *bool `json:"cyber_session_block_enabled"`
-	CyberSessionBlockTTLSeconds *int  `json:"cyber_session_block_ttl_seconds"`
+	CyberSessionBlockEnabled    *bool   `json:"cyber_session_block_enabled"`
+	CyberPolicyUserAllowlist    *string `json:"cyber_policy_user_allowlist"`
+	CyberSessionBlockTTLSeconds *int    `json:"cyber_session_block_ttl_seconds"`
 
 	// OpenAI fast/flex policy (optional, only updated when provided)
 	OpenAIFastPolicySettings *dto.OpenAIFastPolicySettings `json:"openai_fast_policy_settings,omitempty"`
 
 	// 系统全局 platform quota 默认值（整体替换语义：nil = 不修改，non-nil = 整体覆盖）。
 	DefaultPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"default_platform_quotas"`
+
+	// 各平台账号自动停调阈值（整体替换语义：nil = 不修改，non-nil = 整体覆盖）。
+	AccountSchedulingThresholds map[string]int `json:"account_scheduling_thresholds"`
 
 	// auth-source 层 platform quota 覆盖（override 语义：nil = 不修改，non-nil = 整体覆盖该 source 的 quota 配置）。
 	AuthSourceEmailPlatformQuotas    map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_email_platform_quotas"`
@@ -466,48 +390,7 @@ type UpdateSettingsRequest struct {
 	AuthSourceGooglePlatformQuotas   map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_google_platform_quotas"`
 	AuthSourceDingTalkPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_dingtalk_platform_quotas"`
 
-	// Fork: contact channels + AI support chat
-	ContactChannels                *[]dto.ContactChannel `json:"contact_channels"`
-	SupportChatEnabled             bool                  `json:"support_chat_enabled"`
-	SupportChatGatewayURL          string                `json:"support_chat_gateway_url"`
-	SupportChatTitle               string                `json:"support_chat_title"`
-	SupportChatWelcomeMessage      string                `json:"support_chat_welcome_message"`
-	SupportChatOfficialContactText string                `json:"support_chat_official_contact_text"`
-	SupportChatOfficialContactURL  string                `json:"support_chat_official_contact_url"`
-
-	// Fork: frontend locales + CCSwitch defaults
-	FrontendLocales                       []string `json:"frontend_locales"`
-	CCSwitchDefaultModelAnthropic         string   `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI            string   `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini            string   `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity       string   `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string   `json:"ccswitch_default_model_antigravity_gemini"`
-
-	// Fork: user subscriptions visibility / notify / multi-purchase / quota reset
-	UserSubscriptionsVisible               *bool `json:"user_subscriptions_visible"`
-	SubscriptionNotifyEmailEnabled         *bool `json:"subscription_notify_email_enabled"`
-	SubscriptionMultiplePurchasesEnabled   *bool `json:"subscription_multiple_purchases_enabled"`
-	SubscriptionQuotaResetUTCOffsetMinutes *int  `json:"subscription_quota_reset_utc_offset_minutes"`
-	SubscriptionQuotaResetHour             *int  `json:"subscription_quota_reset_hour"`
-
-	// Fork: affiliate signup bonus + balance usage gate
-	AffiliateSignupBonusEnabled  *bool    `json:"affiliate_signup_bonus_enabled"`
-	AffiliateSignupBonusAmount   *float64 `json:"affiliate_signup_bonus_amount"`
-	AffiliateSignupBonusTotalCap *float64 `json:"affiliate_signup_bonus_total_cap"`
-	AffiliateSignupBonusDailyCap *float64 `json:"affiliate_signup_bonus_daily_cap"`
-	BalanceUsageGateEnabled      *bool    `json:"balance_usage_gate_enabled"`
-	BalanceUsageGateMinBalance   *float64 `json:"balance_usage_gate_min_balance"`
-	BalanceUsageGateMinRecharge  *float64 `json:"balance_usage_gate_min_recharge"`
-
-	// Fork: subscription balance payment
-	PaymentSubscriptionBalanceEnabled *bool `json:"payment_subscription_balance_enabled"`
-
-	// Fork: site messages
-	SiteMessagesEnabled               *bool   `json:"site_messages_enabled"`
-	SiteMessagesDailySendLimit        *int    `json:"site_messages_daily_send_limit"`
-	SiteMessagesRetentionDays         *int    `json:"site_messages_retention_days"`
-	SiteMessagesDefaultRecipientEmail *string `json:"site_messages_default_recipient_email"`
-	AllowUserViewErrorRequests        *bool   `json:"allow_user_view_error_requests"`
+	AllowUserViewErrorRequests *bool `json:"allow_user_view_error_requests"`
 }
 
 // UpdateSettings 更新系统设置
@@ -561,7 +444,8 @@ var settingKeyJSONAliases = map[string]string{
 // Pointer-typed fields are deliberately excluded: they already carry their own
 // "omitted = keep the stored value" merge in UpdateSettings, and some of them
 // rely on being rewritten on every save to re-normalize fail-closed security
-// state.
+// state (see TestUpdateSettingsMalformedForwardedClientIPHeadersRemainFailClosedWhenOmitted).
+// Only the value-typed fields are indistinguishable from a deliberate clear.
 var settingKeyByJSONName = buildSettingKeyByJSONName()
 
 func buildSettingKeyByJSONName() map[string]string {
@@ -569,7 +453,7 @@ func buildSettingKeyByJSONName() map[string]string {
 	out := make(map[string]string, t.NumField())
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		if field.Type.Kind() == reflect.Ptr {
+		if field.Type.Kind() == reflect.Pointer {
 			continue
 		}
 		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
@@ -586,6 +470,8 @@ func buildSettingKeyByJSONName() map[string]string {
 }
 
 // omittedSettingKeys reports the setting keys this payload never mentioned.
+// Saving settings is a whole-document PUT, so without this a client that sends
+// only the one field it cares about resets every other field to a zero value.
 func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSettingKeys {
 	omitted := make(service.OmittedSettingKeys, len(settingKeyByJSONName))
 	for jsonName, settingKey := range settingKeyByJSONName {
@@ -596,111 +482,28 @@ func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSe
 	return omitted
 }
 
+func settingsAuditRequest(req UpdateSettingsRequest) UpdateSettingsRequest {
+	req.TencentCaptchaAppSecretKey = strings.TrimSpace(req.TencentCaptchaAppSecretKey)
+	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
+	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
+	req.AliyunCaptchaAccessKeySecret = strings.TrimSpace(req.AliyunCaptchaAccessKeySecret)
+	return req
+}
+
 func (h *SettingHandler) UpdateSettings(c *gin.Context) {
-	var raw map[string]json.RawMessage
-	if err := c.ShouldBindBodyWith(&raw, binding.JSON); err != nil {
+	var sentFields map[string]json.RawMessage
+	if err := c.ShouldBindBodyWith(&sentFields, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-
 	var req UpdateSettingsRequest
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	auditReq := settingsAuditRequest(req)
+	omitted := omittedSettingKeys(sentFields)
 
-	_, hasStatusBanner := raw[service.SettingKeyChannelMonitorStatusBanner]
-	omitted := omittedSettingKeys(raw)
-	h.updateSettingsIdempotently(c, req, len(raw) == 1 && hasStatusBanner, omitted)
-}
-
-func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool, omitted service.OmittedSettingKeys) {
-	coordinator := service.DefaultIdempotencyCoordinator()
-	if coordinator == nil {
-		h.runSettingsUpdate(c, req, statusBannerOnly, omitted)
-		return
-	}
-
-	actorScope := adminIdempotencyActorScope(c)
-	payload := adminSettingsIdempotencyPayload{
-		Settings:         req,
-		StatusBannerOnly: statusBannerOnly,
-	}
-	idempotencyKey, err := adminSettingsImplicitIdempotencyKey(actorScope, payload)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	result, err := coordinator.Execute(c.Request.Context(), service.IdempotencyExecuteOptions{
-		Scope:          adminSettingsUpdateIdempotencyScope,
-		ActorScope:     actorScope,
-		Method:         c.Request.Method,
-		Route:          c.FullPath(),
-		IdempotencyKey: idempotencyKey,
-		Payload:        payload,
-		RequireKey:     true,
-		TTL:            adminSettingsUpdateDedupeTTL,
-	}, func(ctx context.Context) (any, error) {
-		return captureSettingsUpdateResponse(c, func() {
-			h.runSettingsUpdate(c, req, statusBannerOnly, omitted)
-		})
-	})
-	if err != nil {
-		if captured, ok := err.(*capturedSettingsUpdateResponseError); ok {
-			writeCapturedSettingsUpdateResponse(c, captured)
-			return
-		}
-		if retryAfter := service.RetryAfterSecondsFromError(err); retryAfter > 0 {
-			c.Header("Retry-After", fmt.Sprintf("%d", retryAfter))
-		}
-		response.ErrorFrom(c, err)
-		return
-	}
-	if result != nil && result.Replayed {
-		c.Header("X-Idempotency-Replayed", "true")
-	}
-	if result == nil {
-		response.Success(c, nil)
-		return
-	}
-	response.Success(c, result.Data)
-}
-
-func (h *SettingHandler) runSettingsUpdate(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool, omitted service.OmittedSettingKeys) {
-	if statusBannerOnly {
-		h.updateChannelMonitorStatusBanner(c, req)
-		return
-	}
-	h.updateSettings(c, req, omitted)
-}
-
-func (h *SettingHandler) updateChannelMonitorStatusBanner(c *gin.Context, req UpdateSettingsRequest) {
-	if req.ChannelMonitorStatusBanner == nil {
-		response.BadRequest(c, "channel_monitor_status_banner must be a string")
-		return
-	}
-
-	previous, err := h.settingService.GetAllSettings(c.Request.Context())
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	banner, err := h.settingService.UpdateChannelMonitorStatusBanner(c.Request.Context(), *req.ChannelMonitorStatusBanner)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	updated := *previous
-	updated.ChannelMonitorStatusBanner = banner
-	h.auditSettingsUpdate(c, previous, &updated, nil, nil, req)
-	response.Success(c, map[string]string{
-		service.SettingKeyChannelMonitorStatusBanner: banner,
-	})
-}
-
-func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsRequest, omitted service.OmittedSettingKeys) {
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -721,6 +524,25 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	stepUpEnabled := previousSettings.StepUpEnabled
 	if req.StepUpEnabled != nil {
 		stepUpEnabled = *req.StepUpEnabled
+	}
+	passkeyEnabled := previousSettings.PasskeyEnabled
+	if req.PasskeyEnabled != nil {
+		passkeyEnabled = *req.PasskeyEnabled
+	}
+	registrationEmailDomainQuotaEnabled := previousSettings.RegistrationEmailDomainQuotaEnabled
+	if req.RegistrationEmailDomainQuotaEnabled != nil {
+		registrationEmailDomainQuotaEnabled = *req.RegistrationEmailDomainQuotaEnabled
+	}
+	if passkeyEnabled {
+		configured, _, _ := h.settingService.PasskeyConfiguration()
+		if !configured {
+			response.BadRequest(c, "Passkey sign-in requires a valid WebAuthn RP ID and allowed HTTPS origins in the deployment configuration")
+			return
+		}
+	}
+	forwardedClientIPHeaders := append([]string(nil), previousSettings.ForwardedClientIPHeaders...)
+	if req.ForwardedClientIPHeaders != nil {
+		forwardedClientIPHeaders = append([]string(nil), (*req.ForwardedClientIPHeaders)...)
 	}
 
 	// 开启敏感操作 step-up 门控属自锁风险操作：仅允许本人已启用 TOTP 的管理员会话开启，
@@ -757,10 +579,6 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	if affiliateRebateRate > service.AffiliateRebateRateMax {
 		affiliateRebateRate = service.AffiliateRebateRateMax
 	}
-	affiliateRebateTiers := previousSettings.AffiliateRebateTiers
-	if req.AffiliateRebateTiers != nil {
-		affiliateRebateTiers = *req.AffiliateRebateTiers
-	}
 	affiliateRebateFreezeHours := previousSettings.AffiliateRebateFreezeHours
 	if req.AffiliateRebateFreezeHours != nil {
 		affiliateRebateFreezeHours = *req.AffiliateRebateFreezeHours
@@ -788,6 +606,10 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	if affiliateRebatePerInviteeCap < 0 {
 		affiliateRebatePerInviteeCap = service.AffiliateRebatePerInviteeCapDefault
 	}
+	adminRechargeRebateEnabled := previousSettings.AdminRechargeRebateEnabled
+	if req.AdminRechargeRebateEnabled != nil {
+		adminRechargeRebateEnabled = *req.AdminRechargeRebateEnabled
+	}
 	// 通用表格配置：兼容旧客户端未传字段时保留当前值。
 	if req.TableDefaultPageSize <= 0 {
 		req.TableDefaultPageSize = previousSettings.TableDefaultPageSize
@@ -800,6 +622,10 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	req.SMTPPassword = strings.TrimSpace(req.SMTPPassword)
 	req.SMTPFrom = strings.TrimSpace(req.SMTPFrom)
 	req.SMTPFromName = strings.TrimSpace(req.SMTPFromName)
+	req.TencentCaptchaAppID = strings.TrimSpace(req.TencentCaptchaAppID)
+	req.TencentCaptchaAppSecretKey = strings.TrimSpace(req.TencentCaptchaAppSecretKey)
+	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
+	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
 	if req.SMTPPort <= 0 {
 		req.SMTPPort = 587
 	}
@@ -819,6 +645,43 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		req.SMTPFrom = previousSettings.SMTPFrom
 		req.SMTPFromName = previousSettings.SMTPFromName
 		req.SMTPUseTLS = previousSettings.SMTPUseTLS
+	}
+
+	turnstileEnabled := req.TurnstileEnabled
+	if _, sent := sentFields["turnstile_enabled"]; !sent {
+		turnstileEnabled = previousSettings.TurnstileEnabled
+	}
+	tencentCaptchaEnabled := req.TencentCaptchaEnabled
+	if _, sent := sentFields["tencent_captcha_enabled"]; !sent {
+		tencentCaptchaEnabled = previousSettings.TencentCaptchaEnabled
+	}
+	aliyunCaptchaEnabled := req.AliyunCaptchaEnabled
+	if _, sent := sentFields["aliyun_captcha_enabled"]; !sent {
+		aliyunCaptchaEnabled = previousSettings.AliyunCaptchaEnabled
+	}
+	enabledCaptchaProviders := 0
+	for _, enabled := range []bool{turnstileEnabled, tencentCaptchaEnabled, aliyunCaptchaEnabled} {
+		if enabled {
+			enabledCaptchaProviders++
+		}
+	}
+	if enabledCaptchaProviders > 1 {
+		response.BadRequest(c, "Multiple captcha providers (Cloudflare Turnstile / Tencent Captcha / Aliyun Captcha) cannot be enabled at the same time")
+		return
+	}
+	// 阿里云地域 normalize：未发送保留已存值，非法值一律按中国内地落库
+	if _, sent := sentFields["aliyun_captcha_region"]; !sent {
+		req.AliyunCaptchaRegion = previousSettings.AliyunCaptchaRegion
+	}
+	if req.AliyunCaptchaRegion != service.AliyunCaptchaRegionSGP {
+		req.AliyunCaptchaRegion = service.AliyunCaptchaRegionCN
+	}
+	// 天御站点 normalize：未发送保留已存值，非法值一律按中国站落库
+	if _, sent := sentFields["tencent_captcha_region"]; !sent {
+		req.TencentCaptchaRegion = previousSettings.TencentCaptchaRegion
+	}
+	if req.TencentCaptchaRegion != service.TencentCaptchaRegionINTL {
+		req.TencentCaptchaRegion = service.TencentCaptchaRegionCN
 	}
 
 	// Turnstile 参数验证
@@ -842,6 +705,83 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		secretKeyChanged := previousSettings.TurnstileSecretKey != req.TurnstileSecretKey
 		if siteKeyChanged || secretKeyChanged {
 			if err := h.turnstileService.ValidateSecretKey(c.Request.Context(), req.TurnstileSecretKey); err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+		}
+	}
+
+	if tencentCaptchaEnabled {
+		if _, sent := sentFields["tencent_captcha_app_id"]; !sent {
+			req.TencentCaptchaAppID = previousSettings.TencentCaptchaAppID
+		}
+		appID, err := strconv.ParseUint(req.TencentCaptchaAppID, 10, 64)
+		if err != nil || appID == 0 {
+			response.BadRequest(c, "Tencent Captcha CaptchaAppId must be a positive integer when enabled")
+			return
+		}
+		if req.TencentCaptchaAppSecretKey == "" {
+			req.TencentCaptchaAppSecretKey = previousSettings.TencentCaptchaAppSecretKey
+		}
+		if req.TencentCaptchaCloudSecretID == "" {
+			req.TencentCaptchaCloudSecretID = previousSettings.TencentCaptchaCloudSecretID
+		}
+		if req.TencentCaptchaCloudSecretKey == "" {
+			req.TencentCaptchaCloudSecretKey = previousSettings.TencentCaptchaCloudSecretKey
+		}
+		if req.TencentCaptchaAppSecretKey == "" {
+			response.BadRequest(c, "Tencent Captcha AppSecretKey is required when enabled")
+			return
+		}
+		if req.TencentCaptchaCloudSecretID == "" {
+			response.BadRequest(c, "Tencent Cloud SecretId is required when Tencent Captcha is enabled")
+			return
+		}
+		if req.TencentCaptchaCloudSecretKey == "" {
+			response.BadRequest(c, "Tencent Cloud SecretKey is required when Tencent Captcha is enabled")
+			return
+		}
+	}
+
+	// 阿里云验证码 2.0 参数验证
+	if aliyunCaptchaEnabled {
+		if _, sent := sentFields["aliyun_captcha_scene_id"]; !sent {
+			req.AliyunCaptchaSceneID = previousSettings.AliyunCaptchaSceneID
+		}
+		if _, sent := sentFields["aliyun_captcha_prefix"]; !sent {
+			req.AliyunCaptchaPrefix = previousSettings.AliyunCaptchaPrefix
+		}
+		if _, sent := sentFields["aliyun_captcha_access_key_id"]; !sent {
+			req.AliyunCaptchaAccessKeyID = previousSettings.AliyunCaptchaAccessKeyID
+		}
+		if req.AliyunCaptchaSceneID == "" {
+			response.BadRequest(c, "Aliyun Captcha Scene ID is required when enabled")
+			return
+		}
+		if req.AliyunCaptchaPrefix == "" {
+			response.BadRequest(c, "Aliyun Captcha Prefix is required when enabled")
+			return
+		}
+		if req.AliyunCaptchaAccessKeyID == "" {
+			response.BadRequest(c, "Aliyun Captcha AccessKey ID is required when enabled")
+			return
+		}
+		// 如果未提供 AccessKey Secret，使用已保存的值（留空保留当前值）
+		if req.AliyunCaptchaAccessKeySecret == "" {
+			if previousSettings.AliyunCaptchaAccessKeySecret == "" {
+				response.BadRequest(c, "Aliyun Captcha AccessKey Secret is required when enabled")
+				return
+			}
+			req.AliyunCaptchaAccessKeySecret = previousSettings.AliyunCaptchaAccessKeySecret
+		}
+
+		// 凭证任一变化时真实调用一次阿里云校验（避免配置错误导致无法登录）
+		credentialsChanged := previousSettings.AliyunCaptchaAccessKeyID != req.AliyunCaptchaAccessKeyID ||
+			previousSettings.AliyunCaptchaAccessKeySecret != req.AliyunCaptchaAccessKeySecret ||
+			previousSettings.AliyunCaptchaSceneID != req.AliyunCaptchaSceneID ||
+			previousSettings.AliyunCaptchaRegion != req.AliyunCaptchaRegion
+		if credentialsChanged {
+			if err := h.aliyunCaptchaService.ValidateCredentials(c.Request.Context(), req.AliyunCaptchaAccessKeyID, req.AliyunCaptchaAccessKeySecret, req.AliyunCaptchaSceneID, req.AliyunCaptchaRegion); err != nil {
 				response.ErrorFrom(c, err)
 				return
 			}
@@ -1019,12 +959,6 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		}
 	}
 
-	wechatOpenEnabled := boolValueOrDefault(req.WeChatConnectOpenEnabled, previousSettings.WeChatConnectOpenEnabled)
-	wechatMPEnabled := boolValueOrDefault(req.WeChatConnectMPEnabled, previousSettings.WeChatConnectMPEnabled)
-	wechatMobileEnabled := boolValueOrDefault(req.WeChatConnectMobileEnabled, previousSettings.WeChatConnectMobileEnabled)
-	wechatCapabilitiesProvided := req.WeChatConnectOpenEnabled != nil ||
-		req.WeChatConnectMPEnabled != nil ||
-		req.WeChatConnectMobileEnabled != nil
 	if req.WeChatConnectEnabled {
 		req.WeChatConnectAppID = strings.TrimSpace(req.WeChatConnectAppID)
 		req.WeChatConnectAppSecret = strings.TrimSpace(req.WeChatConnectAppSecret)
@@ -1048,7 +982,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			req.WeChatConnectScopes = strings.TrimSpace(previousSettings.WeChatConnectScopes)
 		}
 
-		if wechatMPEnabled && wechatMobileEnabled {
+		if req.WeChatConnectMPEnabled && req.WeChatConnectMobileEnabled {
 			response.BadRequest(c, "WeChat Official Account and Mobile App cannot be enabled at the same time")
 			return
 		}
@@ -1060,20 +994,20 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 				return
 			}
 		}
-		if !wechatCapabilitiesProvided && !wechatOpenEnabled && !wechatMPEnabled && !wechatMobileEnabled {
+		if !req.WeChatConnectOpenEnabled && !req.WeChatConnectMPEnabled && !req.WeChatConnectMobileEnabled {
 			switch req.WeChatConnectMode {
 			case "mp":
-				wechatMPEnabled = true
+				req.WeChatConnectMPEnabled = true
 			case "mobile":
-				wechatMobileEnabled = true
+				req.WeChatConnectMobileEnabled = true
 			default:
-				wechatOpenEnabled = true
+				req.WeChatConnectOpenEnabled = true
 			}
 		}
 		if req.WeChatConnectMode == "" {
-			if wechatMPEnabled {
+			if req.WeChatConnectMPEnabled {
 				req.WeChatConnectMode = "mp"
-			} else if wechatMobileEnabled {
+			} else if req.WeChatConnectMobileEnabled {
 				req.WeChatConnectMode = "mobile"
 			} else {
 				req.WeChatConnectMode = "open"
@@ -1097,7 +1031,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			req.WeChatConnectAppSecret = strings.TrimSpace(firstNonEmpty(req.WeChatConnectOpenAppSecret, req.WeChatConnectMPAppSecret, req.WeChatConnectMobileAppSecret, previousSettings.WeChatConnectAppSecret))
 		}
 
-		if wechatOpenEnabled {
+		if req.WeChatConnectOpenEnabled {
 			if req.WeChatConnectOpenAppID == "" {
 				response.BadRequest(c, "WeChat PC App ID is required when enabled")
 				return
@@ -1107,7 +1041,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 				return
 			}
 		}
-		if wechatMPEnabled {
+		if req.WeChatConnectMPEnabled {
 			if req.WeChatConnectMPAppID == "" {
 				response.BadRequest(c, "WeChat Official Account App ID is required when enabled")
 				return
@@ -1117,7 +1051,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 				return
 			}
 		}
-		if wechatMobileEnabled {
+		if req.WeChatConnectMobileEnabled {
 			if req.WeChatConnectMobileAppID == "" {
 				response.BadRequest(c, "WeChat Mobile App ID is required when enabled")
 				return
@@ -1129,13 +1063,13 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		}
 
 		if req.WeChatConnectScopes == "" {
-			if wechatMPEnabled {
+			if req.WeChatConnectMPEnabled {
 				req.WeChatConnectScopes = service.DefaultWeChatConnectScopesForMode("mp")
 			} else {
 				req.WeChatConnectScopes = service.DefaultWeChatConnectScopesForMode(req.WeChatConnectMode)
 			}
 		}
-		if wechatOpenEnabled || wechatMPEnabled {
+		if req.WeChatConnectOpenEnabled || req.WeChatConnectMPEnabled {
 			if req.WeChatConnectRedirectURL == "" {
 				response.BadRequest(c, "WeChat Redirect URL is required when web oauth is enabled")
 				return
@@ -1519,6 +1453,24 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			return
 		}
 	}
+	if req.OpenAICodexClientVersion != nil {
+		// 该值会被拼进出站 User-Agent 与 version 头，必须是合法版本号；空串表示跟随自动同步。
+		normalized := strings.TrimSpace(*req.OpenAICodexClientVersion)
+		if normalized != "" && service.NormalizeCodexClientVersion(normalized) == "" {
+			response.Error(c, http.StatusBadRequest, "openai_codex_client_version must be empty or a valid version (e.g. 0.146.0)")
+			return
+		}
+		req.OpenAICodexClientVersion = &normalized
+	}
+	if req.ClaudeCodeClientVersion != nil {
+		// 该值会被拼进出站 User-Agent 与 billing attribution，必须是合法版本号；空串表示跟随自动同步。
+		normalized := strings.TrimSpace(*req.ClaudeCodeClientVersion)
+		if normalized != "" && service.NormalizeClaudeCodeClientVersion(normalized) == "" {
+			response.Error(c, http.StatusBadRequest, "claude_code_client_version must be empty or a valid version (e.g. 2.1.258)")
+			return
+		}
+		req.ClaudeCodeClientVersion = &normalized
+	}
 
 	// codex_cli_only 加固：最低/最高 Codex 版本（空=禁用，或合法 semver；max>=min）
 	if req.MinCodexVersion != "" && !semverPattern.MatchString(req.MinCodexVersion) {
@@ -1556,249 +1508,70 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		}
 	}
 
+	if req.CyberPolicyUserAllowlist != nil {
+		if _, err := service.ParseCyberPolicyUserAllowlist(*req.CyberPolicyUserAllowlist); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
+
 	// cyber 会话屏蔽 TTL 校验：提供时必须 > 0
 	if req.CyberSessionBlockTTLSeconds != nil && *req.CyberSessionBlockTTLSeconds <= 0 {
 		response.BadRequest(c, "cyber_session_block_ttl_seconds must be > 0")
 		return
 	}
 
-	// 公开站点页面验证
-	const (
-		maxSitePages       = 10
-		maxSitePageTitle   = 80
-		maxSitePageSlug    = 120
-		maxSitePageContent = 200000
-		sitePageSlugPrefix = "doc/"
-	)
-
-	sitePagesJSON := previousSettings.SitePages
-	if req.SitePages != nil {
-		pages := *req.SitePages
-		if len(pages) > maxSitePages {
-			response.BadRequest(c, "Too many site pages (max 10)")
-			return
-		}
-		seenPageKeys := make(map[string]struct{}, len(pages))
-		seenPageSlugs := make(map[string]struct{}, len(pages))
-		for i := range pages {
-			pages[i].Key = strings.TrimSpace(pages[i].Key)
-			pages[i].Title = strings.TrimSpace(pages[i].Title)
-			pages[i].Slug = strings.Trim(strings.TrimSpace(pages[i].Slug), "/")
-			pages[i].Mode = strings.TrimSpace(pages[i].Mode)
-			if pages[i].Mode == "" {
-				pages[i].Mode = "markdown"
-			}
-			if pages[i].Key == "" {
-				response.BadRequest(c, "Site page key is required")
-				return
-			}
-			if pages[i].Mode != "markdown" && pages[i].Mode != "link" {
-				response.BadRequest(c, "Site page mode is invalid")
-				return
-			}
-			if !menuItemIDPattern.MatchString(pages[i].Key) {
-				response.BadRequest(c, "Site page key contains invalid characters")
-				return
-			}
-			if _, exists := seenPageKeys[pages[i].Key]; exists {
-				response.BadRequest(c, "Duplicate site page key: "+pages[i].Key)
-				return
-			}
-			seenPageKeys[pages[i].Key] = struct{}{}
-			if pages[i].Title == "" {
-				response.BadRequest(c, "Site page title is required")
-				return
-			}
-			if len(pages[i].Title) > maxSitePageTitle {
-				response.BadRequest(c, "Site page title is too long (max 80 characters)")
-				return
-			}
-			if pages[i].Slug == "" {
-				response.BadRequest(c, "Site page slug is required")
-				return
-			}
-			if len(pages[i].Slug) > maxSitePageSlug ||
-				!strings.HasPrefix(pages[i].Slug, sitePageSlugPrefix) ||
-				strings.ContainsAny(pages[i].Slug, "?#\\") ||
-				strings.Contains(pages[i].Slug, "//") ||
-				strings.Contains(pages[i].Slug, "..") {
-				response.BadRequest(c, "Site page slug is invalid")
-				return
-			}
-			if _, exists := seenPageSlugs[pages[i].Slug]; exists {
-				response.BadRequest(c, "Duplicate site page slug: "+pages[i].Slug)
-				return
-			}
-			seenPageSlugs[pages[i].Slug] = struct{}{}
-			if len(pages[i].Content) > maxSitePageContent {
-				response.BadRequest(c, "Site page content is too long (max 200000 characters)")
-				return
-			}
-			if pages[i].Mode == "link" {
-				pages[i].Content = strings.TrimSpace(pages[i].Content)
-				if !isHTTPURL(pages[i].Content) {
-					response.BadRequest(c, "Site page link URL is invalid")
-					return
-				}
-			}
-		}
-		pageBytes, err := json.Marshal(pages)
-		if err != nil {
-			response.BadRequest(c, "Failed to serialize site pages")
-			return
-		}
-		sitePagesJSON = string(pageBytes)
-	}
-	siteLogo := previousSettings.SiteLogo
-	if req.SiteLogo != nil {
-		siteLogo = *req.SiteLogo
-	}
-
-	// Fork fields: contact channels JSON
-	const maxContactChannels = 10
-	contactChannelsJSON := previousSettings.ContactChannels
-	if req.ContactChannels != nil {
-		channels := *req.ContactChannels
-		if len(channels) > maxContactChannels {
-			channels = channels[:maxContactChannels]
-		}
-		normalized := make([]dto.ContactChannel, 0, len(channels))
-		for _, ch := range channels {
-			label := strings.TrimSpace(ch.Label)
-			url := strings.TrimSpace(ch.URL)
-			if label == "" && url == "" {
-				continue
-			}
-			normalized = append(normalized, dto.ContactChannel{Label: label, URL: url})
-		}
-		raw, err := json.Marshal(normalized)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid contact_channels"})
-			return
-		}
-		contactChannelsJSON = string(raw)
-	}
-
-	affiliateSignupBonusAmount := previousSettings.AffiliateSignupBonusAmount
-	if req.AffiliateSignupBonusAmount != nil {
-		affiliateSignupBonusAmount = *req.AffiliateSignupBonusAmount
-	}
-	if affiliateSignupBonusAmount < 0 {
-		affiliateSignupBonusAmount = service.AffiliateSignupBonusAmountDefault
-	}
-	affiliateSignupBonusTotalCap := previousSettings.AffiliateSignupBonusTotalCap
-	if req.AffiliateSignupBonusTotalCap != nil {
-		affiliateSignupBonusTotalCap = *req.AffiliateSignupBonusTotalCap
-	}
-	if affiliateSignupBonusTotalCap < 0 {
-		affiliateSignupBonusTotalCap = service.AffiliateSignupBonusTotalCapDefault
-	}
-	affiliateSignupBonusDailyCap := previousSettings.AffiliateSignupBonusDailyCap
-	if req.AffiliateSignupBonusDailyCap != nil {
-		affiliateSignupBonusDailyCap = *req.AffiliateSignupBonusDailyCap
-	}
-	if affiliateSignupBonusDailyCap < 0 {
-		affiliateSignupBonusDailyCap = service.AffiliateSignupBonusDailyCapDefault
-	}
-	balanceUsageGateMinBalance := previousSettings.BalanceUsageGateMinBalance
-	if req.BalanceUsageGateMinBalance != nil {
-		balanceUsageGateMinBalance = *req.BalanceUsageGateMinBalance
-	}
-	if balanceUsageGateMinBalance < 0 {
-		balanceUsageGateMinBalance = service.BalanceUsageGateMinBalanceDefault
-	}
-	balanceUsageGateMinRecharge := previousSettings.BalanceUsageGateMinRecharge
-	if req.BalanceUsageGateMinRecharge != nil {
-		balanceUsageGateMinRecharge = *req.BalanceUsageGateMinRecharge
-	}
-	if balanceUsageGateMinRecharge < 0 {
-		balanceUsageGateMinRecharge = service.BalanceUsageGateMinRechargeDefault
-	}
-
-	subscriptionQuotaResetUTCOffsetMinutes := previousSettings.SubscriptionQuotaResetUTCOffsetMinutes
-	if req.SubscriptionQuotaResetUTCOffsetMinutes != nil {
-		subscriptionQuotaResetUTCOffsetMinutes = *req.SubscriptionQuotaResetUTCOffsetMinutes
-	}
-	subscriptionQuotaResetHour := previousSettings.SubscriptionQuotaResetHour
-	if req.SubscriptionQuotaResetHour != nil {
-		subscriptionQuotaResetHour = *req.SubscriptionQuotaResetHour
-	}
-
-	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
-	subscriptionNotifyEmailEnabled := boolValueOrDefault(req.SubscriptionNotifyEmailEnabled, previousSettings.SubscriptionNotifyEmailEnabled)
-	subscriptionMultiplePurchasesEnabled := boolValueOrDefault(req.SubscriptionMultiplePurchasesEnabled, previousSettings.SubscriptionMultiplePurchasesEnabled)
-
-	affiliateSignupBonusEnabled := previousSettings.AffiliateSignupBonusEnabled
-	if req.AffiliateSignupBonusEnabled != nil {
-		affiliateSignupBonusEnabled = *req.AffiliateSignupBonusEnabled
-	}
-	balanceUsageGateEnabled := previousSettings.BalanceUsageGateEnabled
-	if req.BalanceUsageGateEnabled != nil {
-		balanceUsageGateEnabled = *req.BalanceUsageGateEnabled
-	}
-
-	siteMessagesEnabled := previousSettings.SiteMessagesEnabled
-	if req.SiteMessagesEnabled != nil {
-		siteMessagesEnabled = *req.SiteMessagesEnabled
-	}
-	siteMessagesDailySendLimit := previousSettings.SiteMessagesDailySendLimit
-	if req.SiteMessagesDailySendLimit != nil {
-		siteMessagesDailySendLimit = *req.SiteMessagesDailySendLimit
-	}
-	siteMessagesRetentionDays := previousSettings.SiteMessagesRetentionDays
-	if req.SiteMessagesRetentionDays != nil {
-		siteMessagesRetentionDays = *req.SiteMessagesRetentionDays
-	}
-	siteMessagesDefaultRecipientEmail := previousSettings.SiteMessagesDefaultRecipientEmail
-	if req.SiteMessagesDefaultRecipientEmail != nil {
-		siteMessagesDefaultRecipientEmail = strings.TrimSpace(*req.SiteMessagesDefaultRecipientEmail)
-	}
-
-	frontendLocales := previousSettings.FrontendLocales
-	if req.FrontendLocales != nil {
-		frontendLocales = req.FrontendLocales
-	}
-	lumioDesktopConfig := previousSettings.LumioDesktopConfig
-	if req.LumioDesktopConfig != nil {
-		lumioDesktopConfig = *req.LumioDesktopConfig
-	}
-
 	settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
-		DefaultPlatformQuotas: req.DefaultPlatformQuotas,
+		DefaultPlatformQuotas:       req.DefaultPlatformQuotas,
+		AccountSchedulingThresholds: req.AccountSchedulingThresholds,
 
-		RegistrationEnabled:              req.RegistrationEnabled,
-		EmailVerifyEnabled:               req.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist: req.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                 req.PromoCodeEnabled,
-		PasswordResetEnabled:             req.PasswordResetEnabled,
-		FrontendURL:                      req.FrontendURL,
-		InvitationCodeEnabled:            req.InvitationCodeEnabled,
-		InvitationRegistrationMode:       req.InvitationRegistrationMode,
-		TotpEnabled:                      req.TotpEnabled,
-		SessionBindingEnabled:            sessionBindingEnabled,
-		StepUpEnabled:                    stepUpEnabled,
-		AuditLogRetentionDays:            req.AuditLogRetentionDays,
-		LoginAgreementEnabled:            req.LoginAgreementEnabled,
-		LoginAgreementMode:               loginAgreementMode,
-		LoginAgreementUpdatedAt:          loginAgreementUpdatedAt,
-		LoginAgreementDocuments:          loginAgreementDocuments,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
-		TurnstileEnabled:                 req.TurnstileEnabled,
-		TurnstileSiteKey:                 req.TurnstileSiteKey,
-		TurnstileSecretKey:               req.TurnstileSecretKey,
+		RegistrationEnabled:                 req.RegistrationEnabled,
+		EmailVerifyEnabled:                  req.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:    req.RegistrationEmailSuffixWhitelist,
+		RegistrationEmailDomainQuotaEnabled: registrationEmailDomainQuotaEnabled,
+		PromoCodeEnabled:                    req.PromoCodeEnabled,
+		PasswordResetEnabled:                req.PasswordResetEnabled,
+		FrontendURL:                         req.FrontendURL,
+		InvitationCodeEnabled:               req.InvitationCodeEnabled,
+		TotpEnabled:                         req.TotpEnabled,
+		PasskeyEnabled:                      passkeyEnabled,
+		SessionBindingEnabled:               sessionBindingEnabled,
+		StepUpEnabled:                       stepUpEnabled,
+		AuditLogRetentionDays:               req.AuditLogRetentionDays,
+		LoginAgreementEnabled:               req.LoginAgreementEnabled,
+		LoginAgreementMode:                  loginAgreementMode,
+		LoginAgreementUpdatedAt:             loginAgreementUpdatedAt,
+		LoginAgreementDocuments:             loginAgreementDocuments,
+		SMTPHost:                            req.SMTPHost,
+		SMTPPort:                            req.SMTPPort,
+		SMTPUsername:                        req.SMTPUsername,
+		SMTPPassword:                        req.SMTPPassword,
+		SMTPFrom:                            req.SMTPFrom,
+		SMTPFromName:                        req.SMTPFromName,
+		SMTPUseTLS:                          req.SMTPUseTLS,
+		TurnstileEnabled:                    req.TurnstileEnabled,
+		TurnstileSiteKey:                    req.TurnstileSiteKey,
+		TurnstileSecretKey:                  req.TurnstileSecretKey,
+		TencentCaptchaEnabled:               req.TencentCaptchaEnabled,
+		TencentCaptchaAppID:                 req.TencentCaptchaAppID,
+		TencentCaptchaAppSecretKey:          req.TencentCaptchaAppSecretKey,
+		TencentCaptchaCloudSecretID:         req.TencentCaptchaCloudSecretID,
+		TencentCaptchaCloudSecretKey:        req.TencentCaptchaCloudSecretKey,
+		TencentCaptchaRegion:                req.TencentCaptchaRegion,
+		AliyunCaptchaEnabled:                req.AliyunCaptchaEnabled,
+		AliyunCaptchaAccessKeyID:            req.AliyunCaptchaAccessKeyID,
+		AliyunCaptchaAccessKeySecret:        req.AliyunCaptchaAccessKeySecret,
+		AliyunCaptchaSceneID:                req.AliyunCaptchaSceneID,
+		AliyunCaptchaPrefix:                 req.AliyunCaptchaPrefix,
+		AliyunCaptchaRegion:                 req.AliyunCaptchaRegion,
 		APIKeyACLTrustForwardedIP: func() bool {
 			if req.APIKeyACLTrustForwardedIP != nil {
 				return *req.APIKeyACLTrustForwardedIP
 			}
 			return previousSettings.APIKeyACLTrustForwardedIP
 		}(),
+		ForwardedClientIPHeaders:               forwardedClientIPHeaders,
 		LinuxDoConnectEnabled:                  req.LinuxDoConnectEnabled,
 		LinuxDoConnectClientID:                 req.LinuxDoConnectClientID,
 		LinuxDoConnectClientSecret:             req.LinuxDoConnectClientSecret,
@@ -1828,9 +1601,9 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		WeChatConnectMPAppSecret:               req.WeChatConnectMPAppSecret,
 		WeChatConnectMobileAppID:               req.WeChatConnectMobileAppID,
 		WeChatConnectMobileAppSecret:           req.WeChatConnectMobileAppSecret,
-		WeChatConnectOpenEnabled:               wechatOpenEnabled,
-		WeChatConnectMPEnabled:                 wechatMPEnabled,
-		WeChatConnectMobileEnabled:             wechatMobileEnabled,
+		WeChatConnectOpenEnabled:               req.WeChatConnectOpenEnabled,
+		WeChatConnectMPEnabled:                 req.WeChatConnectMPEnabled,
+		WeChatConnectMobileEnabled:             req.WeChatConnectMobileEnabled,
 		WeChatConnectMode:                      req.WeChatConnectMode,
 		WeChatConnectScopes:                    req.WeChatConnectScopes,
 		WeChatConnectRedirectURL:               req.WeChatConnectRedirectURL,
@@ -1868,46 +1641,27 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		GoogleOAuthRedirectURL:                 req.GoogleOAuthRedirectURL,
 		GoogleOAuthFrontendRedirectURL:         req.GoogleOAuthFrontendRedirectURL,
 		SiteName:                               req.SiteName,
-		SiteLogo:                               siteLogo,
+		SiteLogo:                               req.SiteLogo,
 		SiteSubtitle:                           req.SiteSubtitle,
 		APIBaseURL:                             req.APIBaseURL,
 		ContactInfo:                            req.ContactInfo,
-		ContactChannels:                        contactChannelsJSON,
-		SupportChatEnabled:                     req.SupportChatEnabled,
-		SupportChatGatewayURL:                  req.SupportChatGatewayURL,
-		SupportChatTitle:                       req.SupportChatTitle,
-		SupportChatWelcomeMessage:              req.SupportChatWelcomeMessage,
-		SupportChatOfficialContactText:         req.SupportChatOfficialContactText,
-		SupportChatOfficialContactURL:          req.SupportChatOfficialContactURL,
 		DocURL:                                 req.DocURL,
-		SitePages:                              sitePagesJSON,
 		HomeContent:                            req.HomeContent,
+		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
-		FrontendLocales:                        frontendLocales,
-		CCSwitchDefaultModelAnthropic:          req.CCSwitchDefaultModelAnthropic,
-		CCSwitchDefaultModelOpenAI:             req.CCSwitchDefaultModelOpenAI,
-		CCSwitchDefaultModelGemini:             req.CCSwitchDefaultModelGemini,
-		CCSwitchDefaultModelAntigravity:        req.CCSwitchDefaultModelAntigravity,
-		CCSwitchDefaultModelAntigravityGemini:  req.CCSwitchDefaultModelAntigravityGemini,
-		UserSubscriptionsVisible:               userSubscriptionsVisible,
-		SubscriptionNotifyEmailEnabled:         subscriptionNotifyEmailEnabled,
-		SubscriptionMultiplePurchasesEnabled:   subscriptionMultiplePurchasesEnabled,
-		SubscriptionQuotaResetUTCOffsetMinutes: subscriptionQuotaResetUTCOffsetMinutes,
-		SubscriptionQuotaResetHour:             subscriptionQuotaResetHour,
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
 		CustomEndpoints:                        customEndpointsJSON,
-		LumioDesktopConfig:                     lumioDesktopConfig,
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
-		AffiliateRebateTiers:                   affiliateRebateTiers,
 		AffiliateRebateFreezeHours:             affiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            affiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           affiliateRebatePerInviteeCap,
+		AdminRechargeRebateEnabled:             adminRechargeRebateEnabled,
 		DefaultUserRPMLimit:                    req.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   defaultSubscriptions,
 		EnableModelFallback:                    req.EnableModelFallback,
@@ -1956,6 +1710,12 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 				return *req.EnableFingerprintUnification
 			}
 			return previousSettings.EnableFingerprintUnification
+		}(),
+		OpenAITTFTMode: func() string {
+			if req.OpenAITTFTMode != nil {
+				return *req.OpenAITTFTMode
+			}
+			return previousSettings.OpenAITTFTMode
 		}(),
 		EnableMetadataPassthrough: func() bool {
 			if req.EnableMetadataPassthrough != nil {
@@ -2017,6 +1777,34 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.OpenAICodexUserAgent
 		}(),
+		OpenAICodexClientVersion: func() string {
+			if req.OpenAICodexClientVersion != nil {
+				return *req.OpenAICodexClientVersion
+			}
+			return previousSettings.OpenAICodexClientVersion
+		}(),
+		// 同步值由自动同步任务独占写入，面板保存时原样带回，避免被清空。
+		OpenAICodexClientVersionSynced: previousSettings.OpenAICodexClientVersionSynced,
+		OpenAICodexVersionAutoSyncEnabled: func() bool {
+			if req.OpenAICodexVersionAutoSyncEnabled != nil {
+				return *req.OpenAICodexVersionAutoSyncEnabled
+			}
+			return previousSettings.OpenAICodexVersionAutoSyncEnabled
+		}(),
+		ClaudeCodeClientVersion: func() string {
+			if req.ClaudeCodeClientVersion != nil {
+				return *req.ClaudeCodeClientVersion
+			}
+			return previousSettings.ClaudeCodeClientVersion
+		}(),
+		// 同步值由自动同步任务独占写入，面板保存时原样带回，避免被清空。
+		ClaudeCodeClientVersionSynced: previousSettings.ClaudeCodeClientVersionSynced,
+		ClaudeCodeVersionAutoSyncEnabled: func() bool {
+			if req.ClaudeCodeVersionAutoSyncEnabled != nil {
+				return *req.ClaudeCodeVersionAutoSyncEnabled
+			}
+			return previousSettings.ClaudeCodeVersionAutoSyncEnabled
+		}(),
 		MinCodexVersion:       strings.TrimSpace(req.MinCodexVersion),
 		MaxCodexVersion:       strings.TrimSpace(req.MaxCodexVersion),
 		CodexCLIOnlyBlacklist: strings.TrimSpace(req.CodexCLIOnlyBlacklist),
@@ -2058,9 +1846,10 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.OpenAILowUpstreamRatePriorityEnabled
 		}(),
-		OpenAIOAuthSchedulingRateMultiplier: func() float64 {
-			if req.OpenAIOAuthSchedulingRateMultiplier != nil {
-				return *req.OpenAIOAuthSchedulingRateMultiplier
+		OpenAIOAuthSchedulingRateMultiplier: func() *float64 {
+			// Omitted fields preserve the override; explicit null clears it.
+			if _, sent := sentFields[service.SettingKeyOpenAIOAuthSchedulingRateMultiplier]; sent {
+				return req.OpenAIOAuthSchedulingRateMultiplier
 			}
 			return previousSettings.OpenAIOAuthSchedulingRateMultiplier
 		}(),
@@ -2135,23 +1924,35 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.ChannelMonitorEnabled
 		}(),
+		ChannelMonitorMode: func() string {
+			if req.ChannelMonitorMode != nil {
+				return *req.ChannelMonitorMode
+			}
+			return previousSettings.ChannelMonitorMode
+		}(),
 		ChannelMonitorDefaultIntervalSeconds: func() int {
 			if req.ChannelMonitorDefaultIntervalSeconds != nil {
 				return *req.ChannelMonitorDefaultIntervalSeconds
 			}
 			return previousSettings.ChannelMonitorDefaultIntervalSeconds
 		}(),
-		ChannelMonitorStatusBanner: func() string {
-			if req.ChannelMonitorStatusBanner != nil {
-				return *req.ChannelMonitorStatusBanner
+		ChannelMonitorHideThroughput: func() bool {
+			if req.ChannelMonitorHideThroughput != nil {
+				return *req.ChannelMonitorHideThroughput
 			}
-			return previousSettings.ChannelMonitorStatusBanner
+			return previousSettings.ChannelMonitorHideThroughput
 		}(),
 		ChannelMonitorShowQuota: func() bool {
 			if req.ChannelMonitorShowQuota != nil {
 				return *req.ChannelMonitorShowQuota
 			}
 			return previousSettings.ChannelMonitorShowQuota
+		}(),
+		ChannelMonitorHideUserRanking: func() bool {
+			if req.ChannelMonitorHideUserRanking != nil {
+				return *req.ChannelMonitorHideUserRanking
+			}
+			return previousSettings.ChannelMonitorHideUserRanking
 		}(),
 		GrokDefaultTextModel: func() string {
 			if req.GrokDefaultTextModel != nil {
@@ -2165,11 +1966,47 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.GrokCrossClientModelMapEnabled
 		}(),
+		GrokDefaultBaseURLMode: func() string {
+			if req.GrokDefaultBaseURLMode != nil {
+				return strings.TrimSpace(*req.GrokDefaultBaseURLMode)
+			}
+			return previousSettings.GrokDefaultBaseURLMode
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
 			}
 			return previousSettings.AvailableChannelsEnabled
+		}(),
+		SubscriptionEnabled: func() bool {
+			if req.SubscriptionEnabled != nil {
+				return *req.SubscriptionEnabled
+			}
+			return previousSettings.SubscriptionEnabled
+		}(),
+		ModelPlazaEnabled: func() bool {
+			if req.ModelPlazaEnabled != nil {
+				return *req.ModelPlazaEnabled
+			}
+			return previousSettings.ModelPlazaEnabled
+		}(),
+		ModelPlazaRequireAuth: func() bool {
+			if req.ModelPlazaRequireAuth != nil {
+				return *req.ModelPlazaRequireAuth
+			}
+			return previousSettings.ModelPlazaRequireAuth
+		}(),
+		ModelPlazaDescription: func() string {
+			if req.ModelPlazaDescription != nil {
+				return *req.ModelPlazaDescription
+			}
+			return previousSettings.ModelPlazaDescription
+		}(),
+		PluginManagementEnabled: func() bool {
+			if req.PluginManagementEnabled != nil {
+				return *req.PluginManagementEnabled
+			}
+			return previousSettings.PluginManagementEnabled
 		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
@@ -2177,23 +2014,18 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.AffiliateEnabled
 		}(),
-		AffiliateSignupBonusEnabled:  affiliateSignupBonusEnabled,
-		AffiliateSignupBonusAmount:   affiliateSignupBonusAmount,
-		AffiliateSignupBonusTotalCap: affiliateSignupBonusTotalCap,
-		AffiliateSignupBonusDailyCap: affiliateSignupBonusDailyCap,
-		BalanceUsageGateEnabled:      balanceUsageGateEnabled,
-		BalanceUsageGateMinBalance:   balanceUsageGateMinBalance,
-		BalanceUsageGateMinRecharge:  balanceUsageGateMinRecharge,
 		RiskControlEnabled: func() bool {
 			if req.RiskControlEnabled != nil {
 				return *req.RiskControlEnabled
 			}
 			return previousSettings.RiskControlEnabled
 		}(),
-		SiteMessagesEnabled:               siteMessagesEnabled,
-		SiteMessagesDailySendLimit:        siteMessagesDailySendLimit,
-		SiteMessagesRetentionDays:         siteMessagesRetentionDays,
-		SiteMessagesDefaultRecipientEmail: siteMessagesDefaultRecipientEmail,
+		CyberPolicyUserAllowlist: func() string {
+			if req.CyberPolicyUserAllowlist != nil {
+				return *req.CyberPolicyUserAllowlist
+			}
+			return previousSettings.CyberPolicyUserAllowlist
+		}(),
 		CyberSessionBlockEnabled: func() bool {
 			if req.CyberSessionBlockEnabled != nil {
 				return *req.CyberSessionBlockEnabled
@@ -2289,31 +2121,32 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	// Skip if no payment fields were provided (prevents accidental wipe).
 	if h.paymentConfigService != nil && hasPaymentFields(req) {
 		paymentReq := service.UpdatePaymentConfigRequest{
-			Enabled:                           req.PaymentEnabled,
-			MinAmount:                         req.PaymentMinAmount,
-			MaxAmount:                         req.PaymentMaxAmount,
-			DailyLimit:                        req.PaymentDailyLimit,
-			OrderTimeoutMin:                   req.PaymentOrderTimeoutMin,
-			MaxPendingOrders:                  req.PaymentMaxPendingOrders,
-			EnabledTypes:                      req.PaymentEnabledTypes,
-			BalanceDisabled:                   req.PaymentBalanceDisabled,
-			SubscriptionBalancePaymentEnabled: req.PaymentSubscriptionBalanceEnabled,
-			BalanceRechargeMultiplier:         req.PaymentBalanceRechargeMultiplier,
-			SubscriptionUSDToCNYRate:          req.PaymentSubscriptionUSDToCNYRate,
-			RechargeFeeRate:                   req.PaymentRechargeFeeRate,
-			LoadBalanceStrategy:               req.PaymentLoadBalanceStrat,
-			ProductNamePrefix:                 req.PaymentProductNamePrefix,
-			ProductNameSuffix:                 req.PaymentProductNameSuffix,
-			HelpImageURL:                      req.PaymentHelpImageURL,
-			HelpText:                          req.PaymentHelpText,
-			CancelRateLimitEnabled:            req.PaymentCancelRateLimitEnabled,
-			CancelRateLimitMax:                req.PaymentCancelRateLimitMax,
-			CancelRateLimitWindow:             req.PaymentCancelRateLimitWindow,
-			CancelRateLimitUnit:               req.PaymentCancelRateLimitUnit,
-			CancelRateLimitMode:               req.PaymentCancelRateLimitMode,
-			AlipayForceQRCode:                 req.PaymentAlipayForceQRCode,
-			RechargeBonusEnabled:              req.PaymentRechargeBonusEnabled,
-			RechargeBonusTiers:                req.PaymentRechargeBonusTiers,
+			Enabled:                       req.PaymentEnabled,
+			MinAmount:                     req.PaymentMinAmount,
+			MaxAmount:                     req.PaymentMaxAmount,
+			DailyLimit:                    req.PaymentDailyLimit,
+			OrderTimeoutMin:               req.PaymentOrderTimeoutMin,
+			MaxPendingOrders:              req.PaymentMaxPendingOrders,
+			EnabledTypes:                  req.PaymentEnabledTypes,
+			BalanceDisabled:               req.PaymentBalanceDisabled,
+			BalanceRechargeMultiplier:     req.PaymentBalanceRechargeMultiplier,
+			SubscriptionUSDToCNYRate:      req.PaymentSubscriptionUSDToCNYRate,
+			RechargeFeeRate:               req.PaymentRechargeFeeRate,
+			RechargeBonusTiers:            rechargeBonusTiersFromDTO(req.PaymentRechargeBonusTiers),
+			RechargeBonusMode:             req.PaymentRechargeBonusMode,
+			RechargeBonusNotice:           req.PaymentRechargeBonusNotice,
+			LoadBalanceStrategy:           req.PaymentLoadBalanceStrat,
+			ProductNamePrefix:             req.PaymentProductNamePrefix,
+			ProductNameSuffix:             req.PaymentProductNameSuffix,
+			HelpImageURL:                  req.PaymentHelpImageURL,
+			HelpText:                      req.PaymentHelpText,
+			CancelRateLimitEnabled:        req.PaymentCancelRateLimitEnabled,
+			CancelRateLimitMax:            req.PaymentCancelRateLimitMax,
+			CancelRateLimitWindow:         req.PaymentCancelRateLimitWindow,
+			CancelRateLimitUnit:           req.PaymentCancelRateLimitUnit,
+			CancelRateLimitMode:           req.PaymentCancelRateLimitMode,
+			AlipayForceQRCode:             req.PaymentAlipayForceQRCode,
+			AlipayMobilePrecreateDeepLink: req.PaymentAlipayMobilePrecreateDeepLink,
 		}
 		if err := h.paymentConfigService.UpdatePaymentConfig(c.Request.Context(), paymentReq); err != nil {
 			response.ErrorFrom(c, err)
@@ -2325,7 +2158,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		}
 	}
 
-	h.auditSettingsUpdate(c, previousSettings, settings, previousAuthSourceDefaults, authSourceDefaults, req)
+	h.auditSettingsUpdate(c, previousSettings, settings, previousAuthSourceDefaults, authSourceDefaults, auditReq)
 
 	// 重新获取设置返回
 	updatedSettings, err := h.settingService.GetAllSettings(c.Request.Context())
@@ -2353,20 +2186,25 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		updatedPaymentCfg, _ = h.paymentConfigService.GetPaymentConfig(c.Request.Context())
 	}
 	if updatedPaymentCfg == nil {
-		updatedPaymentCfg = &service.PaymentConfig{RechargeBonusTiers: []service.RechargeBonusTier{}}
+		updatedPaymentCfg = &service.PaymentConfig{}
 	}
+	passkeyConfigured, passkeyRPID, passkeyRPOrigins := h.settingService.PasskeyConfiguration()
 
 	payload := dto.SystemSettings{
 		RegistrationEnabled:                                    updatedSettings.RegistrationEnabled,
 		EmailVerifyEnabled:                                     updatedSettings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:                       updatedSettings.RegistrationEmailSuffixWhitelist,
+		RegistrationEmailDomainQuotaEnabled:                    updatedSettings.RegistrationEmailDomainQuotaEnabled,
 		PromoCodeEnabled:                                       updatedSettings.PromoCodeEnabled,
 		PasswordResetEnabled:                                   updatedSettings.PasswordResetEnabled,
 		FrontendURL:                                            updatedSettings.FrontendURL,
 		InvitationCodeEnabled:                                  updatedSettings.InvitationCodeEnabled,
-		InvitationRegistrationMode:                             updatedSettings.InvitationRegistrationMode,
 		TotpEnabled:                                            updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:                            h.settingService.IsTotpEncryptionKeyConfigured(),
+		PasskeyEnabled:                                         updatedSettings.PasskeyEnabled,
+		PasskeyConfigured:                                      passkeyConfigured,
+		PasskeyRPID:                                            passkeyRPID,
+		PasskeyRPOrigins:                                       passkeyRPOrigins,
 		SessionBindingEnabled:                                  updatedSettings.SessionBindingEnabled,
 		StepUpEnabled:                                          updatedSettings.StepUpEnabled,
 		AuditLogRetentionDays:                                  updatedSettings.AuditLogRetentionDays,
@@ -2384,7 +2222,20 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		TurnstileEnabled:                                       updatedSettings.TurnstileEnabled,
 		TurnstileSiteKey:                                       updatedSettings.TurnstileSiteKey,
 		TurnstileSecretKeyConfigured:                           updatedSettings.TurnstileSecretKeyConfigured,
+		TencentCaptchaEnabled:                                  updatedSettings.TencentCaptchaEnabled,
+		TencentCaptchaAppID:                                    updatedSettings.TencentCaptchaAppID,
+		TencentCaptchaAppSecretKeyConfigured:                   updatedSettings.TencentCaptchaAppSecretKeyConfigured,
+		TencentCaptchaCloudSecretIDConfigured:                  updatedSettings.TencentCaptchaCloudSecretIDConfigured,
+		TencentCaptchaCloudSecretKeyConfigured:                 updatedSettings.TencentCaptchaCloudSecretKeyConfigured,
+		TencentCaptchaRegion:                                   updatedSettings.TencentCaptchaRegion,
+		AliyunCaptchaEnabled:                                   updatedSettings.AliyunCaptchaEnabled,
+		AliyunCaptchaAccessKeyID:                               updatedSettings.AliyunCaptchaAccessKeyID,
+		AliyunCaptchaAccessKeySecretConfigured:                 updatedSettings.AliyunCaptchaAccessKeySecretConfigured,
+		AliyunCaptchaSceneID:                                   updatedSettings.AliyunCaptchaSceneID,
+		AliyunCaptchaPrefix:                                    updatedSettings.AliyunCaptchaPrefix,
+		AliyunCaptchaRegion:                                    updatedSettings.AliyunCaptchaRegion,
 		APIKeyACLTrustForwardedIP:                              updatedSettings.APIKeyACLTrustForwardedIP,
+		ForwardedClientIPHeaders:                               updatedSettings.ForwardedClientIPHeaders,
 		LinuxDoConnectEnabled:                                  updatedSettings.LinuxDoConnectEnabled,
 		LinuxDoConnectClientID:                                 updatedSettings.LinuxDoConnectClientID,
 		LinuxDoConnectClientSecretConfigured:                   updatedSettings.LinuxDoConnectClientSecretConfigured,
@@ -2458,42 +2309,23 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		SiteSubtitle:                                           updatedSettings.SiteSubtitle,
 		APIBaseURL:                                             updatedSettings.APIBaseURL,
 		ContactInfo:                                            updatedSettings.ContactInfo,
-		ContactChannels:                                        dto.ParseContactChannels(updatedSettings.ContactChannels),
-		SupportChatEnabled:                                     updatedSettings.SupportChatEnabled,
-		SupportChatGatewayURL:                                  updatedSettings.SupportChatGatewayURL,
-		SupportChatTitle:                                       updatedSettings.SupportChatTitle,
-		SupportChatWelcomeMessage:                              updatedSettings.SupportChatWelcomeMessage,
-		SupportChatOfficialContactText:                         updatedSettings.SupportChatOfficialContactText,
-		SupportChatOfficialContactURL:                          updatedSettings.SupportChatOfficialContactURL,
 		DocURL:                                                 updatedSettings.DocURL,
-		SitePages:                                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                                            updatedSettings.HomeContent,
+		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
-		FrontendLocales:                                        updatedSettings.FrontendLocales,
-		CCSwitchDefaultModelAnthropic:                          updatedSettings.CCSwitchDefaultModelAnthropic,
-		CCSwitchDefaultModelOpenAI:                             updatedSettings.CCSwitchDefaultModelOpenAI,
-		CCSwitchDefaultModelGemini:                             updatedSettings.CCSwitchDefaultModelGemini,
-		CCSwitchDefaultModelAntigravity:                        updatedSettings.CCSwitchDefaultModelAntigravity,
-		CCSwitchDefaultModelAntigravityGemini:                  updatedSettings.CCSwitchDefaultModelAntigravityGemini,
-		UserSubscriptionsVisible:                               updatedSettings.UserSubscriptionsVisible,
-		SubscriptionNotifyEmailEnabled:                         updatedSettings.SubscriptionNotifyEmailEnabled,
-		SubscriptionMultiplePurchasesEnabled:                   updatedSettings.SubscriptionMultiplePurchasesEnabled,
-		SubscriptionQuotaResetUTCOffsetMinutes:                 updatedSettings.SubscriptionQuotaResetUTCOffsetMinutes,
-		SubscriptionQuotaResetHour:                             updatedSettings.SubscriptionQuotaResetHour,
 		PurchaseSubscriptionEnabled:                            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
-		LumioDesktopConfig:                                     updatedSettings.LumioDesktopConfig,
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,
 		AffiliateRebateRate:                                    updatedSettings.AffiliateRebateRate,
-		AffiliateRebateTiers:                                   affiliateRebateTiersDTOs(updatedSettings.AffiliateRebateTiers),
 		AffiliateRebateFreezeHours:                             updatedSettings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:                            updatedSettings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:                           updatedSettings.AffiliateRebatePerInviteeCap,
+		AdminRechargeRebateEnabled:                             updatedSettings.AdminRechargeRebateEnabled,
 		DefaultUserRPMLimit:                                    updatedSettings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                                   updatedDefaultSubscriptions,
 		EnableModelFallback:                                    updatedSettings.EnableModelFallback,
@@ -2501,8 +2333,6 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		FallbackModelOpenAI:                                    updatedSettings.FallbackModelOpenAI,
 		FallbackModelGemini:                                    updatedSettings.FallbackModelGemini,
 		FallbackModelAntigravity:                               updatedSettings.FallbackModelAntigravity,
-		GrokDefaultTextModel:                                   updatedSettings.GrokDefaultTextModel,
-		GrokCrossClientModelMapEnabled:                         updatedSettings.GrokCrossClientModelMapEnabled,
 		EnableIdentityPatch:                                    updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    updatedSettings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                                   updatedSettings.OpsMonitoringEnabled,
@@ -2524,6 +2354,12 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		EnableClientDatelineNormalization:                      updatedSettings.EnableClientDatelineNormalization,
 		AntigravityUserAgentVersion:                            updatedSettings.AntigravityUserAgentVersion,
 		OpenAICodexUserAgent:                                   updatedSettings.OpenAICodexUserAgent,
+		OpenAICodexClientVersion:                               updatedSettings.OpenAICodexClientVersion,
+		OpenAICodexClientVersionSynced:                         updatedSettings.OpenAICodexClientVersionSynced,
+		OpenAICodexVersionAutoSyncEnabled:                      updatedSettings.OpenAICodexVersionAutoSyncEnabled,
+		ClaudeCodeClientVersion:                                updatedSettings.ClaudeCodeClientVersion,
+		ClaudeCodeClientVersionSynced:                          updatedSettings.ClaudeCodeClientVersionSynced,
+		ClaudeCodeVersionAutoSyncEnabled:                       updatedSettings.ClaudeCodeVersionAutoSyncEnabled,
 		MinCodexVersion:                                        updatedSettings.MinCodexVersion,
 		MaxCodexVersion:                                        updatedSettings.MaxCodexVersion,
 		CodexCLIOnlyBlacklist:                                  updatedSettings.CodexCLIOnlyBlacklist,
@@ -2575,10 +2411,12 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PaymentMaxPendingOrders:                                updatedPaymentCfg.MaxPendingOrders,
 		PaymentEnabledTypes:                                    updatedPaymentCfg.EnabledTypes,
 		PaymentBalanceDisabled:                                 updatedPaymentCfg.BalanceDisabled,
-		PaymentSubscriptionBalanceEnabled:                      updatedPaymentCfg.SubscriptionBalancePaymentEnabled,
 		PaymentBalanceRechargeMultiplier:                       updatedPaymentCfg.BalanceRechargeMultiplier,
 		PaymentSubscriptionUSDToCNYRate:                        updatedPaymentCfg.SubscriptionUSDToCNYRate,
 		PaymentRechargeFeeRate:                                 updatedPaymentCfg.RechargeFeeRate,
+		PaymentRechargeBonusTiers:                              rechargeBonusTiersToDTO(updatedPaymentCfg.RechargeBonusTiers),
+		PaymentRechargeBonusMode:                               rechargeBonusModeToDTO(updatedPaymentCfg.RechargeBonusMode),
+		PaymentRechargeBonusNotice:                             updatedPaymentCfg.RechargeBonusNotice,
 		PaymentLoadBalanceStrat:                                updatedPaymentCfg.LoadBalanceStrategy,
 		PaymentProductNamePrefix:                               updatedPaymentCfg.ProductNamePrefix,
 		PaymentProductNameSuffix:                               updatedPaymentCfg.ProductNameSuffix,
@@ -2590,33 +2428,35 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PaymentCancelRateLimitUnit:                             updatedPaymentCfg.CancelRateLimitUnit,
 		PaymentCancelRateLimitMode:                             updatedPaymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               updatedPaymentCfg.AlipayForceQRCode,
-		PaymentRechargeBonusEnabled:                            updatedPaymentCfg.RechargeBonusEnabled,
-		PaymentRechargeBonusTiers:                              updatedPaymentCfg.RechargeBonusTiers,
+		PaymentAlipayMobilePrecreateDeepLink:                   updatedPaymentCfg.AlipayMobilePrecreateDeepLink,
 
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
+		ChannelMonitorMode:                   updatedSettings.ChannelMonitorMode,
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
-		ChannelMonitorStatusBanner:           updatedSettings.ChannelMonitorStatusBanner,
+		ChannelMonitorHideThroughput:         updatedSettings.ChannelMonitorHideThroughput,
 		ChannelMonitorShowQuota:              updatedSettings.ChannelMonitorShowQuota,
+		ChannelMonitorHideUserRanking:        updatedSettings.ChannelMonitorHideUserRanking,
+
+		GrokDefaultTextModel:           updatedSettings.GrokDefaultTextModel,
+		GrokCrossClientModelMapEnabled: updatedSettings.GrokCrossClientModelMapEnabled,
+		GrokDefaultBaseURLMode:         updatedSettings.GrokDefaultBaseURLMode,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
+		SubscriptionEnabled:      updatedSettings.SubscriptionEnabled,
 
-		AffiliateEnabled:             updatedSettings.AffiliateEnabled,
-		AffiliateSignupBonusEnabled:  updatedSettings.AffiliateSignupBonusEnabled,
-		AffiliateSignupBonusAmount:   updatedSettings.AffiliateSignupBonusAmount,
-		AffiliateSignupBonusTotalCap: updatedSettings.AffiliateSignupBonusTotalCap,
-		AffiliateSignupBonusDailyCap: updatedSettings.AffiliateSignupBonusDailyCap,
-		BalanceUsageGateEnabled:      updatedSettings.BalanceUsageGateEnabled,
-		BalanceUsageGateMinBalance:   updatedSettings.BalanceUsageGateMinBalance,
-		BalanceUsageGateMinRecharge:  updatedSettings.BalanceUsageGateMinRecharge,
+		ModelPlazaEnabled:       updatedSettings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:   updatedSettings.ModelPlazaRequireAuth,
+		ModelPlazaDescription:   updatedSettings.ModelPlazaDescription,
+		PluginManagementEnabled: updatedSettings.PluginManagementEnabled,
 
-		RiskControlEnabled:                updatedSettings.RiskControlEnabled,
-		SiteMessagesEnabled:               updatedSettings.SiteMessagesEnabled,
-		SiteMessagesDailySendLimit:        updatedSettings.SiteMessagesDailySendLimit,
-		SiteMessagesRetentionDays:         updatedSettings.SiteMessagesRetentionDays,
-		SiteMessagesDefaultRecipientEmail: updatedSettings.SiteMessagesDefaultRecipientEmail,
-		CyberSessionBlockEnabled:          updatedSettings.CyberSessionBlockEnabled,
-		CyberSessionBlockTTLSeconds:       updatedSettings.CyberSessionBlockTTLSeconds,
-		AllowUserViewErrorRequests:        updatedSettings.AllowUserViewErrorRequests,
+		AffiliateEnabled: updatedSettings.AffiliateEnabled,
+
+		RiskControlEnabled:          updatedSettings.RiskControlEnabled,
+		CyberSessionBlockEnabled:    updatedSettings.CyberSessionBlockEnabled,
+		CyberPolicyUserAllowlist:    updatedSettings.CyberPolicyUserAllowlist,
+		CyberSessionBlockTTLSeconds: updatedSettings.CyberSessionBlockTTLSeconds,
+		AccountSchedulingThresholds: updatedSettings.AccountSchedulingThresholds,
+		AllowUserViewErrorRequests:  updatedSettings.AllowUserViewErrorRequests,
 	}
 	if fastPolicy, err := h.settingService.GetOpenAIFastPolicySettings(c.Request.Context()); err != nil {
 		slog.Error("openai_fast_policy_settings_get_failed", "error", err)
@@ -2653,13 +2493,13 @@ func hasPaymentFields(req UpdateSettingsRequest) bool {
 		req.PaymentEnabledTypes != nil || req.PaymentBalanceDisabled != nil ||
 		req.PaymentBalanceRechargeMultiplier != nil || req.PaymentSubscriptionUSDToCNYRate != nil ||
 		req.PaymentRechargeFeeRate != nil ||
+		req.PaymentRechargeBonusTiers != nil || req.PaymentRechargeBonusMode != nil || req.PaymentRechargeBonusNotice != nil ||
 		req.PaymentLoadBalanceStrat != nil || req.PaymentProductNamePrefix != nil ||
 		req.PaymentProductNameSuffix != nil || req.PaymentHelpImageURL != nil ||
 		req.PaymentHelpText != nil || req.PaymentCancelRateLimitEnabled != nil ||
 		req.PaymentCancelRateLimitMax != nil || req.PaymentCancelRateLimitWindow != nil ||
 		req.PaymentCancelRateLimitUnit != nil || req.PaymentCancelRateLimitMode != nil ||
-		req.PaymentAlipayForceQRCode != nil ||
-		req.PaymentRechargeBonusEnabled != nil || req.PaymentRechargeBonusTiers != nil
+		req.PaymentAlipayForceQRCode != nil || req.PaymentAlipayMobilePrecreateDeepLink != nil
 }
 
 // ensureDingTalkSyncAttributes 在保存 settings 后，按 admin 配置的 (attr key, attr name)

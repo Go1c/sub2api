@@ -295,7 +295,7 @@ func ProvideOpenAIQuotaService(
 	privacyClientFactory PrivacyClientFactory,
 	openAIGatewayService *OpenAIGatewayService,
 ) *OpenAIQuotaService {
-	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory)
+	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory, nil)
 	service.agentIdentityWS = openAIGatewayService
 	service.SetIPGroupResolver(openAIGatewayService.IPGroupResolver())
 	return service
@@ -785,7 +785,6 @@ func ProvideImageStorageSettingService(
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
-
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
 	settingRepo SettingRepository,
@@ -861,8 +860,9 @@ func ProvideOpsIngressRejectAggregator(opsRepo OpsRepository, opsService *OpsSer
 }
 
 // ProvideSettingService wires SettingService with group reader and proxy repo.
-func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, cfg *config.Config) *SettingService {
+func ProvideSettingService(scopedKeys ScopedAdminKeyRepository, settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, cfg *config.Config) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
+	svc.scopedAdminKeyRepo = scopedKeys
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
 	svc.SetProxyRepository(proxyRepo)
 	if err := svc.LoadAPIKeyACLTrustForwardedIPSetting(context.Background()); err != nil {

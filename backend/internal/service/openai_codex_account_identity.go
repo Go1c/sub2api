@@ -84,7 +84,7 @@ func isolateOpenAIUpstreamSessionID(apiKeyID int64, account *Account, raw string
 	}
 	namespace := codexAccountIdentityNamespace(account)
 	if namespace == "" {
-		return isolateOpenAISessionID(apiKeyID, raw, account)
+		return isolateOpenAISessionID(apiKeyID, raw)
 	}
 	sum := sha256.Sum256([]byte(fmt.Sprintf("u%d:a%s:%s", apiKeyID, namespace, raw)))
 	return fmt.Sprintf("%x", sum[:8])

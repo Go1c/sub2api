@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ type Group struct {
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
+	ImageCountBilling            bool
 	ImageRateIndependent         bool
 	ImageRateMultiplier          float64
 	ImagePrice1K                 *float64
@@ -56,33 +58,31 @@ type Group struct {
 	VideoPrice480P               *float64
 	VideoPrice720P               *float64
 	VideoPrice1080P              *float64
-	// VideoModelPrices 按模型族和分辨率覆盖视频每秒价格。命中时只覆盖该模型的 VideoPrice*。
+	// VideoModelPrices is optional per-model-family per-second pricing
+	// (groups.video_model_prices JSONB). Shape: family → resolution → USD/s.
+	// When set for a model, overrides VideoPrice* for that model only.
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
 	WebSearchPricePerCall *float64
+
 	// 搜索工具显式定价（per 1k calls）。
 	SearchPricePer1k *float64
 	// Grok Voice 显式定价（分组级，不按文本 RateMultiplier）。
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
-	// 网页搜索独立倍率：false 表示共享分组有效倍率；true 时使用 WebSearchRateMultiplier。
-	WebSearchRateIndependent bool
-	WebSearchRateMultiplier  float64
-	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
-	// 默认 true；关闭后始终按第一档基础价。
+
+	// ModelPricing overrides channel and built-in prices for matching models.
+	// Token intervals are selected only when LongContextPricingEnabled is true.
 	LongContextPricingEnabled bool
-	// ModelPricing 分组级逐模型定价，优先于渠道和内置价卡。
-	ModelPricing []ChannelModelPricing
+	ModelPricing              []ChannelModelPricing
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool
 	FallbackGroupID *int64
 	// 无效请求兜底分组（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
-	// 账号全部不可用时兜底分组
-	FallbackGroupIDOnExhausted *int64
 
 	// 模型路由配置
 	// key: 模型匹配模式（支持 * 通配符，如 "claude-opus-*"）
@@ -109,35 +109,44 @@ type Group struct {
 	RequirePrivacySet           bool // 调度时仅允许 privacy 已成功设置的账号（OpenAI/Antigravity/Anthropic/Gemini）
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
-	ModelsListConfig            GroupModelsListConfig
 	ModelAllowlist              GroupModelAllowlist
-	CodexModelsManifestConfig   GroupCodexModelsManifestConfig
+	// CodexModelsManifestConfig 开启后，普通模型列表与 Codex manifest 优先使用
+	// 固定账号列表拉取并合并，不经过调度器（仅 openai 平台）。
+	CodexModelsManifestConfig GroupCodexModelsManifestConfig
 
 	// RPMLimit 分组级每分钟请求数上限（0 = 不限制）。
 	// 一旦设置即接管该分组用户的限流（覆盖用户级 rpm_limit），可被 user-group rpm_override 进一步覆盖。
 	RPMLimit int
-	// MaxReasoningEffort 限制 Anthropic/OpenAI 请求的推理强度。空字符串表示不限制。
-	MaxReasoningEffort string
-	// MaxReasoningEffortOverLimit 超过上限时的动作：downgrade 或 deny。
-	MaxReasoningEffortOverLimit string
-	// ReasoningEffortMappings 在套用上限之前改写请求里的推理强度。
-	ReasoningEffortMappings []ReasoningEffortMapping
-	// 分组利润控制。准入条件：账号倍率 U <= D*(1-margin-buffer)。
-	ProfitControlEnabled bool
-	ProfitMinMargin      float64
-	ProfitSafetyBuffer   float64
 
-	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
-	// false 时仅管理员接口返回 upstream_model / model_mapping_chain。
-	ExposeUpstreamModelToUser bool
+	// MaxReasoningEffort limits the effective Anthropic/OpenAI reasoning effort.
+	// Empty means unlimited; supported values are minimal/low/medium/high/xhigh/max.
+	MaxReasoningEffort string
+	// MaxReasoningEffortOverLimit is the access control when an explicit effort
+	// exceeds the ceiling: downgrade (default) or deny.
+	MaxReasoningEffortOverLimit string
+	// ReasoningEffortMappings rewrites explicit request values before applying the ceiling.
+	ReasoningEffortMappings []ReasoningEffortMapping
+
+	// 分组利润控制（五个 token 计费平台可启用）。
+	// 调度准入条件：账号倍率 U 满足 U <= D*(1-margin-buffer)，
+	// D 为请求用户当刻有效下游倍率（用户覆盖 ?? 分组默认，再乘高峰因子）。
+	// 只过滤候选账号，不改变既有排序/评分/粘性/熔断。
+	ProfitControlEnabled bool
+	ProfitMinMargin      float64 // 最低毛利率，小数存储（0.30=30%）
+	ProfitSafetyBuffer   float64 // 安全缓冲，小数，与 margin 相加后从 D 中扣除
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	AccountGroups           []AccountGroup
-	AccountCount            int64
-	ActiveAccountCount      int64
-	RateLimitedAccountCount int64
+	AccountGroups              []AccountGroup
+	AccountCount               int64
+	ActiveAccountCount         int64
+	RateLimitedAccountCount    int64
+	WebSearchRateIndependent   bool
+	WebSearchRateMultiplier    float64
+	FallbackGroupIDOnExhausted *int64
+	ModelsListConfig           GroupModelsListConfig
+	ExposeUpstreamModelToUser  bool
 }
 
 // IsGroupBindableInSimpleMode is the shared policy for groups that may be
@@ -164,60 +173,6 @@ func (g *Group) HasWeeklyLimit() bool {
 
 func (g *Group) HasMonthlyLimit() bool {
 	return g.MonthlyLimitUSD != nil && *g.MonthlyLimitUSD > 0
-}
-
-func NormalizeGroupPlatform(platform string) string {
-	platform = strings.TrimSpace(platform)
-	if platform == "" {
-		return PlatformAnthropic
-	}
-	return platform
-}
-
-func ValidateProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) error {
-	if !enabled {
-		return nil
-	}
-	if !profitControlPlatformSupported(platform) {
-		return fmt.Errorf("profit control is not supported for platform %s", platform)
-	}
-	if minMargin < 0 || minMargin >= 1 || safetyBuffer < 0 || safetyBuffer >= 1 || minMargin+safetyBuffer >= 1 {
-		return fmt.Errorf("invalid profit control thresholds")
-	}
-	return nil
-}
-
-func NormalizeProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) (bool, float64, float64) {
-	if !profitControlPlatformSupported(platform) {
-		return false, 0, 0
-	}
-	if minMargin < 0 || minMargin >= 1 {
-		minMargin = 0
-	}
-	if safetyBuffer < 0 || safetyBuffer >= 1 {
-		safetyBuffer = 0
-	}
-	if minMargin+safetyBuffer >= 1 {
-		minMargin, safetyBuffer = 0, 0
-	}
-	return enabled, minMargin, safetyBuffer
-}
-
-func profitControlPlatformSupported(platform string) bool {
-	switch platform {
-	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity:
-		return true
-	default:
-		return false
-	}
-}
-
-// GetSearchPricePer1k returns explicit search/tool price per 1k calls if configured.
-func (g *Group) GetSearchPricePer1k() *float64 {
-	if g == nil {
-		return nil
-	}
-	return g.SearchPricePer1k
 }
 
 // GetImagePrice 根据 image_size 返回对应的图片生成价格
@@ -248,6 +203,30 @@ func (g *Group) GetVideoPrice(resolution string) *float64 {
 		return g.VideoPrice1080P
 	default:
 		return g.VideoPrice480P
+	}
+}
+
+// GetVideoPriceForModel prefers VideoModelPrices for the model family, then flat columns.
+func (g *Group) GetVideoPriceForModel(model, resolution string) *float64 {
+	if g == nil {
+		return nil
+	}
+	if price := LookupVideoModelPrice(g.VideoModelPrices, model, resolution); price != nil {
+		return price
+	}
+	return g.GetVideoPrice(resolution)
+}
+
+// VideoPriceConfig builds billing config including optional per-model map.
+func (g *Group) VideoPriceConfig() *VideoPriceConfig {
+	if g == nil {
+		return nil
+	}
+	return &VideoPriceConfig{
+		Price480P:   g.VideoPrice480P,
+		Price720P:   g.VideoPrice720P,
+		Price1080P:  g.VideoPrice1080P,
+		ModelPrices: NormalizeVideoModelPrices(g.VideoModelPrices),
 	}
 }
 
@@ -427,4 +406,81 @@ func computePeakAwareMultipliers(apiKey *APIKey, base float64, now time.Time) (t
 	}
 	text = base * peak
 	return
+}
+
+// validProfitControlRatio 判定 margin/buffer 是否为可落库的合法小数：[0,1) 且非 NaN/Inf。
+func validProfitControlRatio(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 && v < 1
+}
+
+// NormalizeGroupPlatform 把创建分组时省略的 platform 归一化为默认平台。
+// handler 的入参预校验必须与 CreateGroup 落库时用同一个归一化结果，否则
+// 「省略 platform + 启用利润控制」会被 handler 以「平台不支持」400 掉，
+// 而该分组本会被建成受支持的 anthropic 分组。
+func NormalizeGroupPlatform(platform string) string {
+	if platform == "" {
+		return PlatformAnthropic
+	}
+	return platform
+}
+
+// ValidateProfitControlConfig 是分组利润控制配置的唯一校验来源，handler 与 service 层共用。
+// enabled=true 时仅允许五个可计费平台分组；margin/buffer 各自 ∈ [0,1)，且 margin+buffer < 1
+// （相加 >=1 时阈值 <=0，所有可核价账号都会被排除，视为配置错误而不是静默全黑）。
+// enabled=false 时放行（不关心平台），由 Normalize 兜底清洗数值。
+func ValidateProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) error {
+	if !enabled {
+		return nil
+	}
+	if !profitControlPlatformSupported(platform) {
+		return errors.New("利润控制仅支持 openai、anthropic、gemini、grok、antigravity 平台分组")
+	}
+	if !validProfitControlRatio(minMargin) {
+		return fmt.Errorf("profit_min_margin 应为 [0,1) 的小数，got %v", minMargin)
+	}
+	if !validProfitControlRatio(safetyBuffer) {
+		return fmt.Errorf("profit_safety_buffer 应为 [0,1) 的小数，got %v", safetyBuffer)
+	}
+	if minMargin+safetyBuffer >= 1 {
+		return errors.New("profit_min_margin 与 profit_safety_buffer 之和必须小于 1，否则将排除全部账号")
+	}
+	return nil
+}
+
+// NormalizeProfitControlConfig 归一化最终落库的利润控制配置，CreateGroup 与 UpdateGroup 共用（唯一收口）：
+//   - 非五个平台分组不携带利润控制，一律重置为默认（关、0、0）；
+//   - 支持平台关闭开关时保留合法数值（便于再次启用），清洗 NaN/Inf/越界脏值。
+//
+// 与 ValidateProfitControlConfig 的分工同高峰倍率：先归一化、后校验，
+// 使"openai 转其他平台"这类更新能静默清空利润配置而不是被校验拒绝。
+func NormalizeProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) (bool, float64, float64) {
+	if !profitControlPlatformSupported(platform) {
+		return false, 0, 0
+	}
+	if !enabled {
+		if !validProfitControlRatio(minMargin) {
+			minMargin = 0
+		}
+		if !validProfitControlRatio(safetyBuffer) {
+			safetyBuffer = 0
+		}
+	}
+	return enabled, minMargin, safetyBuffer
+}
+
+func profitControlPlatformSupported(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetSearchPricePer1k returns explicit search/tool price per 1k calls if configured.
+func (g *Group) GetSearchPricePer1k() *float64 {
+	if g == nil {
+		return nil
+	}
+	return g.SearchPricePer1k
 }

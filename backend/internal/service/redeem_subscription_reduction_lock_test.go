@@ -10,7 +10,7 @@ import (
 
 func TestRedeemReductionUsesLockedSubscription(t *testing.T) {
 	now := time.Now()
-	stale := UserSubscription{ID: 7, UserID: 11, GroupID: 13, ExpiresAt: now.AddDate(0, 0, 10), Status: SubscriptionStatusActive, Notes: "old"}
+	stale := UserSubscription{ID: 7, UserID: 11, GroupID: int64Ptr(13), ExpiresAt: now.AddDate(0, 0, 10), Status: SubscriptionStatusActive, Notes: "old"}
 	current := stale
 	current.ExpiresAt = now.AddDate(0, 0, 20)
 	current.Notes = "renewed"

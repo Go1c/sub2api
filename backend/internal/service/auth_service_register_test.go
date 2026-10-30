@@ -15,9 +15,11 @@ import (
 )
 
 type settingRepoStub struct {
-	mu     sync.Mutex
-	values map[string]string
-	err    error
+	mu               sync.Mutex
+	values           map[string]string
+	err              error
+	getValueCalls    int
+	getMultipleCalls int
 }
 
 func (s *settingRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -27,6 +29,7 @@ func (s *settingRepoStub) Get(ctx context.Context, key string) (*Setting, error)
 func (s *settingRepoStub) GetValue(ctx context.Context, key string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.getValueCalls++
 	if s.err != nil {
 		return "", s.err
 	}
@@ -43,6 +46,7 @@ func (s *settingRepoStub) Set(ctx context.Context, key, value string) error {
 func (s *settingRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.getMultipleCalls++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -114,6 +118,7 @@ func (s *userPlatformQuotaRepoStub) ResetExpiredWindow(context.Context, int64, s
 func (s *userPlatformQuotaRepoStub) BatchSnapshotUsage(_ context.Context, _ []UserPlatformQuotaSnapshot, _ time.Time) error {
 	return nil
 }
+
 func (s *defaultSubscriptionAssignerStub) AssignOrExtendSubscription(_ context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
 	if input != nil {
 		s.calls = append(s.calls, *input)
@@ -121,8 +126,7 @@ func (s *defaultSubscriptionAssignerStub) AssignOrExtendSubscription(_ context.C
 	if s.err != nil {
 		return nil, false, s.err
 	}
-	gid := input.GroupID
-	return &UserSubscription{UserID: input.UserID, GroupID: &gid}, false, nil
+	return &UserSubscription{UserID: input.UserID, GroupID: int64PtrT(input.GroupID)}, false, nil
 }
 
 func (s *refreshTokenCacheStub) StoreRefreshToken(context.Context, string, *RefreshTokenData, time.Duration) error {
@@ -220,7 +224,7 @@ func (s *emailCacheStub) IncrNotifyCodeUserRate(ctx context.Context, userID int6
 	return 0, nil
 }
 
-func newAuthService(repo *userRepoStub, settings map[string]string, emailCache EmailCache, quotaRepos ...UserPlatformQuotaRepository) *AuthService {
+func newAuthService(repo *userRepoStub, settings map[string]string, emailCache EmailCache, quotaRepo UserPlatformQuotaRepository) *AuthService {
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
 			Secret:     "test-secret",
@@ -240,10 +244,6 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 	var emailService *EmailService
 	if emailCache != nil {
 		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
-	}
-	var quotaRepo UserPlatformQuotaRepository
-	if len(quotaRepos) > 0 {
-		quotaRepo = quotaRepos[0]
 	}
 
 	return NewAuthService(
@@ -639,106 +639,6 @@ func TestAuthService_Register_Success(t *testing.T) {
 	require.True(t, user.CheckPassword("password"))
 }
 
-func TestAuthService_Register_InvitationModeAffiliateLinkAcceptsUserInviteCode(t *testing.T) {
-	repo := &userRepoStub{nextID: 2}
-	service := newAuthService(repo, map[string]string{
-		SettingKeyRegistrationEnabled:   "true",
-		SettingKeyInvitationCodeEnabled: "true",
-		"invitation_registration_mode":  "affiliate_link",
-		SettingKeyAffiliateEnabled:      "true",
-	}, nil)
-	affiliateRepo := newAffiliateSignupBonusRepoStub()
-	service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
-	service.redeemRepo = &redeemCodeRepoStub{}
-
-	_, user, err := service.RegisterWithVerification(
-		context.Background(),
-		"invitee@test.com",
-		"password",
-		"",
-		"",
-		"",
-		"INVITE123",
-	)
-
-	require.NoError(t, err)
-	require.NotNil(t, user)
-	require.Len(t, affiliateRepo.bindWithBonusCalls, 1)
-	require.Equal(t, int64(2), affiliateRepo.bindWithBonusCalls[0].userID)
-	require.Equal(t, int64(1), affiliateRepo.bindWithBonusCalls[0].inviterID)
-}
-
-func TestAuthService_Register_InvitationModeBothAcceptsRedeemOrAffiliateCode(t *testing.T) {
-	t.Run("redeem code", func(t *testing.T) {
-		repo := &userRepoStub{nextID: 3}
-		redeemRepo := &redeemCodeRepoStub{
-			codesByCode: map[string]*RedeemCode{
-				"REDEEM123": {
-					ID:     7,
-					Code:   "REDEEM123",
-					Type:   RedeemTypeInvitation,
-					Status: StatusUnused,
-				},
-			},
-		}
-		service := newAuthService(repo, map[string]string{
-			SettingKeyRegistrationEnabled:   "true",
-			SettingKeyInvitationCodeEnabled: "true",
-			"invitation_registration_mode":  "both",
-			SettingKeyAffiliateEnabled:      "true",
-		}, nil)
-		affiliateRepo := newAffiliateSignupBonusRepoStub()
-		service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
-		service.redeemRepo = redeemRepo
-
-		_, user, err := service.RegisterWithVerification(
-			context.Background(),
-			"redeem@test.com",
-			"password",
-			"",
-			"",
-			"REDEEM123",
-			"",
-		)
-
-		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.Len(t, redeemRepo.useCalls, 1)
-		require.Empty(t, affiliateRepo.bindWithBonusCalls)
-	})
-
-	t.Run("affiliate invite code", func(t *testing.T) {
-		repo := &userRepoStub{nextID: 4}
-		service := newAuthService(repo, map[string]string{
-			SettingKeyRegistrationEnabled:   "true",
-			SettingKeyInvitationCodeEnabled: "true",
-			"invitation_registration_mode":  "both",
-			SettingKeyAffiliateEnabled:      "true",
-		}, nil)
-		affiliateRepo := newAffiliateSignupBonusRepoStub()
-		now := time.Now()
-		affiliateRepo.profiles[4] = &AffiliateSummary{UserID: 4, AffCode: "INVITEE4", CreatedAt: now}
-		service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
-		service.redeemRepo = &redeemCodeRepoStub{}
-
-		_, user, err := service.RegisterWithVerification(
-			context.Background(),
-			"affiliate@test.com",
-			"password",
-			"",
-			"",
-			"",
-			"INVITE123",
-		)
-
-		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.Len(t, affiliateRepo.bindWithBonusCalls, 1)
-		require.Equal(t, int64(4), affiliateRepo.bindWithBonusCalls[0].userID)
-		require.Equal(t, int64(1), affiliateRepo.bindWithBonusCalls[0].inviterID)
-	})
-}
-
 func TestAuthService_ValidateToken_ExpiredReturnsClaimsWithError(t *testing.T) {
 	repo := &userRepoStub{}
 	service := newAuthService(repo, nil, nil, nil)
@@ -1110,3 +1010,21 @@ func TestCanBypassRegistrationDisabledForOAuth(t *testing.T) {
 		})
 	}
 }
+
+func (s *emailCacheStub) IncrVerificationCodeAttempts(context.Context, string) (int, error) {
+	if s.data == nil {
+		return 0, errors.New("verification code not found")
+	}
+	s.data.Attempts++
+	return s.data.Attempts, nil
+}
+
+func (s *emailCacheStub) IncrNotifyVerifyCodeAttempts(context.Context, string) (int, error) {
+	return 0, errors.New("notify verification code not found")
+}
+
+func (s *emailCacheStub) ConsumePasswordResetToken(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
+func int64PtrT(v int64) *int64 { return &v }

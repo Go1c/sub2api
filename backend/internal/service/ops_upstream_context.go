@@ -22,11 +22,6 @@ const (
 	OpsUpstreamErrorsKey       = "ops_upstream_errors"
 	OpsUpstreamModelKey        = "ops_upstream_model"
 
-	// Best-effort capture of the current upstream request body so ops can
-	// retry the specific upstream attempt (not just the client request).
-	// This value is sanitized+trimmed before being persisted.
-	OpsUpstreamRequestBodyKey = "ops_upstream_request_body"
-
 	// Optional stage latencies (milliseconds) for troubleshooting and alerting.
 	OpsAuthLatencyMsKey      = "ops_auth_latency_ms"
 	OpsRoutingLatencyMsKey   = "ops_routing_latency_ms"
@@ -43,9 +38,27 @@ const (
 	// ops_error_logger 中间件检查此 key，为 true 时跳过错误记录。
 	OpsSkipPassthroughKey = "ops_skip_passthrough"
 
+	// OpsStreamErrorKey 保存 handleStreamingAwareError 在「响应已固化为 HTTP 200 的 SSE 流」
+	// 上就地(in-band)补发错误帧时记录的 OpsStreamError。因为 wire 状态码停留在 200，
+	// ops_error_logger 的 status>=400 采集路径永远不会触发，这类流内失败
+	//（例如等待并发槽位超时后回退的限流、Wait 后二次计费校验失败）本会在错误看板里隐形。
 	OpsStreamErrorKey  = "ops_stream_error"
 	OpsStreamErrorsKey = "ops_stream_errors"
 	OpsStreamTurnKey   = "ops_stream_turn"
+
+	// Client-side configuration denials should remain visible in ops_error_logs,
+	// but should be excluded from SLA/error-rate calculations.
+	// ResponseCommittedKey 由 handleErrorResponse 系列函数在写完 HTTP 错误响应后设置。
+	// ensureForwardErrorResponse 检查此 key，为 true 时跳过兜底写入，避免在已完成的 JSON 后追加 SSE。
+	ResponseCommittedKey = "response_committed"
+
+	// OpsLocalErrorTypeKey / OpsLocalErrorCodeKey 记录网关以 Google 错误格式回写的错误类型与错误码：
+	// Google 错误体没有 type 字段，ops_error_logger 据此按与 Claude / OpenAI 格式错误相同的口径分类。
+	OpsLocalErrorTypeKey = "ops_local_error_type"
+	OpsLocalErrorCodeKey = "ops_local_error_code"
+	// OpsRequestScopedErrorKey 标记失败由请求内容决定（如引用的显式缓存不存在）：只按错误类型分类，
+	// 上游错误上下文保留为明细但不参与归因。
+	OpsRequestScopedErrorKey = "ops_request_scoped_error"
 
 	OpsClientBusinessLimitedKey                           = "ops_client_business_limited"
 	OpsClientBusinessLimitedReasonKey                     = "ops_client_business_limited_reason"
@@ -55,76 +68,17 @@ const (
 	OpsClientBusinessLimitedReasonLocalFeatureGate        = "local_feature_gate"
 	OpsClientBusinessLimitedReasonLocalPolicyDenied       = "local_policy_denied"
 	OpsClientBusinessLimitedReasonLocalModelConfiguration = "local_model_configuration"
-
-	// ResponseCommittedKey 由 handleErrorResponse 系列函数在写完 HTTP 错误响应后设置。
-	// ensureForwardErrorResponse 检查此 key，为 true 时跳过兜底写入，避免在已完成的 JSON 后追加 SSE。
-	ResponseCommittedKey = "response_committed"
 )
 
-const (
-	OpsRequestScopedErrorKey = "ops_request_scoped_error"
-	OpsLocalErrorTypeKey     = "ops_local_error_type"
-	OpsLocalErrorCodeKey     = "ops_local_error_code"
-)
-
-// SetOpsLocalErrorType records an error type that the response body does not carry.
-func SetOpsLocalErrorType(c *gin.Context, errType, code string) {
-	if c == nil {
-		return
-	}
-	c.Set(OpsLocalErrorTypeKey, strings.TrimSpace(errType))
-	c.Set(OpsLocalErrorCodeKey, strings.TrimSpace(code))
-	c.Set(OpsRequestScopedErrorKey, false)
-}
-
-// OpsLocalErrorType returns the type and code recorded by SetOpsLocalErrorType.
-func OpsLocalErrorType(c *gin.Context) (errType, code string) {
-	if c == nil {
-		return "", ""
-	}
-	errType = c.GetString(OpsLocalErrorTypeKey)
-	if errType == "" {
-		return "", ""
-	}
-	return errType, c.GetString(OpsLocalErrorCodeKey)
-}
-
-func MarkOpsRequestScopedError(c *gin.Context, errType string) {
-	if c == nil {
-		return
-	}
-	_ = errType
-	c.Set(OpsRequestScopedErrorKey, true)
-}
-
-func MarkOpsStreamErrorValue(c *gin.Context, streamErr OpsStreamError) {
-	markOpsStreamError(c, streamErr)
-}
-
-func MarkResponseCommitted(c *gin.Context) {
-	if c == nil {
-		return
-	}
-	c.Set(ResponseCommittedKey, true)
-}
+func MarkResponseCommitted(c *gin.Context) { c.Set(ResponseCommittedKey, true) }
 
 func IsResponseCommitted(c *gin.Context) bool {
-	if c == nil {
-		return false
-	}
 	v, ok := c.Get(ResponseCommittedKey)
 	if !ok {
 		return false
 	}
 	b, _ := v.(bool)
 	return b
-}
-
-func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
-	if c == nil || len(body) == 0 {
-		return
-	}
-	c.Set(OpsUpstreamRequestBodyKey, body)
 }
 
 func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
@@ -134,6 +88,8 @@ func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
 	c.Set(key, value)
 }
 
+// SetOpsUpstreamModel stores only the effective model slug for final Ops
+// attribution. Call it immediately before an upstream attempt is dispatched.
 func SetOpsUpstreamModel(c *gin.Context, model string) {
 	if c == nil {
 		return
@@ -186,8 +142,47 @@ func OpsClientBusinessLimitedReason(c *gin.Context) string {
 	return strings.TrimSpace(reason)
 }
 
-// OpsStreamError records an in-band SSE error for ops logging when the wire
-// status is already committed as HTTP 200 (so middleware would otherwise miss it).
+// SetOpsLocalErrorType 登记响应错误体缺少的错误类型与错误码，并清除请求级失败标记；errType 为空表示不登记。
+func SetOpsLocalErrorType(c *gin.Context, errType, code string) {
+	if c == nil {
+		return
+	}
+	c.Set(OpsLocalErrorTypeKey, strings.TrimSpace(errType))
+	c.Set(OpsLocalErrorCodeKey, strings.TrimSpace(code))
+	c.Set(OpsRequestScopedErrorKey, false)
+}
+
+// OpsLocalErrorType 返回 SetOpsLocalErrorType 登记的错误类型与错误码；未登记时返回空串。
+func OpsLocalErrorType(c *gin.Context) (errType, code string) {
+	if c == nil {
+		return "", ""
+	}
+	errType = c.GetString(OpsLocalErrorTypeKey)
+	if errType == "" {
+		return "", ""
+	}
+	return errType, c.GetString(OpsLocalErrorCodeKey)
+}
+
+// MarkOpsRequestScopedError 登记错误类型，并标记失败由请求内容决定：上游错误上下文不参与 ops 归因。
+func MarkOpsRequestScopedError(c *gin.Context, errType string) {
+	if c == nil {
+		return
+	}
+	SetOpsLocalErrorType(c, errType, "")
+	c.Set(OpsRequestScopedErrorKey, true)
+}
+
+// IsOpsRequestScopedError 判断 MarkOpsRequestScopedError 是否标记了本次请求的失败。
+func IsOpsRequestScopedError(c *gin.Context) bool {
+	return c != nil && c.GetBool(OpsRequestScopedErrorKey)
+}
+
+// OpsStreamError 描述承载在 2xx 响应上的带内错误：网关在响应状态已固化为 200 之后
+// 就地以 SSE error 帧返回的错误（并发限流回退、Wait 后二次计费校验失败、流开始后才无
+// 可用账号等），以及上游 2xx 正文或事件里携带的错误结果（NonStream 标记非流式正文）。
+// 由于 HTTP 状态码停留在 2xx，ops_error_logger 中间件在 status<400 分支消费该标记并
+// 补记错误日志；标记方是 handler.handleStreamingAwareError 或各 service 的带内检测。
 type OpsStreamError struct {
 	// ErrType 是写入 SSE 帧的对客错误类型（如 rate_limit_error / upstream_error / api_error）。
 	ErrType string
@@ -197,13 +192,11 @@ type OpsStreamError struct {
 	// Message 是写入 SSE 帧的对客错误消息。
 	Message string
 	// IntendedStatus 是流若未固化本应返回的 HTTP 状态码（如并发限流的 429）。
-	// 默认仅用于错误分级；CountTowardsSLA=true 时也作为 Ops 的逻辑状态码。
+	// 默认仅用于错误分级；CountTowardsSLA 或 RequestScoped 为 true 时也作为 Ops 的逻辑状态码。
 	IntendedStatus int
 	// CountTowardsSLA 表示虽然 wire 状态已固化为 200，请求在应用语义上仍然失败，
 	// Ops 应使用 IntendedStatus 计入错误率/SLA。
 	CountTowardsSLA bool
-	RequestScoped   bool
-	NonStream       bool
 	// Turn identifies a WebSocket turn. HTTP/SSE requests leave it at zero.
 	Turn int
 	// SkipMonitoring snapshots the rule decision for this visible failure.
@@ -214,6 +207,12 @@ type OpsStreamError struct {
 	UpstreamMessage string
 	UpstreamDetail  string
 	UpstreamErrors  []*OpsUpstreamErrorEvent
+	// RequestScoped 表示该带内失败是请求级结果（如上游内容策略截停），与本请求此前的
+	// 上游尝试无关：分类不受上游错误上下文影响、不快照也不落库上游归因、不继承透传规则的
+	// skip_monitoring，按业务限制计，落库状态取 IntendedStatus 以便进入错误列表。
+	RequestScoped bool
+	// NonStream 表示带内信号来自非流式 2xx 响应体，落库 stream=false。
+	NonStream bool
 }
 
 const maxOpsStreamErrorsPerRequest = 64
@@ -224,6 +223,7 @@ func BeginOpsStreamTurn(c *gin.Context, turn int) {
 		return
 	}
 	c.Set(OpsStreamTurnKey, turn)
+	// Rule and attempt state is turn-scoped on a long-lived WS connection.
 	c.Set(OpsSkipPassthroughKey, false)
 	c.Set(OpsUpstreamErrorsKey, []*OpsUpstreamErrorEvent{})
 	c.Set(OpsUpstreamStatusCodeKey, 0)
@@ -231,6 +231,9 @@ func BeginOpsStreamTurn(c *gin.Context, turn int) {
 	c.Set(OpsUpstreamErrorDetailKey, "")
 }
 
+// MarkOpsStreamError 记录一次就地 SSE 错误，供 ops 日志采集。
+// 采用「首个标记生效」策略：同一请求若先后补发多帧（如上游透传错误后又追加通用兜底帧），
+// 保留最先记录的根因错误，而不是被后续的 "Upstream request failed" 覆盖。
 func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus int) {
 	markOpsStreamError(c, OpsStreamError{
 		ErrType:        errType,
@@ -252,6 +255,16 @@ func MarkOpsStreamFailure(c *gin.Context, errType, code, message string, intende
 	})
 }
 
+// MarkOpsStreamErrorValue 以完整的 OpsStreamError 记录一次带内错误，供需要
+// RequestScoped / NonStream 等附加语义的调用方使用；首个标记生效的规则不变。
+// 调用方只填 ErrType / Code / Message / IntendedStatus / CountTowardsSLA / RequestScoped / NonStream。
+// AccountID、UpstreamModel 与 Turn 由请求上下文接管；UpstreamStatus、UpstreamMessage、
+// UpstreamDetail、UpstreamErrors 与 SkipMonitoring 在非 RequestScoped 时由上下文接管，
+// RequestScoped 时被忽略。
+func MarkOpsStreamErrorValue(c *gin.Context, streamErr OpsStreamError) {
+	markOpsStreamError(c, streamErr)
+}
+
 func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
 	if c == nil {
 		return
@@ -259,7 +272,9 @@ func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
 	streamErr.ErrType = strings.TrimSpace(streamErr.ErrType)
 	streamErr.Code = strings.TrimSpace(streamErr.Code)
 	streamErr.Message = strings.TrimSpace(streamErr.Message)
-	streamErr.SkipMonitoring = currentOpsFailureSkipMonitoring(c)
+	if !streamErr.RequestScoped {
+		streamErr.SkipMonitoring = currentOpsFailureSkipMonitoring(c)
+	}
 	snapshotOpsStreamErrorContext(c, &streamErr)
 	if GetOpenAIClientTransport(c) == OpenAIClientTransportWS {
 		if value, ok := c.Get(OpsStreamTurnKey); ok {
@@ -298,6 +313,9 @@ func snapshotOpsStreamErrorContext(c *gin.Context, streamErr *OpsStreamError) {
 	if value, ok := c.Get(OpsUpstreamModelKey); ok {
 		streamErr.UpstreamModel, _ = value.(string)
 		streamErr.UpstreamModel = strings.TrimSpace(streamErr.UpstreamModel)
+	}
+	if streamErr.RequestScoped {
+		return
 	}
 	if value, ok := c.Get(OpsUpstreamStatusCodeKey); ok {
 		switch status := value.(type) {
@@ -351,6 +369,7 @@ func currentOpsFailureSkipMonitoring(c *gin.Context) bool {
 	return false
 }
 
+// GetOpsStreamError 返回本请求记录的就地 SSE 错误（若有）。
 func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
 	if c == nil {
 		return OpsStreamError{}, false
@@ -359,8 +378,8 @@ func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
 	if !ok {
 		return OpsStreamError{}, false
 	}
-	streamErr, ok := v.(OpsStreamError)
-	return streamErr, ok
+	se, ok := v.(OpsStreamError)
+	return se, ok
 }
 
 func GetOpsStreamErrors(c *gin.Context) []OpsStreamError {
@@ -435,8 +454,6 @@ type OpsUpstreamErrorEvent struct {
 
 	// Best-effort upstream response capture (sanitized+trimmed).
 	UpstreamResponseBody string `json:"upstream_response_body,omitempty"`
-	// UpstreamRequestBody is the sanitized request sent on this attempt.
-	UpstreamRequestBody string `json:"upstream_request_body,omitempty"`
 
 	// Kind: http_error | request_error | retry_exhausted | failover
 	Kind string `json:"kind,omitempty"`
@@ -453,7 +470,8 @@ type OpsUpstreamErrorEvent struct {
 	// from persisted attempt JSON. The logger consults it only when this event is
 	// the final client-visible failure; recovered attempts remain provider-health
 	// telemetry and do not count as failed requests.
-	SkipMonitoring bool `json:"-"`
+	SkipMonitoring      bool   `json:"-"`
+	UpstreamRequestBody string `json:"upstream_request_body,omitempty"`
 }
 
 const (
@@ -703,3 +721,12 @@ func safeUpstreamURL(rawURL string) string {
 	}
 	return rawURL
 }
+
+func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
+	if c == nil || len(body) == 0 {
+		return
+	}
+	c.Set(OpsUpstreamRequestBodyKey, body)
+}
+
+const OpsUpstreamRequestBodyKey = "ops_upstream_request_body"

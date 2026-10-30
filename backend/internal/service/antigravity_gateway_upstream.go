@@ -130,7 +130,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 		}
 
 		// 提取 usage
-		ensureUpstreamResponseModelObserver(c).ObserveAnthropic(respBody)
+		upstreamResponseModelObserverFromContext(c).ObserveAnthropic(respBody)
 		usage = s.extractClaudeUsage(respBody)
 
 		c.Header("Content-Type", resp.Header.Get("Content-Type"))
@@ -150,6 +150,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 		Duration:                      duration,
 		FirstTokenMs:                  firstTokenMs,
 		ClientDisconnect:              clientDisconnect,
+		UpstreamHeaders:               resp.Header,
 		Usage: ClaudeUsage{
 			InputTokens:              usage.InputTokens,
 			OutputTokens:             usage.OutputTokens,
@@ -252,7 +253,7 @@ func (s *AntigravityGatewayService) streamUpstreamResponse(c *gin.Context, resp 
 
 			line := ev.line
 			if data, ok := extractAnthropicSSEDataLine(line); ok {
-				ensureUpstreamResponseModelObserver(c).ObserveAnthropic([]byte(strings.TrimSpace(data)))
+				upstreamResponseModelObserverFromContext(c).ObserveAnthropic([]byte(strings.TrimSpace(data)))
 			}
 
 			// 记录首 token 时间

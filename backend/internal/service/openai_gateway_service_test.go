@@ -3642,3 +3642,23 @@ func TestHandleCompatErrorResponseCyberPolicyEarlyReturn(t *testing.T) {
 	require.NotContains(t, gotMsg, "Upstream request failed")
 	require.NotNil(t, GetOpsCyberPolicy(c))
 }
+
+func (s *stubGatewayCache) ClaimGrokVideoBilled(_ context.Context, _ string, _ time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (s *stubGatewayCache) GetGrokVideoPendingBilling(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *stubGatewayCache) UpsertGrokVideoPendingBilling(_ context.Context, _ *GrokVideoPendingBilling) error {
+	return nil
+}
+
+func (s *stubGatewayCache) ReleaseGrokVideoBilled(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *stubGatewayCache) SetGrokVideoPendingBilling(_ context.Context, _ string, _ []byte, _ time.Duration) error {
+	return nil
+}

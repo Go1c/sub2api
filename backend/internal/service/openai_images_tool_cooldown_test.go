@@ -60,9 +60,8 @@ func TestShouldCoolOpenAIImagesToolForError(t *testing.T) {
 			// 网关从模型文字里推断出来的判据：只说明这一轮没出图。
 			name: "synthesized_from_model_text",
 			err: &OpenAIImagesUpstreamError{
-				StatusCode:               http.StatusBadGateway,
-				Code:                     "image_generation_unavailable",
-				
+				StatusCode: http.StatusBadGateway,
+				Code:       "image_generation_unavailable",
 			},
 			want: false,
 		},

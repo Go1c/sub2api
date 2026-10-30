@@ -131,8 +131,7 @@ func TestOpenAISetupTokenWSCompatibility(t *testing.T) {
 	headers, session, err := svc.buildOpenAIWSHeaders(
 		context.Background(), c, account, "setup-token-value",
 		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
-		true, "", "", "",
-	)
+		true, "", "", "", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "Bearer setup-token-value", headers.Get("authorization"))
 	require.Equal(t, "chatgpt-setup", headers.Get("chatgpt-account-id"))

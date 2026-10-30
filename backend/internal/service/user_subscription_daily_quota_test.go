@@ -31,7 +31,7 @@ func TestAssignOrExtendSubscription_ExpiredDailyCardStartsNewOneTimeQuota(t *tes
 	subRepo.seed(&UserSubscription{
 		ID:                 100,
 		UserID:             200,
-		GroupID:            1,
+		GroupID:            int64Ptr(1),
 		StartsAt:           oldStart,
 		ExpiresAt:          oldStart.AddDate(0, 0, 1),
 		Status:             SubscriptionStatusExpired,
@@ -75,7 +75,7 @@ func TestAssignOrExtendSubscription_ExpiredSubscriptionAppendsMatchingNotes(t *t
 	subRepo.seed(&UserSubscription{
 		ID:        101,
 		UserID:    201,
-		GroupID:   1,
+		GroupID:   int64Ptr(1),
 		StartsAt:  oldStart,
 		ExpiresAt: oldStart.AddDate(0, 0, 1),
 		Status:    SubscriptionStatusExpired,
@@ -146,7 +146,7 @@ func TestCheckAndResetWindows_DailyCardDoesNotResetDailyUsage(t *testing.T) {
 	sub := &UserSubscription{
 		ID:               1,
 		UserID:           10,
-		GroupID:          20,
+		GroupID:          int64Ptr(20),
 		StartsAt:         startsAt,
 		ExpiresAt:        startsAt.Add(24 * time.Hour),
 		DailyUsageUSD:    10,
@@ -170,7 +170,7 @@ func TestCheckAndResetWindows_MultiDaySubscriptionStillResetsDailyUsage(t *testi
 	sub := &UserSubscription{
 		ID:               1,
 		UserID:           10,
-		GroupID:          20,
+		GroupID:          int64Ptr(20),
 		StartsAt:         startsAt,
 		ExpiresAt:        startsAt.AddDate(0, 0, 4),
 		DailyUsageUSD:    10,

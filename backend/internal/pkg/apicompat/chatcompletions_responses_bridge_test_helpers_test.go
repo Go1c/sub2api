@@ -1,5 +1,3 @@
-//go:build unit
-
 package apicompat
 
 func chatMessageRoles(messages []ChatMessage) []string {

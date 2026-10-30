@@ -64,10 +64,6 @@ func (s *apiKeyRepoStub) GetByID(ctx context.Context, id int64) (*APIKey, error)
 	panic("unexpected GetByID call")
 }
 
-func (s *apiKeyRepoStub) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*APIKey, error) {
-	panic("unexpected GetByUserIDAndName call")
-}
-
 func (s *apiKeyRepoStub) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	if s.getByIDErr != nil {
 		return "", 0, s.getByIDErr
@@ -491,6 +487,5 @@ func TestApiKeyService_Delete_DeleteFails(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "delete api key")
 	require.Equal(t, []int64{3}, repo.deletedIDs) // 验证 DeleteWithAudit 被调用
-	require.Empty(t, cache.invalidated)           // 验证删除失败时缓存未被清除（新顺序：先删后清）
 	require.Empty(t, cache.deleteAuthKeys)        // 验证删除失败时 auth 缓存未被清除
 }

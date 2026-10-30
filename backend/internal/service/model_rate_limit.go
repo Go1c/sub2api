@@ -13,6 +13,7 @@ const (
 	modelRateLimitsKey                 = "model_rate_limits"
 	antigravityGeminiModelRateLimitKey = "antigravity:gemini"
 	openAIImageGenerationRateLimitKey  = "openai:image_generation"
+	openAICodexSparkRateLimitReason    = "openai_codex_spark_rate_limit"
 	// anthropicFableRateLimitKey 是 Anthropic 7d_oi（Fable 专属 7d 窗口）限流的
 	// 家族级 scope：命中后所有 Fable 变体（含 [1m] 等后缀）都不再调度到该账号。
 	anthropicFableRateLimitKey = "claude-fable-5"
@@ -79,7 +80,7 @@ func (a *Account) modelRateLimitKeysForRequest(ctx context.Context, requestedMod
 	keys := []string{modelKey}
 	switch a.Platform {
 	case PlatformAntigravity:
-		if isAntigravityGeminiModel(modelKey) && modelKey != antigravityGeminiModelRateLimitKey {
+		if isAntigravityGeminiModel(modelKey) && !isAntigravityGeminiImageModel(modelKey) && modelKey != antigravityGeminiModelRateLimitKey {
 			keys = append(keys, antigravityGeminiModelRateLimitKey)
 		}
 	case PlatformOpenAI:
@@ -89,6 +90,10 @@ func (a *Account) modelRateLimitKeysForRequest(ctx context.Context, requestedMod
 	case PlatformAnthropic:
 		if isAnthropicFableModel(modelKey) && modelKey != anthropicFableRateLimitKey {
 			keys = append(keys, anthropicFableRateLimitKey)
+		}
+	case PlatformCline:
+		if walletKey := clineWalletRateLimitKey(modelKey); walletKey != "" {
+			keys = append(keys, walletKey)
 		}
 	}
 	return keys
@@ -121,6 +126,23 @@ func OpenAIImageGenerationIntentFromContext(ctx context.Context) bool {
 	return ok && enabled
 }
 
+// WithOpenAIImagesEndpoint 标记请求从 /v1/images/* 专用生图端点入站。
+func WithOpenAIImagesEndpoint(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, ctxkey.OpenAIImagesEndpoint, true)
+}
+
+// OpenAIImagesEndpointFromContext 报告请求是否来自 /v1/images/*。
+func OpenAIImagesEndpointFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	enabled, ok := ctx.Value(ctxkey.OpenAIImagesEndpoint).(bool)
+	return ok && enabled
+}
+
 func resolveFinalAntigravityModelKey(ctx context.Context, account *Account, requestedModel string) string {
 	modelKey := mapAntigravityModel(account, requestedModel)
 	if modelKey == "" {
@@ -143,10 +165,15 @@ func antigravityModelRateLimitKeys(model string) []string {
 		return nil
 	}
 	keys := []string{model}
-	if isAntigravityGeminiModel(model) && model != antigravityGeminiModelRateLimitKey {
+	if isAntigravityGeminiModel(model) && !isAntigravityGeminiImageModel(model) && model != antigravityGeminiModelRateLimitKey {
 		keys = append(keys, antigravityGeminiModelRateLimitKey)
 	}
 	return keys
+}
+
+func isAntigravityGeminiImageModel(model string) bool {
+	normalized := normalizeAntigravityModelName(model)
+	return strings.HasPrefix(normalized, "gemini-") && strings.Contains(normalized, "-image")
 }
 
 func (a *Account) modelRateLimitResetAt(scope string) *time.Time {

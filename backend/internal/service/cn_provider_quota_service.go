@@ -52,16 +52,16 @@ type CNQuotaTier struct {
 
 // CNProviderQuotaProbeResult 是 Coding Plan 额度探测的返回结构（管理端 + UI 消费）。
 type CNProviderQuotaProbeResult struct {
-	Provider        string        `json:"provider"`
-	Source          string        `json:"source"`
-	Success         bool          `json:"success"`
-	CredentialValid bool          `json:"credential_valid"` // false = 401/403 鉴权失败
-	Tiers           []CNQuotaTier `json:"tiers,omitempty"`
-	PlanLevel       string        `json:"plan_level,omitempty"` // 智谱套餐等级
-	StatusCode      int           `json:"status_code,omitempty"`
-	FetchedAt       int64         `json:"fetched_at"`
-	Persisted       bool          `json:"persisted"`
-	Error           string        `json:"error,omitempty"`
+	Provider        string                   `json:"provider"`
+	Source          string                   `json:"source"`
+	Success         bool                     `json:"success"`
+	CredentialValid bool                     `json:"credential_valid"` // false = 401/403 鉴权失败
+	Tiers           []CNQuotaTier            `json:"tiers,omitempty"`
+	PlanLevel       string                   `json:"plan_level,omitempty"` // 智谱套餐等级
+	StatusCode      int                      `json:"status_code,omitempty"`
+	FetchedAt       int64                    `json:"fetched_at"`
+	Persisted       bool                     `json:"persisted"`
+	Error           string                   `json:"error,omitempty"`
 	Balance         *CNProviderBalanceResult `json:"balance,omitempty"`
 }
 

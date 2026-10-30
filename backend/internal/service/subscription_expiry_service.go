@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	subscriptionExpiryReminderLeaderLockKey         = "subscription:expiry:reminder:leader"
-	subscriptionExpiryReminderLeaderLockTTL         = 3 * time.Minute
-	subscriptionExpiryReminderSMTPWarningInterval   = time.Hour
+	subscriptionExpiryReminderLeaderLockKey       = "subscription:expiry:reminder:leader"
+	subscriptionExpiryReminderLeaderLockTTL       = 3 * time.Minute
+	subscriptionExpiryReminderSMTPWarningInterval = time.Hour
 )
 
 // SubscriptionExpiryService periodically expires subscriptions and records credit-pool expiry audit events.
@@ -34,8 +34,8 @@ type SubscriptionExpiryService struct {
 	db         *sql.DB
 	instanceID string
 
-	smtpWarningMu    sync.Mutex
-	lastSMTPWarning  time.Time
+	smtpWarningMu   sync.Mutex
+	lastSMTPWarning time.Time
 }
 
 func NewSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, interval time.Duration) *SubscriptionExpiryService {

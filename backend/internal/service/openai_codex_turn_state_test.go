@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -249,6 +251,19 @@ func TestWriteOpenAIPassthroughResponseHeaders_RelaysAndClearsTurnState(t *testi
 	require.Empty(t, dst.Get("X-Codex-Turn-State"))
 }
 
+func TestWriteOpenAIPassthroughResponseHeaders_RelaysReasoningIncluded(t *testing.T) {
+	dst := http.Header{}
+	src := http.Header{}
+	src.Set("X-Reasoning-Included", "1")
+
+	writeOpenAIPassthroughResponseHeaders(
+		dst,
+		src,
+		responseheaders.CompileHeaderFilter(config.ResponseHeaderConfig{}),
+	)
+	require.Equal(t, "1", dst.Get("X-Reasoning-Included"))
+}
+
 func TestEnsureOpenAIRemoteCompactionV2BetaFeature(t *testing.T) {
 	t.Run("absent_sets_feature", func(t *testing.T) {
 		h := http.Header{}
@@ -355,7 +370,7 @@ func TestBuildOpenAIWSHeaders_CarriesSessionBetaFeatures(t *testing.T) {
 		}
 		headers, _, err := svc.buildOpenAIWSHeaders(
 			context.Background(), c, account, "test-token", decision,
-			true, "", "", "",
+			true, "", "", "", "gpt-5.6-codex", "",
 		)
 		require.NoError(t, err)
 		return headers

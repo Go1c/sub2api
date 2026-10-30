@@ -14,12 +14,11 @@ func TestBuildUsageBillingCommandSimpleModeOnlyChargesAPIKeyWindows(t *testing.T
 	user := &User{ID: 7}
 	account := &Account{ID: 9, Type: AccountTypeAPIKey}
 	p := &postUsageBillingParams{
-		Cost:                       &CostBreakdown{ActualCost: 3.25, TotalCost: 2.5},
-		User:                       user,
-		APIKey:                     apiKey,
-		Account:                    account,
-		APIKeyService:              &apiKeyQuotaUpdaterStub{},
-		
+		Cost:          &CostBreakdown{ActualCost: 3.25, TotalCost: 2.5},
+		User:          user,
+		APIKey:        apiKey,
+		Account:       account,
+		APIKeyService: &apiKeyQuotaUpdaterStub{},
 	}
 
 	cmd := buildUsageBillingCommand("simple-req", nil, p)
@@ -60,12 +59,11 @@ func (s *simpleModeUsageBillingRepoStub) Apply(_ context.Context, cmd *UsageBill
 func TestApplyUsageBillingSimpleModeDeduplicatesWithoutBalanceEffects(t *testing.T) {
 	repo := &simpleModeUsageBillingRepoStub{}
 	p := &postUsageBillingParams{
-		Cost:                       &CostBreakdown{ActualCost: 3.25, TotalCost: 3.25},
-		User:                       &User{ID: 7, Balance: 0},
-		APIKey:                     &APIKey{ID: 13, Quota: 100, RateLimit5h: 10},
-		Account:                    &Account{ID: 9, Type: AccountTypeAPIKey},
-		APIKeyService:              &apiKeyQuotaUpdaterStub{},
-		
+		Cost:          &CostBreakdown{ActualCost: 3.25, TotalCost: 3.25},
+		User:          &User{ID: 7, Balance: 0},
+		APIKey:        &APIKey{ID: 13, Quota: 100, RateLimit5h: 10},
+		Account:       &Account{ID: 9, Type: AccountTypeAPIKey},
+		APIKeyService: &apiKeyQuotaUpdaterStub{},
 	}
 
 	first, err := applyUsageBilling(context.Background(), "simple-req", nil, p, &billingDeps{deferredService: &DeferredService{}}, repo)
@@ -90,7 +88,6 @@ func TestApplyUsageBillingSimpleModeRejectsLegacyFallback(t *testing.T) {
 			p := &postUsageBillingParams{
 				Cost: &CostBreakdown{ActualCost: 1}, User: &User{ID: 7},
 				APIKey: &APIKey{ID: 13, RateLimit5h: 10}, Account: &Account{ID: 9},
-				
 			}
 			var repo UsageBillingRepository = &simpleModeUsageBillingRepoStub{}
 			requestID := "simple-req"
@@ -129,7 +126,6 @@ func TestFinalizeSimpleModePreservesLastUsedWithoutFinancialCacheWrites(t *testi
 				Cost: &CostBreakdown{ActualCost: 3}, User: &User{ID: 7},
 				APIKey:  &APIKey{ID: 13, GroupID: &groupID, RateLimit5h: 10},
 				Account: &Account{ID: 9}, IsSubscriptionBill: subscription,
-				
 			}
 			finalizePostUsageBilling(context.Background(), p, &billingDeps{
 				billingCacheService: &BillingCacheService{cache: cache, cacheWriteChan: writes},

@@ -26,20 +26,20 @@ func TestFilterRevenueOrdersExcludesBalancePayments(t *testing.T) {
 
 	stats := &DashboardStats{}
 	computeBasicStats(stats, revenueOrders, todayStart)
-	require.InDelta(t, 30, stats.TotalAmount, 1e-9)
-	require.InDelta(t, 20, stats.TodayAmount, 1e-9)
+	require.InDelta(t, 30, stats.TotalAmount[payment.DefaultPaymentCurrency], 1e-9)
+	require.InDelta(t, 20, stats.TodayAmount[payment.DefaultPaymentCurrency], 1e-9)
 	require.Equal(t, 2, stats.TotalCount)
 	require.Equal(t, 1, stats.TodayCount)
 
 	methods := buildMethodDistribution(revenueOrders)
 	require.Len(t, methods, 2)
 	require.ElementsMatch(t, []PaymentMethodStat{
-		{Type: payment.TypeWxpay, Amount: 20, Count: 1},
-		{Type: payment.TypeAlipay, Amount: 10, Count: 1},
+		{Type: payment.TypeWxpay, Amount: CurrencyAmounts{payment.DefaultPaymentCurrency: 20}, Count: 1},
+		{Type: payment.TypeAlipay, Amount: CurrencyAmounts{payment.DefaultPaymentCurrency: 10}, Count: 1},
 	}, methods)
 
 	topUsers := buildTopUsers(revenueOrders)
-	require.Len(t, topUsers, 2)
-	require.Equal(t, int64(8), topUsers[0].UserID)
-	require.InDelta(t, 20, topUsers[0].Amount, 1e-9)
+	require.Len(t, topUsers[payment.DefaultPaymentCurrency], 2)
+	require.Equal(t, int64(8), topUsers[payment.DefaultPaymentCurrency][0].UserID)
+	require.InDelta(t, 20, topUsers[payment.DefaultPaymentCurrency][0].Amount, 1e-9)
 }

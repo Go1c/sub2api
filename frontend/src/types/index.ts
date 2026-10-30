@@ -674,6 +674,7 @@ export interface Group {
   // 图片生成计费配置
   allow_image_generation: boolean
   allow_batch_image_generation: boolean
+  image_count_billing: boolean
   image_rate_independent: boolean
   image_rate_multiplier: number
   batch_image_discount_multiplier: number
@@ -824,6 +825,7 @@ export interface CreateGroupRequest {
   monthly_limit_usd?: number | null
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
+  image_count_billing?: boolean
   image_rate_independent?: boolean
   image_rate_multiplier?: number
   batch_image_discount_multiplier?: number
@@ -878,6 +880,7 @@ export interface UpdateGroupRequest {
   monthly_limit_usd?: number | null
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
+  image_count_billing?: boolean
   image_rate_independent?: boolean
   image_rate_multiplier?: number
   batch_image_discount_multiplier?: number
@@ -1248,6 +1251,7 @@ export interface Account {
   parent_chatgpt_account_id?: string
   ollama_cloud_usage?: OllamaCloudUsageState
   opencode_go_usage?: OpenCodeGoUsageState
+	grok_model_diagnostics?: GrokModelDiagnostics
 }
 
 export interface AccountSchedulerGroupScore {

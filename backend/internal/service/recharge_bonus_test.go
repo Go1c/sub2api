@@ -234,9 +234,9 @@ func TestUpdatePaymentConfigRechargeBonusTiersValidation(t *testing.T) {
 			t.Parallel()
 			repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
 			svc := &PaymentConfigService{settingRepo: repo}
+			tiers := tt.tiers
 			err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
-				RechargeBonusEnabled: new(bool),
-				RechargeBonusTiers:   tt.tiers,
+				RechargeBonusTiers: &tiers,
 			})
 			require.Error(t, err)
 			assert.Equal(t, "INVALID_RECHARGE_BONUS_TIERS", infraerrors.Reason(err))
@@ -250,13 +250,12 @@ func TestUpdatePaymentConfigRechargeBonusTiersPersists(t *testing.T) {
 	repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
 	svc := &PaymentConfigService{settingRepo: repo}
 
-	enabled := true
+	tiers := []RechargeBonusTier{
+		{Threshold: 100, Bonus: 10},
+		{Threshold: 1000, Bonus: 200},
+	}
 	err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
-		RechargeBonusEnabled: &enabled,
-		RechargeBonusTiers: []RechargeBonusTier{
-			{Threshold: 100, Bonus: 10},
-			{Threshold: 1000, Bonus: 200},
-		},
+		RechargeBonusTiers: &tiers,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "true", repo.values[SettingRechargeBonusEnabled])
