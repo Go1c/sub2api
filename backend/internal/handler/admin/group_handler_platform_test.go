@@ -47,6 +47,35 @@ func TestGroupPlatformBinding_AllowedPlatforms(t *testing.T) {
 	}
 }
 
+func TestUpdateGroupBinding_ReadsModelPricingFieldNames(t *testing.T) {
+	var req UpdateGroupRequest
+	body := `{
+		"rate_multiplier": 0.55,
+		"model_pricing": [{
+			"platform": "deepseek",
+			"models": ["deepseek-v4.1-flash", "deepseek-flash"],
+			"billing_mode": "token",
+			"input_price": 0.000002,
+			"output_price": 0.000008,
+			"cache_read_price": 0.00000004
+		}]
+	}`
+	require.NoError(t, bindGroupPlatformJSON(t, &req, body))
+	require.NotNil(t, req.RateMultiplier)
+	require.InDelta(t, 0.55, *req.RateMultiplier, 1e-9)
+	require.NotNil(t, req.ModelPricing)
+	require.Len(t, *req.ModelPricing, 1)
+	entry := (*req.ModelPricing)[0]
+	require.Equal(t, []string{"deepseek-v4.1-flash", "deepseek-flash"}, entry.Models)
+	require.Equal(t, "token", string(entry.BillingMode))
+	require.NotNil(t, entry.InputPrice)
+	require.InDelta(t, 2e-6, *entry.InputPrice, 1e-15)
+	require.NotNil(t, entry.OutputPrice)
+	require.InDelta(t, 8e-6, *entry.OutputPrice, 1e-15)
+	require.NotNil(t, entry.CacheReadPrice)
+	require.InDelta(t, 4e-8, *entry.CacheReadPrice, 1e-18)
+}
+
 func TestGroupPlatformBinding_RejectsInvalidPlatforms(t *testing.T) {
 	invalid := []string{
 		"moonshot", // 厂商别名,不是平台标识
