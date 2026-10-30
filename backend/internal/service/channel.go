@@ -86,28 +86,30 @@ type AccountStatsPricingRule struct {
 	UpdatedAt  time.Time
 }
 
-// ChannelModelPricing 渠道模型定价条目
+// ChannelModelPricing 渠道模型定价条目。
+// JSON 名必须和分组编辑页、渠道请求体一致。0.2.19 合并曾丢掉这些标签，
+// 管理端读到 Models/InputPrice 后会把价卡当成空列表，再次保存就把库里的卡清掉。
 type ChannelModelPricing struct {
-	ID                         int64
-	ChannelID                  int64
-	Platform                   string      // 所属平台（anthropic/openai/gemini/...）
-	Models                     []string    // 绑定的模型列表
-	BillingMode                BillingMode // 计费模式
-	InputPrice                 *float64    // 每 token 输入价格（USD）— 向后兼容 flat 定价
-	OutputPrice                *float64    // 每 token 输出价格（USD）
-	CacheWritePrice            *float64    // 缓存写入价格
-	CacheWrite1hPrice          *float64    // 1 小时缓存写入价格
-	CacheReadPrice             *float64    // 缓存读取价格
-	ReasoningEffortMultipliers map[string]float64
-	FastMultiplier             *float64          // Fast/priority 档位倍率；nil 时沿用模型目录行为
-	FlexMultiplier             *float64          // Flex 档位倍率；nil 时沿用默认行为
-	ImageInputPrice            *float64          // 图片输入 token 价格（如 gpt-image-2 图片编辑）；未配置时回退文本输入价
-	ImageOutputPrice           *float64          // 图片输出价格（向后兼容）
-	PerRequestPrice            *float64          // 默认按次计费价格（USD）
-	Intervals                  []PricingInterval // 区间定价列表
-	TimePricing                *ChannelTimePricing
-	CreatedAt                  time.Time
-	UpdatedAt                  time.Time
+	ID                         int64               `json:"id,omitempty"`
+	ChannelID                  int64               `json:"channel_id,omitempty"`
+	Platform                   string              `json:"platform"` // 所属平台（anthropic/openai/gemini/...）
+	Models                     []string            `json:"models"`
+	BillingMode                BillingMode         `json:"billing_mode"`
+	InputPrice                 *float64            `json:"input_price"` // 每 token 输入价格（USD）— 向后兼容 flat 定价
+	OutputPrice                *float64            `json:"output_price"`
+	CacheWritePrice            *float64            `json:"cache_write_price"`
+	CacheWrite1hPrice          *float64            `json:"cache_write_1h_price"`
+	CacheReadPrice             *float64            `json:"cache_read_price"`
+	ReasoningEffortMultipliers map[string]float64  `json:"reasoning_effort_multipliers,omitempty"`
+	FastMultiplier             *float64            `json:"fast_multiplier"` // Fast/priority 档位倍率；nil 时沿用模型目录行为
+	FlexMultiplier             *float64            `json:"flex_multiplier"` // Flex 档位倍率；nil 时沿用默认行为
+	ImageInputPrice            *float64            `json:"image_input_price"`
+	ImageOutputPrice           *float64            `json:"image_output_price"`
+	PerRequestPrice            *float64            `json:"per_request_price"`
+	Intervals                  []PricingInterval   `json:"intervals"`
+	TimePricing                *ChannelTimePricing `json:"time_pricing,omitempty"`
+	CreatedAt                  time.Time           `json:"created_at,omitempty"`
+	UpdatedAt                  time.Time           `json:"updated_at,omitempty"`
 }
 
 // ChannelTimePricing 渠道模型定价的分时倍率配置。
@@ -126,24 +128,24 @@ type ChannelTimePricingPeriod struct {
 
 // PricingInterval 定价区间（token 区间 / 按次分层 / 图片分辨率分层）
 type PricingInterval struct {
-	ID                   int64
-	PricingID            int64
-	MinTokens            int      // 区间下界（含）
-	MaxTokens            *int     // 区间上界（不含），nil = 无上限
-	TierLabel            string   // 层级标签（按次/图片模式：1K, 2K, 4K, HD 等）
-	InputPrice           *float64 // token 模式：每 token 输入价
-	OutputPrice          *float64 // token 模式：每 token 输出价
-	CacheWritePrice      *float64 // token 模式：缓存写入价
-	CacheWrite1hPrice    *float64 // token 模式：1 小时缓存写入价
-	CacheReadPrice       *float64 // token 模式：缓存读取价
-	InputMultiplier      *float64 // token 模式：相对渠道底价的输入倍率（input_price 优先）
-	OutputMultiplier     *float64 // token 模式：相对渠道底价的输出倍率（output_price 优先）
-	CacheWriteMultiplier *float64 // token 模式：相对渠道底价的缓存写入倍率
-	CacheReadMultiplier  *float64 // token 模式：相对渠道底价的缓存读取倍率
-	PerRequestPrice      *float64 // 按次/图片模式：每次请求价格
-	SortOrder            int
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
+	ID                   int64     `json:"id,omitempty"`
+	PricingID            int64     `json:"pricing_id,omitempty"`
+	MinTokens            int       `json:"min_tokens"` // 区间下界（含）
+	MaxTokens            *int      `json:"max_tokens"` // 区间上界（不含），nil = 无上限
+	TierLabel            string    `json:"tier_label"` // 层级标签（按次/图片模式：1K, 2K, 4K, HD 等）
+	InputPrice           *float64  `json:"input_price"`
+	OutputPrice          *float64  `json:"output_price"`
+	CacheWritePrice      *float64  `json:"cache_write_price"`
+	CacheWrite1hPrice    *float64  `json:"cache_write_1h_price"`
+	CacheReadPrice       *float64  `json:"cache_read_price"`
+	InputMultiplier      *float64  `json:"input_multiplier"`
+	OutputMultiplier     *float64  `json:"output_multiplier"`
+	CacheWriteMultiplier *float64  `json:"cache_write_multiplier"`
+	CacheReadMultiplier  *float64  `json:"cache_read_multiplier"`
+	PerRequestPrice      *float64  `json:"per_request_price"`
+	SortOrder            int       `json:"sort_order"`
+	CreatedAt            time.Time `json:"created_at,omitempty"`
+	UpdatedAt            time.Time `json:"updated_at,omitempty"`
 }
 
 // IsActive 判断渠道是否启用
