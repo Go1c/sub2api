@@ -33,21 +33,7 @@ const (
 	AffiliateRebateDurationDaysDefault  = 0     // 0 = 永久有效
 	AffiliateRebateDurationDaysMax      = 3650  // ~10 年
 	AffiliateRebatePerInviteeCapDefault = 0.0   // 0 = 无上限
-	AffiliateSignupBonusEnabledDefault  = false // 注册就送默认关闭
-	AffiliateSignupBonusAmountDefault   = 0.0
-	AffiliateSignupBonusTotalCapDefault = 0.0 // 单个邀请人累计上限，0 = 无上限
-	AffiliateSignupBonusDailyCapDefault = 0.0 // 全站每日上限，0 = 无上限
-	BalanceUsageGateEnabledDefault      = false
-	BalanceUsageGateMinBalanceDefault   = 0.0
-	BalanceUsageGateMinRechargeDefault  = 0.0
-)
-
-// Invitation registration mode settings.
-const (
-	InvitationRegistrationModeRedeemCode    = "redeem_code"
-	InvitationRegistrationModeAffiliateLink = "affiliate_link"
-	InvitationRegistrationModeBoth          = "both"
-	InvitationRegistrationModeDefault       = InvitationRegistrationModeRedeemCode
+	AdminRechargeRebateEnabledDefault   = false // 管理员充值默认不产生返利
 )
 
 // Platform constants
@@ -67,6 +53,9 @@ const (
 	PlatformCommandCode = domain.PlatformCommandCode
 	PlatformCline       = domain.PlatformCline
 	PlatformComposite   = domain.PlatformComposite
+	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
+	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
+	PlatformKiro = "kiro"
 )
 
 // 账号接入模式（国产供应商）：按量付费 vs Coding Plan。
@@ -97,65 +86,64 @@ const (
 	DefaultMiniMaxBaseURL = "https://api.minimaxi.com/v1"
 	// OpenCode Go：Chat Completions / Responses / models 共用 /v1 基址。
 	DefaultOpenCodeGoBaseURL = "https://opencode.ai/zen/go/v1"
-	// OpenCode Zen：按量付费网关。
+	// OpenCode Zen：按量付费网关，模型列表为 /zen/v1/models。
 	DefaultOpenCodeZenBaseURL = "https://opencode.ai/zen/v1"
-	// Command Code Provider API。
+	// Command Code Provider API：Chat Completions / Responses / models 共用 /provider/v1 基址。
 	DefaultCommandCodeBaseURL = "https://api.commandcode.ai/provider/v1"
-	// Cline API。
+	// Cline API：只提供 Chat Completions（{base}/chat/completions）与模型列表。
 	DefaultClineBaseURL = "https://api.cline.bot/api/v1"
 )
 
 // 国产供应商 Anthropic 协议端点的默认 base_url（上游路径为 {base}/v1/messages）。
 // 与前端 credentialsBuilder.ts 中的预设保持一致。
 const (
-	DefaultKimiPayGAnthropicBaseURL    = "https://api.moonshot.cn/anthropic"
-	DefaultKimiCodingAnthropicBaseURL  = "https://api.kimi.com/coding"
-	DefaultZhipuAnthropicBaseURL       = "https://open.bigmodel.cn/api/anthropic"
-	DefaultDeepseekAnthropicBaseURL    = "https://api.deepseek.com/anthropic"
-	DefaultMiniMaxAnthropicBaseURL     = "https://api.minimaxi.com/anthropic"
+	DefaultKimiPayGAnthropicBaseURL   = "https://api.moonshot.cn/anthropic"
+	DefaultKimiCodingAnthropicBaseURL = "https://api.kimi.com/coding"
+	DefaultZhipuAnthropicBaseURL      = "https://open.bigmodel.cn/api/anthropic"
+	DefaultDeepseekAnthropicBaseURL   = "https://api.deepseek.com/anthropic"
+	DefaultMiniMaxAnthropicBaseURL    = "https://api.minimaxi.com/anthropic"
+	// OpenCode Go Anthropic 基址不含 /v1：nativeAnthropicTargetURL 会再拼 /v1/messages。
 	DefaultOpenCodeGoAnthropicBaseURL  = "https://opencode.ai/zen/go"
 	DefaultOpenCodeZenAnthropicBaseURL = "https://opencode.ai/zen"
+	// Command Code 的 Anthropic 端点为 /provider/v1/messages（Claude 系模型只在此端点提供）。
 	DefaultCommandCodeAnthropicBaseURL = "https://api.commandcode.ai/provider"
 )
 
-// IsMultiProtocolAPIKeyProvider 报告 platform 是否为多协议 API Key 网关。
+// IsCNProvider 报告 platform 是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek/minimax），
+// 以平台清单（domain/platforms.go）为准。
+func IsCNProvider(platform string) bool {
+	return domain.IsCNProviderPlatform(platform)
+}
+
+// IsOpenCodeGo 报告 platform 是否为 OpenCode Go 订阅网关。
+func IsOpenCodeGo(platform string) bool {
+	return platform == PlatformOpenCodeGo
+}
+
+// IsMultiProtocolAPIKeyProvider 报告 platform 是否为多协议 API Key 网关
+// （国产供应商 + OpenCode）：走 OpenAI 网关、支持 adaptive 协议分流。
+// 归属以 provider profile 登记为准（见 provider_profile.go）。
 func IsMultiProtocolAPIKeyProvider(platform string) bool {
 	return LookupProviderProfile(platform) != nil
 }
 
-// IsCNProvider 报告 platform 是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）。
-func IsCNProvider(platform string) bool {
-	switch platform {
-	case PlatformKimi, PlatformZhipu, PlatformDeepseek:
-		return true
-	default:
-		return false
-	}
-}
-
-// AllowedQuotaPlatforms 是允许设置 user × platform quota 的平台列表（单一权威来源）。
-// ent/schema/user_platform_quota.go 的 Validate 函数独立维护（构建期约束），
-// 若新增平台需同步修改该 schema。
-var AllowedQuotaPlatforms = []string{
-	PlatformAnthropic,
-	PlatformOpenAI,
-	PlatformGemini,
-	PlatformAntigravity,
-	PlatformGrok,
-	PlatformKimi,
-	PlatformZhipu,
-	PlatformDeepseek,
-}
+// AllowedQuotaPlatforms 是允许设置 user × platform quota 的平台列表：全部已登记的
+// 具体平台（domain/platforms.go），ent/schema/user_platform_quota.go 的校验同源。
+var AllowedQuotaPlatforms = domain.ConcretePlatformIDs()
 
 // AllowedSchedulingThresholdPlatforms 是允许设置账号自动停调阈值的平台列表。
-// openai/anthropic/grok 有原生用量窗口；kimi/zhipu 的 Coding Plan 同样暴露 5h/weekly
-// 滚动窗口，纳入阈值评估。deepseek 为余额型，走余额检测而非阈值。
+// openai/anthropic/grok 有原生用量窗口；kimi/zhipu/minimax 的 Coding Plan 同样暴露
+// 5h/weekly 滚动窗口，纳入阈值评估。deepseek 为余额型，走余额检测而非阈值。
+// OpenCode Go 与 Command Code 的订阅套餐另有月度窗口。
 var AllowedSchedulingThresholdPlatforms = []string{
 	PlatformOpenAI,
 	PlatformAnthropic,
 	PlatformGrok,
 	PlatformKimi,
 	PlatformZhipu,
+	PlatformMiniMax,
+	PlatformOpenCodeGo,
+	PlatformCommandCode,
 }
 
 // IsAllowedQuotaPlatform 报告 s 是否为合法的 quota platform 标识。
@@ -180,18 +168,11 @@ const (
 
 // Redeem type constants
 const (
-	RedeemTypeBalance             = domain.RedeemTypeBalance
-	RedeemTypeBalancePayment      = domain.RedeemTypeBalancePayment
-	RedeemTypeConcurrency         = domain.RedeemTypeConcurrency
-	RedeemTypeSubscription        = domain.RedeemTypeSubscription
-	RedeemTypeInvitation          = domain.RedeemTypeInvitation
-	RedeemTypeAffiliateBalance    = "affiliate_balance"
-	RedeemTypeSubscriptionPayment = "subscription_payment"
-	RedeemTypePromoBalance        = "promo_balance"
-	RedeemTypeWalletDebit         = "wallet_debit"
-	RedeemTypeCheckinBalance      = "checkin_balance"
-	RedeemTypeCheckinMilestone    = "checkin_milestone"
-	RedeemTypeRechargeBonus       = "recharge_bonus"
+	RedeemTypeBalance          = domain.RedeemTypeBalance
+	RedeemTypeConcurrency      = domain.RedeemTypeConcurrency
+	RedeemTypeSubscription     = domain.RedeemTypeSubscription
+	RedeemTypeInvitation       = domain.RedeemTypeInvitation
+	RedeemTypeAffiliateBalance = "affiliate_balance"
 )
 
 // PromoCode status constants
@@ -236,40 +217,31 @@ const DingTalkConnectSyntheticEmailDomain = "@dingtalk-connect.invalid"
 // Setting keys
 const (
 	// 注册设置
-	SettingKeyRegistrationEnabled                 = "registration_enabled"                    // 是否开放注册
-	SettingKeyEmailVerifyEnabled                  = "email_verify_enabled"                    // 是否开启邮件验证
-	SettingKeyRegistrationEmailSuffixWhitelist    = "registration_email_suffix_whitelist"     // 注册邮箱后缀白名单（JSON 数组）
-	SettingKeyRegistrationEmailDomainQuotaEnabled = "registration_email_domain_quota_enabled" // 白名单非空时，非白名单域名是否允许限量注册
-	SettingKeyPromoCodeEnabled                    = "promo_code_enabled"                      // 是否启用优惠码功能
-	SettingKeyPasswordResetEnabled                = "password_reset_enabled"                  // 是否启用忘记密码功能（需要先开启邮件验证）
-	SettingKeyFrontendURL                         = "frontend_url"                            // 前端基础URL，用于生成邮件中的重置密码链接
-	SettingKeyInvitationCodeEnabled               = "invitation_code_enabled"                 // 是否启用邀请码注册
-	SettingKeyInvitationRegistrationMode          = "invitation_registration_mode"            // 邀请注册校验方式：redeem_code / affiliate_link / both
-	SettingKeyAffiliateEnabled                    = "affiliate_enabled"                       // 邀请返利功能总开关
-	SettingKeyAffiliateRebateRate                 = "affiliate_rebate_rate"                   // 邀请返利比例（百分比，0-100）
-	SettingKeyAffiliateRebateTiers                = "affiliate_rebate_tiers"                  // 阶梯式邀请返利配置（L1-L4）
-	SettingKeyAffiliateRebateFreezeHours          = "affiliate_rebate_freeze_hours"           // 返利冻结期（小时，0=不冻结）
-	SettingKeyAffiliateRebateDurationDays         = "affiliate_rebate_duration_days"          // 返利有效期（天，0=永久）
-	SettingKeyAffiliateRebatePerInviteeCap        = "affiliate_rebate_per_invitee_cap"        // 单人返利上限（0=无上限）
-	SettingKeyAffiliateSignupBonusEnabled         = "affiliate_signup_bonus_enabled"          // 注册就送开关
-	SettingKeyAffiliateSignupBonusAmount          = "affiliate_signup_bonus_amount"           // 注册就送固定额度
-	SettingKeyAffiliateSignupBonusTotalCap        = "affiliate_signup_bonus_total_cap"        // 单个邀请人累计注册赠送上限（0=无上限）
-	SettingKeyAffiliateSignupBonusDailyCap        = "affiliate_signup_bonus_daily_cap"        // 全站每日注册赠送上限（0=无上限）
-	SettingKeyBalanceUsageGateEnabled             = "balance_usage_gate_enabled"              // 余额使用门槛开关
-	SettingKeyBalanceUsageGateMinBalance          = "balance_usage_gate_min_balance"          // 使用余额服务前需大于的当前余额
-	SettingKeyBalanceUsageGateMinRecharge         = "balance_usage_gate_min_recharge"         // 使用余额服务前需大于的历史充值
-	SettingKeyRiskControlEnabled                  = "risk_control_enabled"                    // 是否启用风控中心入口与审计链路
-	SettingKeySiteMessagesEnabled                 = "site_messages_enabled"                   // 是否启用站内信功能
-	SettingKeySiteMessagesDailySendLimit          = "site_messages_daily_send_limit"          // 非管理员每日站内信发送上限（0=不限制）
-	SettingKeySiteMessagesRetentionDays           = "site_messages_retention_days"            // 站内信保留天数
-	SettingKeySiteMessagesDefaultRecipientEmail   = "site_messages_default_recipient_email"   // 用户写信时默认填入的收件邮箱
-	SettingKeyContentModerationConfig             = "content_moderation_config"               // 内容审计配置（JSON）
-	SettingKeyCyberSessionBlockEnabled            = "cyber_session_block_enabled"             // cyber 命中后会话级自动屏蔽总开关(默认关)
-	SettingKeyCyberSessionBlockTTLSeconds         = "cyber_session_block_ttl_seconds"         // 会话屏蔽 TTL 秒数(默认 3600)
-	SettingKeyLoginAgreementEnabled               = "login_agreement_enabled"                 // 登录前是否要求同意条款
-	SettingKeyLoginAgreementMode                  = "login_agreement_mode"                    // 条款确认展示模式：modal / checkbox
-	SettingKeyLoginAgreementUpdatedAt             = "login_agreement_updated_at"              // 条款更新日期（展示用）
-	SettingKeyLoginAgreementDocuments             = "login_agreement_documents"               // 条款文档列表（JSON，Markdown 内容）
+	SettingKeyRegistrationEnabled              = "registration_enabled"                // 是否开放注册
+	SettingKeyEmailVerifyEnabled               = "email_verify_enabled"                // 是否开启邮件验证
+	SettingKeyRegistrationEmailSuffixWhitelist = "registration_email_suffix_whitelist" // 注册邮箱后缀白名单（JSON 数组）
+	// 白名单非空时，是否放行非白名单域名按主域名限量注册（每域名 1 个账户）。
+	// 默认 false：非白名单域名直接拒绝（白名单严格模式）。
+	SettingKeyRegistrationEmailDomainQuotaEnabled = "registration_email_domain_quota_enabled"
+	SettingKeyPromoCodeEnabled                    = "promo_code_enabled"               // 是否启用优惠码功能
+	SettingKeyPasswordResetEnabled                = "password_reset_enabled"           // 是否启用忘记密码功能（需要先开启邮件验证）
+	SettingKeyFrontendURL                         = "frontend_url"                     // 前端基础URL，用于生成邮件中的重置密码链接
+	SettingKeyInvitationCodeEnabled               = "invitation_code_enabled"          // 是否启用邀请码注册
+	SettingKeyAffiliateEnabled                    = "affiliate_enabled"                // 邀请返利功能总开关
+	SettingKeyAffiliateRebateRate                 = "affiliate_rebate_rate"            // 邀请返利比例（百分比，0-100）
+	SettingKeyAffiliateRebateFreezeHours          = "affiliate_rebate_freeze_hours"    // 返利冻结期（小时，0=不冻结）
+	SettingKeyAffiliateRebateDurationDays         = "affiliate_rebate_duration_days"   // 返利有效期（天，0=永久）
+	SettingKeyAffiliateRebatePerInviteeCap        = "affiliate_rebate_per_invitee_cap" // 单人返利上限（0=无上限）
+	SettingKeyAffiliateAdminRechargeEnabled       = "affiliate_admin_recharge_enabled" // 管理员充值是否产生返利
+	SettingKeyRiskControlEnabled                  = "risk_control_enabled"             // 是否启用风控中心入口与审计链路
+	SettingKeyContentModerationConfig             = "content_moderation_config"        // 内容审计配置（JSON）
+	SettingKeyCyberSessionBlockEnabled            = "cyber_session_block_enabled"      // cyber 命中后会话级自动屏蔽总开关(默认关)
+	SettingKeyCyberPolicyUserAllowlist            = "cyber_policy_user_allowlist"      // Platform user IDs with log-only cyber handling
+	SettingKeyCyberSessionBlockTTLSeconds         = "cyber_session_block_ttl_seconds"  // 会话屏蔽 TTL 秒数(默认 3600)
+	SettingKeyLoginAgreementEnabled               = "login_agreement_enabled"          // 登录前是否要求同意条款
+	SettingKeyLoginAgreementMode                  = "login_agreement_mode"             // 条款确认展示模式：modal / checkbox
+	SettingKeyLoginAgreementUpdatedAt             = "login_agreement_updated_at"       // 条款更新日期（展示用）
+	SettingKeyLoginAgreementDocuments             = "login_agreement_documents"        // 条款文档列表（JSON，Markdown 内容）
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
@@ -291,18 +263,20 @@ const (
 	SettingKeyTencentCaptchaAppSecretKey   = "tencent_captcha_app_secret_key"
 	SettingKeyTencentCaptchaCloudSecretID  = "tencent_captcha_cloud_secret_id"
 	SettingKeyTencentCaptchaCloudSecretKey = "tencent_captcha_cloud_secret_key"
-	SettingKeyTencentCaptchaRegion         = "tencent_captcha_region" // 站点："cn"|"intl"
+	SettingKeyTencentCaptchaRegion         = "tencent_captcha_region" // 站点："cn"|"intl"，决定前端 SDK 脚本与服务端接入点
 
-	// 阿里云验证码 2.0 设置
-	SettingKeyAliyunCaptchaEnabled         = "aliyun_captcha_enabled"
-	SettingKeyAliyunCaptchaAccessKeyID     = "aliyun_captcha_access_key_id"
-	SettingKeyAliyunCaptchaAccessKeySecret = "aliyun_captcha_access_key_secret"
-	SettingKeyAliyunCaptchaSceneID         = "aliyun_captcha_scene_id"
-	SettingKeyAliyunCaptchaPrefix          = "aliyun_captcha_prefix"
-	SettingKeyAliyunCaptchaRegion          = "aliyun_captcha_region" // 地域："cn"|"sgp"
+	// 阿里云验证码 2.0 设置（与 Turnstile、腾讯天御互斥，同一时间仅可启用一家）
+	SettingKeyAliyunCaptchaEnabled         = "aliyun_captcha_enabled"           // 是否启用阿里云验证码
+	SettingKeyAliyunCaptchaAccessKeyID     = "aliyun_captcha_access_key_id"     // 阿里云 AccessKey ID
+	SettingKeyAliyunCaptchaAccessKeySecret = "aliyun_captcha_access_key_secret" // 阿里云 AccessKey Secret
+	SettingKeyAliyunCaptchaSceneID         = "aliyun_captcha_scene_id"          // 验证场景 ID（所有认证流程共用）
+	SettingKeyAliyunCaptchaPrefix          = "aliyun_captcha_prefix"            // 身份标，前端 SDK 初始化用
+	SettingKeyAliyunCaptchaRegion          = "aliyun_captcha_region"            // 地域："cn"|"sgp"，决定前端脚本区域与服务端接入点
 
 	// API Key IP 访问控制设置
 	SettingKeyAPIKeyACLTrustForwardedIP = "api_key_acl_trust_forwarded_ip" // API Key IP 白/黑名单是否信任转发 IP
+	SettingKeyForwardedClientIPHeaders  = "forwarded_client_ip_headers"    // 自定义 CDN 客户端 IP 请求头（JSON 数组）
+	settingKeyForwardedClientIPModeV2   = "forwarded_client_ip_mode_v2_migrated"
 
 	// TOTP 双因素认证设置
 	SettingKeyTotpEnabled    = "totp_enabled"    // 是否启用 TOTP 2FA 功能
@@ -319,12 +293,6 @@ const (
 
 	// 操作审计日志设置
 	SettingKeyAuditLogRetentionDays = "audit_log_retention_days" // 审计日志保留天数（<=0 永久保留），默认 180
-
-	// 会话安全设置
-
-	// 敏感操作 step-up 2FA 设置
-
-	// 操作审计日志设置
 
 	// LinuxDo Connect OAuth 登录设置
 	SettingKeyLinuxDoConnectEnabled      = "linuxdo_connect_enabled"
@@ -405,39 +373,21 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                               = "site_name"                                   // 网站名称
-	SettingKeySiteLogo                               = "site_logo"                                   // 网站Logo (base64)
-	SettingKeySiteSubtitle                           = "site_subtitle"                               // 网站副标题
-	SettingKeyAPIBaseURL                             = "api_base_url"                                // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                            = "contact_info"                                // 客服联系方式
-	SettingKeyContactChannels                        = "contact_channels"                            // 客服联系渠道（JSON 数组）
-	SettingKeySupportChatEnabled                     = "support_chat_enabled"                        // 是否启用 AI 客服气泡
-	SettingKeySupportChatGatewayURL                  = "support_chat_gateway_url"                    // AI 客服 support-gateway 公网地址
-	SettingKeySupportChatTitle                       = "support_chat_title"                          // AI 客服标题覆盖
-	SettingKeySupportChatWelcomeMessage              = "support_chat_welcome_message"                // AI 客服欢迎语覆盖
-	SettingKeySupportChatOfficialContactText         = "support_chat_official_contact_text"          // AI 客服人工联系文案覆盖
-	SettingKeySupportChatOfficialContactURL          = "support_chat_official_contact_url"           // AI 客服人工联系按钮 URL 覆盖
-	SettingKeyDocURL                                 = "doc_url"                                     // 文档链接
-	SettingKeySitePages                              = "site_pages"                                  // 公开站点页面（JSON 数组，Markdown 或链接）
-	SettingKeyHomeContent                            = "home_content"                                // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton                    = "hide_ccs_import_button"                      // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyFrontendLocales                        = "frontend_locales"                            // 前端可用语言（JSON 数组）
-	SettingKeyCCSwitchDefaultModelAnthropic          = "ccswitch_default_model_anthropic"            // CCSwitch 导入默认 Claude 模型
-	SettingKeyCCSwitchDefaultModelOpenAI             = "ccswitch_default_model_openai"               // CCSwitch 导入默认 OpenAI/Codex 模型
-	SettingKeyCCSwitchDefaultModelGemini             = "ccswitch_default_model_gemini"               // CCSwitch 导入默认 Gemini 模型
-	SettingKeyCCSwitchDefaultModelAntigravity        = "ccswitch_default_model_antigravity"          // CCSwitch 导入默认 Antigravity Claude 模型
-	SettingKeyCCSwitchDefaultModelAntigravityGemini  = "ccswitch_default_model_antigravity_gemini"   // CCSwitch 导入默认 Antigravity Gemini 模型
-	SettingKeyUserSubscriptionsVisible               = "user_subscriptions_visible"                  // 是否展示用户侧“我的订阅”入口
-	SettingKeyPurchaseSubscriptionEnabled            = "purchase_subscription_enabled"               // 是否展示"购买订阅"页面入口
-	SettingKeyPurchaseSubscriptionURL                = "purchase_subscription_url"                   // "购买订阅"页面 URL（作为 iframe src）
-	SettingKeySubscriptionMultiplePurchasesEnabled   = "subscription_multiple_purchases_enabled"     // 是否允许用户同时购买多个可消费订阅
-	SettingKeySubscriptionQuotaResetUTCOffsetMinutes = "subscription_quota_reset_utc_offset_minutes" // 订阅限额刷新 UTC 偏移（分钟）
-	SettingKeySubscriptionQuotaResetHour             = "subscription_quota_reset_hour"               // 订阅限额刷新小时（0-23）
-	SettingKeyTableDefaultPageSize                   = "table_default_page_size"                     // 表格默认每页条数
-	SettingKeyTablePageSizeOptions                   = "table_page_size_options"                     // 表格可选每页条数（JSON 数组）
-	SettingKeyCustomMenuItems                        = "custom_menu_items"                           // 自定义菜单项（JSON 数组）
-	SettingKeyCustomEndpoints                        = "custom_endpoints"                            // 自定义端点列表（JSON 数组）
-	SettingKeyLumioDesktopConfig                     = "lumio_desktop_config"                        // Lumio Codex 桌面引导配置（JSON）
+	SettingKeySiteName                    = "site_name"                     // 网站名称
+	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
+	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
+	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
+	SettingKeyDocURL                      = "doc_url"                       // 文档链接
+	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyCompactHomeEnabled          = "compact_home_enabled"          // 是否启用内置简洁首页
+	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
+	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
+	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
+	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
@@ -489,9 +439,6 @@ const (
 	// Gemini 配额策略（JSON）
 	SettingKeyGeminiQuotaPolicy = "gemini_quota_policy"
 
-	// Model market settings
-	SettingKeyModelMarket = "model_market"
-
 	// Model fallback settings
 	SettingKeyEnableModelFallback      = "enable_model_fallback"
 	SettingKeyFallbackModelAnthropic   = "fallback_model_anthropic"
@@ -531,9 +478,6 @@ const (
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
 
-	// SettingKeyOpsAccountErrorAlertConfig stores JSON config for account error Telegram alerts.
-	SettingKeyOpsAccountErrorAlertConfig = "ops_account_error_alert_config"
-
 	// =========================
 	// Channel Monitor (渠道监控)
 	// =========================
@@ -546,10 +490,6 @@ const (
 	// "v1" active probes, "v2" passive aggregation. Default "v1" (opt-in to v2).
 	SettingKeyChannelMonitorMode = "channel_monitor_mode"
 
-	SettingKeyModelPlazaEnabled     = "model_plaza_enabled"
-	SettingKeyModelPlazaRequireAuth = "model_plaza_require_auth"
-	SettingKeyModelPlazaDescription = "model_plaza_description"
-
 	// ChannelMonitorModeV1/V2 are the only accepted mode values.
 	ChannelMonitorModeV1 = "v1"
 	ChannelMonitorModeV2 = "v2"
@@ -558,19 +498,11 @@ const (
 	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
 	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
 
-	// SettingKeyChannelMonitorHideThroughput hides RPM/TPM from non-admin monitor APIs.
-	// Default false (show rates). Missing values are treated as hidden by the runtime reader.
+	// SettingKeyChannelMonitorHideThroughput hides RPM/TPM (and similar absolute
+	// throughput rates) from non-admin user-facing monitor APIs and UI, so users
+	// cannot reverse-estimate fleet volume from rates × window length.
+	// Default false (show rates). Admin endpoints always keep full metrics.
 	SettingKeyChannelMonitorHideThroughput = "channel_monitor_hide_throughput"
-	// SettingKeyChannelMonitorHideUserRanking hides the user ranking tab from non-admin viewers.
-	SettingKeyChannelMonitorHideUserRanking = "channel_monitor_hide_user_ranking"
-
-	// SettingKeyOllamaCloudUsageSettings stores the opt-in global runner switch and interval.
-	SettingKeyOllamaCloudUsageSettings = "ollama_cloud_usage_settings"
-	SettingKeyOpenCodeGoUsageSettings  = "opencode_go_usage_settings"
-
-	// SettingKeyChannelMonitorStatusBanner is the optional highlight banner text shown at the
-	// top of the user-facing channel status page. Empty string hides the banner.
-	SettingKeyChannelMonitorStatusBanner = "channel_monitor_status_banner"
 
 	// SettingKeyChannelMonitorShowQuota controls whether quota/balance snapshots
 	// attached to channel monitors (check_mode=quota/quota_probe) are exposed on
@@ -578,49 +510,65 @@ const (
 	// fail-closed (only the literal "true" enables it). Admin endpoints always
 	// keep the full snapshots regardless of this flag.
 	SettingKeyChannelMonitorShowQuota = "channel_monitor_show_quota"
+	// SettingKeyChannelMonitorHideUserRanking hides the user ranking tab and
+	// /users payload from non-admin channel-monitor v2 viewers.
+	// Default false (keep the current ranking tab). Admin endpoints always keep it.
+	SettingKeyChannelMonitorHideUserRanking = "channel_monitor_hide_user_ranking"
 
 	// SettingKeyGrokDefaultTextModel is the fallback Grok text model for empty
-	// request models and built-in Grok aliases (e.g. "grok" → this id). Default grok-4.6.
-	SettingKeyGrokDefaultTextModel   = "grok_default_text_model"
-	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
+	// request models and built-in Grok aliases (e.g. "grok" → this id). Default grok-4.5.
+	SettingKeyGrokDefaultTextModel = "grok_default_text_model"
 
 	// SettingKeyGrokCrossClientModelMapEnabled, when true, includes gpt-*/codex-*/o*/claude-*
 	// wildcards in the default Grok account model_mapping so foreign client model names
-	// can reach Grok groups. Default true (Codex/Claude clients keep working).
+	// can reach Grok groups. Default false (no silent cross-vendor rewrite).
 	SettingKeyGrokCrossClientModelMapEnabled = "grok_cross_client_model_map_enabled"
+
+	// SettingKeyGrokDefaultBaseURLMode controls the default text upstream for
+	// Grok accounts without an explicit credentials.base_url.
+	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
 
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
-	// Subscription Credit Pool Notification
-	// 订阅触顶 / 过期通知正文里的"重新订阅"链接。
-	// 为空时回退到 SettingKeyFrontendURL + /purchase，再退到 /purchase。
-	SettingKeySubscriptionCreditPoolRepurchaseURL = "subscription_credit_pool_repurchase_url"
-	// 订阅额度池通知邮件开关。站内信始终发送，邮件默认关闭。
-	SettingKeySubscriptionNotifyEmailEnabled = "subscription_notify_email_enabled"
+	// SettingKeySubscriptionEnabled is a DB-backed soft switch for the user-facing
+	// subscription surface: sidebar entries, purchase-page subscription tab, header
+	// progress badge, usage billing-type filter and the /subscriptions route. When
+	// false users can no longer buy or browse subscriptions from the UI; the
+	// subscriptions API, existing subscription billing and admin subscription
+	// management are unaffected. Together with BALANCE_PAYMENT_DISABLED it forms the
+	// admin "site billing mode" selector. Defaults to true (opt-out feature).
+	SettingKeySubscriptionEnabled = "subscription_enabled"
 
-	// =========================
-	// Geo Block (compliance)
-	// =========================
+	// SettingKeyModelPlazaEnabled is a DB-backed soft switch for the Model Plaza page
+	// (public group/model pricing showcase). When false: the plaza endpoint returns 404
+	// and the header entry is hidden. Defaults to false (opt-in feature).
+	SettingKeyModelPlazaEnabled = "model_plaza_enabled"
 
-	// SettingKeyGeoBlockEnabled is a DB-backed runtime switch for the region web-block
-	// middleware. Stored as "true"/"false". When unset, falls back to the config seed
-	// (cfg.GeoBlock.Enabled), then to the built-in default (false).
-	SettingKeyGeoBlockEnabled = "geo_block_enabled"
+	// SettingKeyModelPlazaRequireAuth controls whether the Model Plaza page requires a
+	// logged-in user. When false the page is public and anonymous visitors see only
+	// non-exclusive groups.
+	SettingKeyModelPlazaRequireAuth = "model_plaza_require_auth"
 
-	// SettingKeyGeoBlockCountries stores the blocked ISO 3166-1 alpha-2 country codes as a
-	// JSON string array (e.g. ["CN"]). When unset, falls back to the config seed, then ["CN"].
-	SettingKeyGeoBlockCountries = "geo_block_countries"
+	// SettingKeyModelPlazaDescription stores the Markdown blurb rendered at the top of
+	// the Model Plaza page (global pricing notes, exchange rate, promotions, ...).
+	SettingKeyModelPlazaDescription = "model_plaza_description"
 
-	// SettingKeyGeoBlockWhitelist stores exempt IP/CIDR entries as a JSON string array.
-	// When unset, falls back to the config seed, then empty.
-	SettingKeyGeoBlockWhitelist = "geo_block_whitelist"
+	// SettingKeyPluginManagementEnabled controls sidebar visibility only; it does
+	// not stop or otherwise change already loaded plugin runtimes.
+	SettingKeyPluginManagementEnabled = "plugin_management_enabled"
 
 	// SettingKeyUpstreamBillingProbeSettings stores the global enable switch and interval
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"
+
+	// SettingKeyOllamaCloudUsageSettings stores the opt-in global runner switch and interval.
+	SettingKeyOllamaCloudUsageSettings = "ollama_cloud_usage_settings"
+
+	// SettingKeyOpenCodeGoUsageSettings stores the opt-in global runner switch and interval.
+	SettingKeyOpenCodeGoUsageSettings = "opencode_go_usage_settings"
 
 	// =========================
 	// Overload Cooldown (529)
@@ -631,6 +579,10 @@ const (
 
 	// SettingKeyRateLimit429CooldownSettings stores JSON config for 429 fallback cooldown handling.
 	SettingKeyRateLimit429CooldownSettings = "rate_limit_429_cooldown_settings"
+	// SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings stores the cooldown applied when the OAuth image tool is unavailable.
+	SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings = "openai_images_oauth_unavailable_cooldown_settings"
+	// SettingKeyOpenAIAPIKeyHealthBreakerSettings stores the opt-in OpenAI pool API-key breaker config.
+	SettingKeyOpenAIAPIKeyHealthBreakerSettings = "openai_apikey_health_breaker_settings"
 
 	// =========================
 	// Stream Timeout Handling
@@ -658,8 +610,6 @@ const (
 	// targets OpenAI's body-level service_tier field instead of Claude's
 	// anthropic-beta header.
 	SettingKeyOpenAIFastPolicySettings = "openai_fast_policy_settings"
-	// SettingKeyOpenAIAPIKeyHealthBreakerSettings stores the opt-in OpenAI pool API-key breaker config.
-	SettingKeyOpenAIAPIKeyHealthBreakerSettings = "openai_apikey_health_breaker_settings"
 
 	// =========================
 	// Claude Code Version Check
@@ -685,19 +635,6 @@ const (
 
 	// SettingKeyMaxClaudeCodeVersion 最高 Claude Code 版本号限制 (semver, 如 "3.0.0"，空值=不检查)
 	SettingKeyMaxClaudeCodeVersion = "max_claude_code_version"
-
-	// SettingKeyClaudeCodeClientVersion 网关对 Anthropic 上游声明的 Claude Code CLI 客户端版本号（管理员覆写）。
-	SettingKeyClaudeCodeClientVersion = "claude_code_client_version"
-	// SettingKeyClaudeCodeClientVersionSynced 自动同步任务写入的官方 Claude Code CLI 最新版本号。
-	SettingKeyClaudeCodeClientVersionSynced = "claude_code_client_version_synced"
-	// SettingKeyOpenAICodexClientVersion 管理员覆写的 Codex CLI 客户端版本号。
-	SettingKeyOpenAICodexClientVersion = "openai_codex_client_version"
-	// SettingKeyOpenAICodexClientVersionSynced 自动同步任务写入的官方 Codex CLI 最新版本号。
-	SettingKeyOpenAICodexClientVersionSynced = "openai_codex_client_version_synced"
-	// SettingKeyOpenAICodexVersionAutoSyncEnabled 是否启用 Codex 客户端版本号自动同步。
-	SettingKeyOpenAICodexVersionAutoSyncEnabled = "openai_codex_version_auto_sync_enabled"
-	// SettingKeyClaudeCodeVersionAutoSyncEnabled 是否启用 Claude Code 客户端版本号自动同步（默认 true）。
-	SettingKeyClaudeCodeVersionAutoSyncEnabled = "claude_code_version_auto_sync_enabled"
 
 	// SettingKeyAllowUngroupedKeyScheduling 允许未分组 API Key 调度（默认 false：未分组 Key 返回 403）
 	SettingKeyAllowUngroupedKeyScheduling = "allow_ungrouped_key_scheduling"
@@ -760,6 +697,25 @@ const (
 	// 当客户端 UA 被识别为浏览器（Chrome/Firefox/Safari/Edge 等）时，转发给 OpenAI 上游前会替换为此值，
 	// 用于避免 Cloudflare 对浏览器型 UA 的质询拦截。
 	SettingKeyOpenAICodexUserAgent = "openai_codex_user_agent"
+	// SettingKeyOpenAICodexClientVersion 网关对 ChatGPT 上游声明的 Codex 客户端版本号（管理员覆写）。
+	// 空值表示跟随自动同步值；自动同步也没有结果时回退到内置常量。
+	// 上游在容量紧张时按客户端身份分优先级降载，陈旧版本会被优先丢弃，故该值需保持跟随官方发布。
+	SettingKeyOpenAICodexClientVersion = "openai_codex_client_version"
+	// SettingKeyOpenAICodexClientVersionSynced 自动同步任务写入的官方 Codex 最新稳定版版本号。
+	// 由 OpenAICodexVersionSyncService 独占写入，面板只读展示；管理员覆写请用
+	// SettingKeyOpenAICodexClientVersion。
+	SettingKeyOpenAICodexClientVersionSynced = "openai_codex_client_version_synced"
+	// SettingKeyOpenAICodexVersionAutoSyncEnabled 是否启用 Codex 客户端版本号自动同步（默认 true）。
+	SettingKeyOpenAICodexVersionAutoSyncEnabled = "openai_codex_version_auto_sync_enabled"
+	// SettingKeyClaudeCodeClientVersion 网关对 Anthropic 上游声明的 Claude Code CLI 客户端版本号（管理员覆写）。
+	// 空值表示跟随自动同步值；自动同步也没有结果时回退到 claude.CLIVersion()（环境变量覆盖 + 内置基线）。
+	// 版本太旧会被 Anthropic 拒绝（claude_code_version_too_old），故该值需保持跟随官方发布。
+	SettingKeyClaudeCodeClientVersion = "claude_code_client_version"
+	// SettingKeyClaudeCodeClientVersionSynced 自动同步任务写入的官方 Claude Code CLI 最新版本号。
+	// 由同步任务独占写入，面板只读展示；管理员覆写请用 SettingKeyClaudeCodeClientVersion。
+	SettingKeyClaudeCodeClientVersionSynced = "claude_code_client_version_synced"
+	// SettingKeyClaudeCodeVersionAutoSyncEnabled 是否启用 Claude Code 客户端版本号自动同步（默认 true）。
+	SettingKeyClaudeCodeVersionAutoSyncEnabled = "claude_code_version_auto_sync_enabled"
 	// SettingKeyOpenAIAllowClaudeCodeCodexPlugin 已废弃：历史全局开关只作为升级迁移输入读取。
 	// 迁移后等价规则写入 SettingKeyCodexCLIOnlyWhitelist，不再参与运行时判定。
 	SettingKeyOpenAIAllowClaudeCodeCodexPlugin = "openai_allow_claude_code_codex_plugin"
@@ -784,6 +740,10 @@ const (
 // 值为 map[platform]{daily,weekly,monthly}，null/缺省 = 不限制；0 = 禁用；>0 = USD 上限。
 const SettingKeyDefaultPlatformQuotas = "default_platform_quotas"
 
+// SettingKeyAccountSchedulingThresholds —— 系统全局：按平台自动停调阈值（JSON map）。
+// 值为 map[platform]percent，1..100；100 = 禁用该平台自动停调。
+const SettingKeyAccountSchedulingThresholds = "account_scheduling_thresholds"
+
 // SettingKeyAuthSourcePlatformQuotas 返回某 auth source 的 platform quota JSON key。
 // 形如 auth_source_default_{source}_platform_quotas
 func SettingKeyAuthSourcePlatformQuotas(source string) string {
@@ -802,3 +762,66 @@ const AdminAPIKeyPrefix = "admin-"
 // SettingKeyAllowUserViewErrorRequests controls whether end users can view
 // their own failed requests on the usage page. Default false (opt-in).
 const SettingKeyAllowUserViewErrorRequests = "allow_user_view_error_requests"
+
+// fork 侧补充常量（自 dev 的 domain_constants.go 保留）
+const (
+	InvitationRegistrationModeRedeemCode             = "redeem_code"
+	InvitationRegistrationModeAffiliateLink          = "affiliate_link"
+	InvitationRegistrationModeBoth                   = "both"
+	RedeemTypeBalancePayment                         = domain.RedeemTypeBalancePayment
+	RedeemTypeSubscriptionPayment                    = "subscription_payment"
+	RedeemTypePromoBalance                           = "promo_balance"
+	RedeemTypeWalletDebit                            = "wallet_debit"
+	RedeemTypeCheckinBalance                         = "checkin_balance"
+	RedeemTypeCheckinMilestone                       = "checkin_milestone"
+	RedeemTypeRechargeBonus                          = "recharge_bonus"
+	SettingKeyInvitationRegistrationMode             = "invitation_registration_mode"                // 邀请注册校验方式：redeem_code / affiliate_link / both
+	SettingKeyAffiliateRebateTiers                   = "affiliate_rebate_tiers"                      // 阶梯式邀请返利配置（L1-L4）
+	SettingKeyAffiliateSignupBonusEnabled            = "affiliate_signup_bonus_enabled"              // 注册就送开关
+	SettingKeyAffiliateSignupBonusAmount             = "affiliate_signup_bonus_amount"               // 注册就送固定额度
+	SettingKeyAffiliateSignupBonusTotalCap           = "affiliate_signup_bonus_total_cap"            // 单个邀请人累计注册赠送上限（0=无上限）
+	SettingKeyAffiliateSignupBonusDailyCap           = "affiliate_signup_bonus_daily_cap"            // 全站每日注册赠送上限（0=无上限）
+	SettingKeyBalanceUsageGateEnabled                = "balance_usage_gate_enabled"                  // 余额使用门槛开关
+	SettingKeyBalanceUsageGateMinBalance             = "balance_usage_gate_min_balance"              // 使用余额服务前需大于的当前余额
+	SettingKeyBalanceUsageGateMinRecharge            = "balance_usage_gate_min_recharge"             // 使用余额服务前需大于的历史充值
+	SettingKeySiteMessagesEnabled                    = "site_messages_enabled"                       // 是否启用站内信功能
+	SettingKeySiteMessagesDailySendLimit             = "site_messages_daily_send_limit"              // 非管理员每日站内信发送上限（0=不限制）
+	SettingKeySiteMessagesRetentionDays              = "site_messages_retention_days"                // 站内信保留天数
+	SettingKeySiteMessagesDefaultRecipientEmail      = "site_messages_default_recipient_email"       // 用户写信时默认填入的收件邮箱
+	SettingKeyContactChannels                        = "contact_channels"                            // 客服联系渠道（JSON 数组）
+	SettingKeySupportChatEnabled                     = "support_chat_enabled"                        // 是否启用 AI 客服气泡
+	SettingKeySupportChatGatewayURL                  = "support_chat_gateway_url"                    // AI 客服 support-gateway 公网地址
+	SettingKeySupportChatTitle                       = "support_chat_title"                          // AI 客服标题覆盖
+	SettingKeySupportChatWelcomeMessage              = "support_chat_welcome_message"                // AI 客服欢迎语覆盖
+	SettingKeySupportChatOfficialContactText         = "support_chat_official_contact_text"          // AI 客服人工联系文案覆盖
+	SettingKeySupportChatOfficialContactURL          = "support_chat_official_contact_url"           // AI 客服人工联系按钮 URL 覆盖
+	SettingKeySitePages                              = "site_pages"                                  // 公开站点页面（JSON 数组，Markdown 或链接）
+	SettingKeyFrontendLocales                        = "frontend_locales"                            // 前端可用语言（JSON 数组）
+	SettingKeyCCSwitchDefaultModelAnthropic          = "ccswitch_default_model_anthropic"            // CCSwitch 导入默认 Claude 模型
+	SettingKeyCCSwitchDefaultModelOpenAI             = "ccswitch_default_model_openai"               // CCSwitch 导入默认 OpenAI/Codex 模型
+	SettingKeyCCSwitchDefaultModelGemini             = "ccswitch_default_model_gemini"               // CCSwitch 导入默认 Gemini 模型
+	SettingKeyCCSwitchDefaultModelAntigravity        = "ccswitch_default_model_antigravity"          // CCSwitch 导入默认 Antigravity Claude 模型
+	SettingKeyCCSwitchDefaultModelAntigravityGemini  = "ccswitch_default_model_antigravity_gemini"   // CCSwitch 导入默认 Antigravity Gemini 模型
+	SettingKeyUserSubscriptionsVisible               = "user_subscriptions_visible"                  // 是否展示用户侧“我的订阅”入口
+	SettingKeySubscriptionMultiplePurchasesEnabled   = "subscription_multiple_purchases_enabled"     // 是否允许用户同时购买多个可消费订阅
+	SettingKeySubscriptionQuotaResetUTCOffsetMinutes = "subscription_quota_reset_utc_offset_minutes" // 订阅限额刷新 UTC 偏移（分钟）
+	SettingKeySubscriptionQuotaResetHour             = "subscription_quota_reset_hour"               // 订阅限额刷新小时（0-23）
+	SettingKeyLumioDesktopConfig                     = "lumio_desktop_config"                        // Lumio Codex 桌面引导配置（JSON）
+	SettingKeyModelMarket                            = "model_market"
+	SettingKeyOpsAccountErrorAlertConfig             = "ops_account_error_alert_config"
+	SettingKeyChannelMonitorStatusBanner             = "channel_monitor_status_banner"
+	SettingKeySubscriptionCreditPoolRepurchaseURL    = "subscription_credit_pool_repurchase_url"
+	SettingKeySubscriptionNotifyEmailEnabled         = "subscription_notify_email_enabled"
+	SettingKeyGeoBlockEnabled                        = "geo_block_enabled"
+	SettingKeyGeoBlockCountries                      = "geo_block_countries"
+	SettingKeyGeoBlockWhitelist                      = "geo_block_whitelist"
+
+	AffiliateSignupBonusEnabledDefault  = false // 注册就送默认关闭
+	AffiliateSignupBonusAmountDefault   = 0.0
+	InvitationRegistrationModeDefault   = InvitationRegistrationModeRedeemCode
+	AffiliateSignupBonusDailyCapDefault = 0.0 // 全站每日上限，0 = 无上限
+	AffiliateSignupBonusTotalCapDefault = 0.0 // 单个邀请人累计上限，0 = 无上限
+	BalanceUsageGateEnabledDefault      = false
+	BalanceUsageGateMinBalanceDefault   = 0.0
+	BalanceUsageGateMinRechargeDefault  = 0.0
+)

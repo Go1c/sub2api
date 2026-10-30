@@ -1567,10 +1567,10 @@ func TestOpenAIGatewayServiceRecordUsage_PersistsRequestedReasoningEffort(t *tes
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
-			RequestID:                "resp_requested_effort",
-			Model:                    "gpt-5.4",
-			ReasoningEffort:          &forwarded,
-			
+			RequestID:       "resp_requested_effort",
+			Model:           "gpt-5.4",
+			ReasoningEffort: &forwarded,
+
 			Usage: OpenAIUsage{
 				InputTokens:  20,
 				OutputTokens: 10,

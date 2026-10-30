@@ -103,7 +103,7 @@ func TestBulkSubscriptionAction_RollsBackPostWriteFailureBeforeRetry(t *testing.
 				status = SubscriptionStatusExpired
 			}
 			repo := &transactionalBulkSubscriptionRepo{
-				committed:       UserSubscription{ID: 1, UserID: 10, GroupID: 20, Status: status, ExpiresAt: expiresAt, DailyUsageUSD: 7},
+				committed:       UserSubscription{ID: 1, UserID: 10, GroupID: int64Ptr(20), Status: status, ExpiresAt: expiresAt, DailyUsageUSD: 7},
 				pending:         make(map[*dbent.Tx]*UserSubscription),
 				reads:           make(map[*dbent.Tx]int),
 				postReadFailure: tc.postReadFailure,

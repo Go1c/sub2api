@@ -24,32 +24,26 @@ type User struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 
-	// 余额不足通知（邮件）
+	// 余额不足通知
 	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
 	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
 	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold"`
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
-	// Webhook 通知（HTTPS POST；与邮件解耦）
-	WebhookBalanceNotifyEnabled      bool     `json:"webhook_balance_notify_enabled"`
-	WebhookBalanceNotifyURL          string   `json:"webhook_balance_notify_url"`
-	WebhookBalanceNotifyThreshold    *float64 `json:"webhook_balance_notify_threshold"`
-	WebhookSiteMessageNotifyEnabled  bool     `json:"webhook_site_message_notify_enabled"`
-	WebhookAnnouncementNotifyEnabled bool     `json:"webhook_announcement_notify_enabled"`
-	TotalRecharged                   float64  `json:"total_recharged"`
+	TotalRecharged             float64            `json:"total_recharged"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`
 
-	// InvoiceEnabled 是否允许该用户使用发票申请入口与相关接口。
-	InvoiceEnabled bool `json:"invoice_enabled"`
-
-	// SubscriptionPurchaseDisabled 为 true 时禁止该用户购买订阅。
-	SubscriptionPurchaseDisabled bool `json:"subscription_purchase_disabled"`
-	// RechargeBonusDisabled 为 true 时该用户仍可充值，但没有满赠价签和赠送额度。
-	RechargeBonusDisabled bool `json:"recharge_bonus_disabled"`
-
-	APIKeys       []APIKey           `json:"api_keys,omitempty"`
-	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
+	APIKeys                          []APIKey           `json:"api_keys,omitempty"`
+	Subscriptions                    []UserSubscription `json:"subscriptions,omitempty"`
+	WebhookBalanceNotifyEnabled      bool               `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL          string             `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold    *float64           `json:"webhook_balance_notify_threshold"`
+	WebhookSiteMessageNotifyEnabled  bool               `json:"webhook_site_message_notify_enabled"`
+	WebhookAnnouncementNotifyEnabled bool               `json:"webhook_announcement_notify_enabled"`
+	InvoiceEnabled                   bool               `json:"invoice_enabled"`
+	SubscriptionPurchaseDisabled     bool               `json:"subscription_purchase_disabled"`
+	RechargeBonusDisabled            bool               `json:"recharge_bonus_disabled"`
 }
 
 // AdminUser 是管理员接口使用的 user DTO（包含敏感/内部字段）。
@@ -68,23 +62,21 @@ type AdminUser struct {
 }
 
 type APIKey struct {
-	ID            int64      `json:"id"`
-	UserID        int64      `json:"user_id"`
-	Key           string     `json:"key"`
-	Name          string     `json:"name"`
-	GroupID       *int64     `json:"group_id"`
-	FallbackKeyID *int64     `json:"fallback_key_id"`
-	Status        string     `json:"status"`
-	AllowedModels []string   `json:"allowed_models"`
-	IPWhitelist   []string   `json:"ip_whitelist"`
-	IPBlacklist   []string   `json:"ip_blacklist"`
-	LastUsedAt    *time.Time `json:"last_used_at"`
-	LastUsedIP    *string    `json:"last_used_ip"`
-	Quota         float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
-	QuotaUsed     float64    `json:"quota_used"` // Used quota amount in USD
-	ExpiresAt     *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID          int64      `json:"id"`
+	UserID      int64      `json:"user_id"`
+	Key         string     `json:"key"`
+	Name        string     `json:"name"`
+	GroupID     *int64     `json:"group_id"`
+	Status      string     `json:"status"`
+	IPWhitelist []string   `json:"ip_whitelist"`
+	IPBlacklist []string   `json:"ip_blacklist"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	LastUsedIP  *string    `json:"last_used_ip"`
+	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
+	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
+	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 	// CurrentConcurrency is the real-time active request count for this API key.
 	CurrentConcurrency int `json:"current_concurrency"`
 
@@ -102,8 +94,10 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User          *User    `json:"user,omitempty"`
+	Group         *Group   `json:"group,omitempty"`
+	FallbackKeyID *int64   `json:"fallback_key_id"`
+	AllowedModels []string `json:"allowed_models"`
 }
 
 type Group struct {
@@ -119,14 +113,16 @@ type Group struct {
 	// name/description 换成请求语言的版本后清空本字段。
 	I18n domain.GroupI18n `json:"i18n,omitempty"`
 
-	SubscriptionType string   `json:"subscription_type"`
-	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
+	SubscriptionType          string   `json:"subscription_type"`
+	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD            *float64 `json:"weekly_limit_usd"`
+	MonthlyLimitUSD           *float64 `json:"monthly_limit_usd"`
+	LongContextPricingEnabled bool     `json:"long_context_pricing_enabled"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool    `json:"allow_image_generation"`
 	AllowBatchImageGeneration    bool    `json:"allow_batch_image_generation"`
+	ImageCountBilling            bool    `json:"image_count_billing"`
 	ImageRateIndependent         bool    `json:"image_rate_independent"`
 	ImageRateMultiplier          float64 `json:"image_rate_multiplier"`
 	BatchImageDiscountMultiplier float64 `json:"batch_image_discount_multiplier"`
@@ -144,18 +140,18 @@ type Group struct {
 	VideoPrice480P     *float64 `json:"video_price_480p"`
 	VideoPrice720P     *float64 `json:"video_price_720p"`
 	VideoPrice1080P    *float64 `json:"video_price_1080p"`
+	// VideoModelPrices 可选按模型族×分辨率覆盖视频每秒单价 (USD/s)。
+	VideoModelPrices map[string]map[string]float64 `json:"video_model_prices,omitempty"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
-	WebSearchPricePerCall    *float64 `json:"web_search_price_per_call"`
-	WebSearchRateIndependent bool     `json:"web_search_rate_independent"`
-	WebSearchRateMultiplier  float64  `json:"web_search_rate_multiplier"`
-	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
-	LongContextPricingEnabled bool `json:"long_context_pricing_enabled"`
+	WebSearchPricePerCall        *float64 `json:"web_search_price_per_call"`
+	SearchPricePer1k             *float64 `json:"search_price_per_1k"`
+	AudioRealtimePricePerMin     *float64 `json:"audio_realtime_price_per_min"`
+	AudioTtsPricePerMillionChars *float64 `json:"audio_tts_price_per_million_chars"`
+	AudioSttPricePerHour         *float64 `json:"audio_stt_price_per_hour"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
 	FallbackGroupID *int64 `json:"fallback_group_id"`
-	// 账号不可用时的分组级兜底（管理员配置的运行时逃生口）
-	FallbackGroupIDOnExhausted *int64 `json:"fallback_group_id_on_exhausted"`
 	// 无效请求兜底分组
 	FallbackGroupIDOnInvalidRequest *int64 `json:"fallback_group_id_on_invalid_request"`
 
@@ -177,11 +173,12 @@ type Group struct {
 	// ReasoningEffortMappings Anthropic/OpenAI 推理强度映射，可按模型精确名、前缀或后缀限定。
 	ReasoningEffortMappings []domain.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
 
-	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
-	ExposeUpstreamModelToUser bool `json:"expose_upstream_model_to_user"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
+	WebSearchRateIndependent   bool      `json:"web_search_rate_independent"`
+	WebSearchRateMultiplier    float64   `json:"web_search_rate_multiplier"`
+	FallbackGroupIDOnExhausted *int64    `json:"fallback_group_id_on_exhausted"`
+	ExposeUpstreamModelToUser  bool      `json:"expose_upstream_model_to_user"`
 }
 
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
@@ -196,11 +193,10 @@ type AdminGroup struct {
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。
 	// 仅管理员可见：这三个字段与同响应中的 rate_multiplier 相乘即可反推出
 	// 运营方的上游成本上限，属于内部经营信息，不得下放到 dto.Group。
-	ProfitControlEnabled bool    `json:"profit_control_enabled"`
-	ProfitMinMargin      float64 `json:"profit_min_margin"`
-	ProfitSafetyBuffer   float64 `json:"profit_safety_buffer"`
-	// ModelPricing 分组级逐模型定价，仅管理员可见。
-	ModelPricing []service.ChannelModelPricing `json:"model_pricing"`
+	ProfitControlEnabled bool                          `json:"profit_control_enabled"`
+	ProfitMinMargin      float64                       `json:"profit_min_margin"`
+	ProfitSafetyBuffer   float64                       `json:"profit_safety_buffer"`
+	ModelPricing         []service.ChannelModelPricing `json:"model_pricing"`
 
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64 `json:"model_routing"`
@@ -212,7 +208,9 @@ type AdminGroup struct {
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	DefaultMappedModel          string                                   `json:"default_mapped_model"`
 	MessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
-	ModelsListConfig            domain.GroupModelsListConfig             `json:"models_list_config"`
+	ModelAllowlist              service.GroupModelAllowlist              `json:"model_allowlist"`
+	// 固定账号获取 Codex Model Manifest 配置（仅 openai 平台使用）。
+	CodexModelsManifestConfig domain.GroupCodexModelsManifestConfig `json:"codex_models_manifest_config"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes    []string       `json:"supported_model_scopes"`
@@ -222,7 +220,8 @@ type AdminGroup struct {
 	RateLimitedAccountCount int64          `json:"rate_limited_account_count,omitempty"`
 
 	// 分组排序
-	SortOrder int `json:"sort_order"`
+	SortOrder        int                          `json:"sort_order"`
+	ModelsListConfig domain.GroupModelsListConfig `json:"models_list_config"`
 }
 
 type Account struct {
@@ -239,7 +238,6 @@ type Account struct {
 	OllamaCloudUsage        *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
 	OpenCodeGoUsage         *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
 	ProxyID                 *int64                         `json:"proxy_id"`
-	ProxyIPGroupID          *int64                         `json:"proxy_ip_group_id"`
 	ProxyFallbackOriginID   *int64                         `json:"proxy_fallback_origin_id"`
 	ProxyFallbackOriginName *string                        `json:"proxy_fallback_origin_name,omitempty"`
 	Concurrency             int                            `json:"concurrency"`
@@ -345,6 +343,10 @@ type Account struct {
 
 	GroupIDs []int64  `json:"group_ids,omitempty"`
 	Groups   []*Group `json:"groups,omitempty"`
+
+	// 仅账号详情填充。列表和公共 mapper 不计算，避免把目录诊断扩散到调度响应。
+	GrokModelDiagnostics *service.GrokModelDiagnostics `json:"grok_model_diagnostics,omitempty"`
+	ProxyIPGroupID       *int64                        `json:"proxy_ip_group_id"`
 }
 
 // AccountListItem is the compact representation returned by the admin account
@@ -490,16 +492,6 @@ type ProxyWithAccountCount struct {
 	QualityChecked *int64 `json:"quality_checked,omitempty"`
 }
 
-// AdminProxyIPGroup is the admin DTO for an IP group and its member proxy IDs.
-type AdminProxyIPGroup struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	PerIPConcurrency int       `json:"per_ip_concurrency"`
-	ProxyIDs         []int64   `json:"proxy_ids"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-}
-
 // AdminProxy 是管理员接口使用的 proxy DTO（包含密码等敏感字段）。
 // 注意：普通接口不得使用此 DTO。
 type AdminProxy struct {
@@ -548,8 +540,8 @@ type RedeemCode struct {
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`
 
-	// Notes is populated for admin_balance/admin_concurrency and checkin_milestone
-	// so users can see why they were credited or parse milestone day.
+	// Notes is only populated for admin_balance/admin_concurrency types
+	// so users can see why they were charged or credited
 	Notes *string `json:"notes,omitempty"`
 
 	User  *User  `json:"user,omitempty"`
@@ -679,15 +671,13 @@ type UsageLog struct {
 	ImageSizeBreakdown map[string]int `json:"image_size_breakdown"`
 	MediaType          *string        `json:"media_type"`
 
-	// 视频生成字段（Grok 等按秒计费）
-	VideoCount           int     `json:"video_count"`
-	VideoResolution      *string `json:"video_resolution,omitempty"`
-	VideoDurationSeconds *int    `json:"video_duration_seconds,omitempty"`
-
 	// User-Agent
 	UserAgent *string `json:"user_agent"`
 	// IPAddress is visible to the owner of the usage record.
 	IPAddress *string `json:"ip_address,omitempty"`
+	// SessionID is the explicit client-provided request correlation identifier
+	// (e.g. the session_id / X-Session-Id headers). Omitted when absent.
+	SessionID *string `json:"session_id,omitempty"`
 
 	// Cache TTL Override 标记
 	CacheTTLOverridden bool `json:"cache_ttl_overridden"`
@@ -695,17 +685,17 @@ type UsageLog struct {
 	// BillingMode 计费模式：token/image
 	BillingMode *string `json:"billing_mode,omitempty"`
 
-	// UpstreamModel is the actual model sent to the upstream provider after mapping.
-	UpstreamModel *string `json:"upstream_model,omitempty"`
-	// ModelMappingChain 模型映射链，如 "a→b→c"
-	ModelMappingChain *string `json:"model_mapping_chain,omitempty"`
-
 	CreatedAt time.Time `json:"created_at"`
 
-	User         *User             `json:"user,omitempty"`
-	APIKey       *APIKey           `json:"api_key,omitempty"`
-	Group        *Group            `json:"group,omitempty"`
-	Subscription *UserSubscription `json:"subscription,omitempty"`
+	User                 *User             `json:"user,omitempty"`
+	APIKey               *APIKey           `json:"api_key,omitempty"`
+	Group                *Group            `json:"group,omitempty"`
+	Subscription         *UserSubscription `json:"subscription,omitempty"`
+	VideoCount           int               `json:"video_count"`
+	VideoResolution      *string           `json:"video_resolution,omitempty"`
+	VideoDurationSeconds *int              `json:"video_duration_seconds,omitempty"`
+	UpstreamModel        *string           `json:"upstream_model,omitempty"`
+	ModelMappingChain    *string           `json:"model_mapping_chain,omitempty"`
 }
 
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
@@ -779,13 +769,6 @@ type AccountSummary struct {
 	Name string `json:"name"`
 }
 
-// GeoBlockSettings is the admin-facing region web-block configuration.
-type GeoBlockSettings struct {
-	Enabled   bool     `json:"enabled"`
-	Countries []string `json:"countries"`
-	Whitelist []string `json:"whitelist"`
-}
-
 type Setting struct {
 	ID        int64     `json:"id"`
 	Key       string    `json:"key"`
@@ -794,51 +777,45 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID              int64  `json:"id"`
-	UserID          int64  `json:"user_id"`
-	GroupID         *int64 `json:"group_id"`
-	PlanID          *int64 `json:"plan_id,omitempty"`
-	PlanName        string `json:"plan_name,omitempty"`
-	PlanProductName string `json:"plan_product_name,omitempty"`
+	ID      int64 `json:"id"`
+	UserID  int64 `json:"user_id"`
+	GroupID int64 `json:"group_id"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Status    string    `json:"status"`
-	IsUsable  bool      `json:"is_usable"`
 
 	DailyWindowStart   *time.Time `json:"daily_window_start"`
 	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
 	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
 
-	ExhaustedAt *time.Time `json:"exhausted_at"`
-
-	QuotaLimitUSD     float64 `json:"quota_limit_usd"`
-	QuotaUsedUSD      float64 `json:"quota_used_usd"`
-	QuotaRemainingUSD float64 `json:"quota_remaining_usd"`
-
-	DailyLimitUSD  *float64   `json:"daily_limit_usd"`
-	DailyUsageUSD  float64    `json:"daily_usage_usd"`
-	DailyResetAt   *time.Time `json:"daily_reset_at"`
-	WeeklyLimitUSD *float64   `json:"weekly_limit_usd"`
-	WeeklyUsageUSD float64    `json:"weekly_usage_usd"`
-	WeeklyResetAt  *time.Time `json:"weekly_reset_at"`
-	// WeeklyLimitResetRemaining 本订阅周期用户还可手动重置周限的次数（0 或 1）。
-	WeeklyLimitResetRemaining int `json:"weekly_limit_reset_remaining"`
-	// WeeklyLimitUserResetAt 用户上次手动重置周限时刻；未重置时 omitempty。
-	WeeklyLimitUserResetAt *time.Time `json:"weekly_limit_user_reset_at,omitempty"`
-	MonthlyUsageUSD        float64    `json:"monthly_usage_usd"`
-
-	Recent30dWastedUSD float64 `json:"recent_30d_wasted_usd"`
-
-	ScopeType   string         `json:"scope_type"`
-	ScopeConfig map[string]any `json:"scope_config"`
+	DailyUsageUSD   float64 `json:"daily_usage_usd"`
+	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
+	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User                      *User          `json:"user,omitempty"`
+	Group                     *Group         `json:"group,omitempty"`
+	PlanID                    *int64         `json:"plan_id,omitempty"`
+	PlanName                  string         `json:"plan_name,omitempty"`
+	PlanProductName           string         `json:"plan_product_name,omitempty"`
+	IsUsable                  bool           `json:"is_usable"`
+	ExhaustedAt               *time.Time     `json:"exhausted_at"`
+	QuotaLimitUSD             float64        `json:"quota_limit_usd"`
+	QuotaUsedUSD              float64        `json:"quota_used_usd"`
+	QuotaRemainingUSD         float64        `json:"quota_remaining_usd"`
+	DailyLimitUSD             *float64       `json:"daily_limit_usd"`
+	DailyResetAt              *time.Time     `json:"daily_reset_at"`
+	WeeklyLimitUSD            *float64       `json:"weekly_limit_usd"`
+	WeeklyResetAt             *time.Time     `json:"weekly_reset_at"`
+	WeeklyLimitResetRemaining int            `json:"weekly_limit_reset_remaining"`
+	WeeklyLimitUserResetAt    *time.Time     `json:"weekly_limit_user_reset_at,omitempty"`
+	Recent30dWastedUSD        float64        `json:"recent_30d_wasted_usd"`
+	ScopeType                 string         `json:"scope_type"`
+	ScopeConfig               map[string]any `json:"scope_config"`
 }
 
 // AdminUserSubscription 是管理员接口使用的订阅 DTO（包含分配信息/备注等字段）。
@@ -861,24 +838,6 @@ type BulkAssignResult struct {
 	Subscriptions []AdminUserSubscription `json:"subscriptions"`
 	Errors        []string                `json:"errors"`
 	Statuses      map[string]string       `json:"statuses,omitempty"`
-}
-
-type SubscriptionCreditLedgerEntry struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	SubscriptionID    int64          `json:"subscription_id"`
-	GroupID           *int64         `json:"group_id,omitempty"`
-	APIKeyID          *int64         `json:"api_key_id,omitempty"`
-	UsageLogID        *int64         `json:"usage_log_id,omitempty"`
-	OrderID           *int64         `json:"order_id,omitempty"`
-	Type              string         `json:"type"`
-	DeltaUSD          float64        `json:"delta_usd"`
-	BalanceDeltaUSD   float64        `json:"balance_delta_usd"`
-	RemainingAfterUSD float64        `json:"remaining_after_usd"`
-	Reason            string         `json:"reason"`
-	EventKey          *string        `json:"event_key,omitempty"`
-	Metadata          map[string]any `json:"metadata"`
-	CreatedAt         time.Time      `json:"created_at"`
 }
 
 // PromoCode 注册优惠码
@@ -904,4 +863,37 @@ type PromoCodeUsage struct {
 	UsedAt      time.Time `json:"used_at"`
 
 	User *User `json:"user,omitempty"`
+}
+
+type AdminProxyIPGroup struct {
+	ID               int64     `json:"id"`
+	Name             string    `json:"name"`
+	PerIPConcurrency int       `json:"per_ip_concurrency"`
+	ProxyIDs         []int64   `json:"proxy_ids"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type SubscriptionCreditLedgerEntry struct {
+	ID                int64          `json:"id"`
+	UserID            int64          `json:"user_id"`
+	SubscriptionID    int64          `json:"subscription_id"`
+	GroupID           *int64         `json:"group_id,omitempty"`
+	APIKeyID          *int64         `json:"api_key_id,omitempty"`
+	UsageLogID        *int64         `json:"usage_log_id,omitempty"`
+	OrderID           *int64         `json:"order_id,omitempty"`
+	Type              string         `json:"type"`
+	DeltaUSD          float64        `json:"delta_usd"`
+	BalanceDeltaUSD   float64        `json:"balance_delta_usd"`
+	RemainingAfterUSD float64        `json:"remaining_after_usd"`
+	Reason            string         `json:"reason"`
+	EventKey          *string        `json:"event_key,omitempty"`
+	Metadata          map[string]any `json:"metadata"`
+	CreatedAt         time.Time      `json:"created_at"`
+}
+
+type GeoBlockSettings struct {
+	Enabled   bool     `json:"enabled"`
+	Countries []string `json:"countries"`
+	Whitelist []string `json:"whitelist"`
 }

@@ -3573,3 +3573,28 @@ func TestGatewayService_SelectAccountForModelWithPlatform_RoutedOpenAIGroup(t *t
 	require.NotNil(t, acc)
 	require.Equal(t, int64(2), acc.ID, "routed account must win over the higher-priority unrouted one")
 }
+
+func (m *mockGatewayCacheForPlatform) ClaimGrokVideoBilled(_ context.Context, _ string, _ time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (m *mockGatewayCacheForPlatform) GetGrokVideoPendingBilling(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockGatewayCacheForPlatform) SetGrokVideoPendingBilling(_ context.Context, _ string, _ []byte, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockGatewayCacheForPlatform) UpsertGrokVideoPendingBilling(_ context.Context, _ *GrokVideoPendingBilling) error {
+	return nil
+}
+
+func (m *mockGatewayCacheForPlatform) ReleaseGrokVideoBilled(_ context.Context, _ string) error {
+	return nil
+}
+
+// modelRoutingAppliesToPlatform from internal/service/gateway_scheduling.go
+func modelRoutingAppliesToPlatform(targetPlatform, groupPlatform string) bool {
+	panic("compile stub")
+}

@@ -125,11 +125,11 @@ func TestContentModerationTypeSafeFailureOpenAndKeyIsolation(t *testing.T) {
 	require.Equal(t, "business-provider", repo.logs[0].Provider)
 	require.Equal(t, "typesafe", repo.logs[0].EngineMeta.Engine)
 	require.Empty(t, repo.logs[0].EngineMeta.Model)
-	require.True(t, s.isAPIKeyFrozen("shared-key", time.Now()))
-	require.False(t, s.isAPIKeyFrozen("shared-key", time.Now()))
-	require.Equal(t, "frozen", s.apiKeyStatuses(cfg.APIKeys)[0].Status)
-	require.Equal(t, "unknown", s.apiKeyStatuses(cfg.APIKeys)[0].Status)
-	require.Zero(t, s.preBlockAPIKeyAvailableCount(cfg.APIKeys))
+	require.True(t, s.isAPIKeyFrozen("shared-key", time.Now(), "typesafe"))
+	require.False(t, s.isAPIKeyFrozen("shared-key", time.Now(), "openai"))
+	require.Equal(t, "frozen", s.apiKeyStatuses(cfg.APIKeys, "typesafe")[0].Status)
+	require.Equal(t, "unknown", s.apiKeyStatuses(cfg.APIKeys, "openai")[0].Status)
+	require.Zero(t, s.preBlockAPIKeyAvailableCount(cfg.APIKeys, "typesafe"))
 }
 
 func TestContentModerationTypeSafeTestDoesNotSwitchActiveEngine(t *testing.T) {

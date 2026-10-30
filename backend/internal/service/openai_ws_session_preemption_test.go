@@ -85,22 +85,22 @@ func TestOpenAIWSSessionPreemptContextEligibilityAndLocalCancellation(t *testing
 	apiKey := &Account{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
 	grok := &Account{ID: 3, Platform: PlatformGrok, Type: AccountTypeOAuth}
 
-	_, cleanup, armed, _ := svc.beginOpenAIWSSessionPreemptContext(context.Background(), apiKey, 7, 11, "sess", false)
+	_, cleanup, armed, _ := svc.beginOpenAIWSSessionPreemptContext(context.Background(), apiKey, 7, 11, "sess", false, nil)
 	cleanup()
 	require.False(t, armed)
-	_, cleanup, armed, _ = svc.beginOpenAIWSSessionPreemptContext(context.Background(), grok, 7, 11, "sess", false)
+	_, cleanup, armed, _ = svc.beginOpenAIWSSessionPreemptContext(context.Background(), grok, 7, 11, "sess", false, nil)
 	cleanup()
 	require.False(t, armed)
-	_, cleanup, armed, _ = svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", true)
+	_, cleanup, armed, _ = svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", true, nil)
 	cleanup()
 	require.False(t, armed, "HTTP-ingress one-shot must not participate")
 
-	firstCtx, firstCleanup, armed, replaced := svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", false)
+	firstCtx, firstCleanup, armed, replaced := svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", false, nil)
 	require.True(t, armed)
 	require.False(t, replaced)
 	stateStore.BindSessionTurnState(7, "sess", "turn-state", time.Hour)
 	stateStore.BindSessionConn(7, "sess", "conn-1", time.Hour)
-	_, secondCleanup, armed, replaced := svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", false)
+	_, secondCleanup, armed, replaced := svc.beginOpenAIWSSessionPreemptContext(context.Background(), oauth, 7, 11, "sess", false, nil)
 	require.True(t, armed)
 	require.True(t, replaced)
 	require.True(t, isOpenAIWSSessionPreempted(firstCtx))

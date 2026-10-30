@@ -268,6 +268,46 @@ func dropInvalidLoweredFunctionItemID(item map[string]any) {
 	}
 }
 
+// responsesToolCallItemIDPrefixes lists the Responses item ID prefixes that are
+// tied to a specific tool-call item type.
+var responsesToolCallItemIDPrefixes = []string{"fc_", "ctc_", "tsc_"}
+
+// responsesToolCallItemIDPrefix reports the ID prefix the Responses API
+// validates for itemType, or "" when the type constrains no prefix.
+func responsesToolCallItemIDPrefix(itemType string) string {
+	switch itemType {
+	case "custom_tool_call":
+		return "ctc_"
+	case "tool_search_call":
+		return "tsc_"
+	case "function_call":
+		return "fc_"
+	default:
+		return ""
+	}
+}
+
+// retypedResponsesToolCallItemID re-prefixes an upstream item ID so it agrees
+// with the item type we raise it back to. A function-only upstream answers a
+// lowered custom tool with an fc_ item ID; emitting that ID on the restored
+// custom_tool_call poisons the client's history, because a later replay of the
+// same item to an upstream that validates IDs fails with
+// "Invalid 'input[N].id' ... Expected an ID that begins with 'ctc'".
+// The suffix is preserved so the ID stays stable and unique per upstream item.
+// IDs that carry no known tool-call prefix are left alone rather than guessed at.
+func retypedResponsesToolCallItemID(id, itemType string) string {
+	want := responsesToolCallItemIDPrefix(itemType)
+	if want == "" || id == "" || strings.HasPrefix(id, want) {
+		return id
+	}
+	for _, known := range responsesToolCallItemIDPrefixes {
+		if known != want && strings.HasPrefix(id, known) {
+			return want + strings.TrimPrefix(id, known)
+		}
+	}
+	return id
+}
+
 func normalizeClientToolOutput(item map[string]any) {
 	output, exists := item["output"]
 	if !exists {

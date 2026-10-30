@@ -28,6 +28,11 @@ const (
 
 	// Sub2RequestID 下游分销对账关联键，来自请求头 X-Sub2-Request-ID；不参与计费去重。
 	Sub2RequestID Key = "ctx_sub2_request_id"
+	// OpenAIImagesEndpoint 标识请求是从 /v1/images/* 入站的。
+	// 与 OpenAIImageGenerationIntent 的区别：后者只表示"这次请求会生图"，
+	// /v1/responses 带图片模型时也会置位；本 key 只在专用生图端点置位，
+	// 用于区分"用错端点"与"端点用对了但账号没能力"。
+	OpenAIImagesEndpoint Key = "ctx_openai_images_endpoint"
 
 	// Model 请求模型标识（用于统一请求链路日志字段）。
 	Model Key = "ctx_model"

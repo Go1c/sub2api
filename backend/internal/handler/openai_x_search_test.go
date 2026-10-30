@@ -100,8 +100,8 @@ func TestExtractGrokXSearchSourcesFromLiveCustomToolCallAndCitations(t *testing.
 	body, err := json.Marshal(map[string]any{
 		"output": []map[string]any{
 			{
-				"type": "custom_tool_call",
-				"name": "x_keyword_search",
+				"type":  "custom_tool_call",
+				"name":  "x_keyword_search",
 				"input": `{"query":"from:xai","limit":"5","mode":"Latest"}`,
 			},
 			{

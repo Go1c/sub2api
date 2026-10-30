@@ -141,3 +141,8 @@ func TestFormatOpsReportIntegerGroupsDigits(t *testing.T) {
 	require.Equal(t, "-1,234", formatOpsReportInteger(-1234))
 	require.Equal(t, "42", formatOpsReportInteger(42))
 }
+
+// formatOpsReportInteger from internal/service/ops_scheduled_report_service.go
+func formatOpsReportInteger(value int64) string {
+	panic("compile stub")
+}

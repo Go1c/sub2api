@@ -57,12 +57,16 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 		}
 		body = rewritten
 	}
+	if normalized, changed := NormalizeGLM53AnthropicThinking(body, upstreamModel); changed {
+		body = normalized
+	}
 
 	// 记录客户端请求的推理强度：优先 Claude 协议的 output_config.effort；
 	// 缺失且 thinking 已启用时，按国产 passback-required 模型兜底为 high
 	// （对齐 Anthropic 网关 gateway_handler 的记录语义，避免该路径长期落 NULL）。
+	requestedReasoningEffort := NormalizeClaudeOutputEffort(gjson.GetBytes(body, "output_config.effort").String())
 	reasoningEffort := ApplyThinkingEnabledFallback(
-		NormalizeClaudeOutputEffort(gjson.GetBytes(body, "output_config.effort").String()),
+		requestedReasoningEffort,
 		body,
 		billingModel,
 	)
@@ -84,11 +88,10 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 		return nil, err
 	}
 
-	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
-	if proxyErr != nil {
-		return nil, proxyErr
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
 	}
-	defer releaseProxy()
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, clientStream)
 	upstreamReq, _, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, body, apiKey, targetURL)
@@ -97,7 +100,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 		return nil, err
 	}
 
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, true)
 	}
@@ -130,7 +133,23 @@ func (s *OpenAIGatewayService) nativeAnthropicTargetURL(account *Account) (strin
 	if err != nil {
 		return "", fmt.Errorf("invalid base_url: %w", err)
 	}
-	return strings.TrimRight(validatedURL, "/") + "/v1/messages", nil
+	return nativeAnthropicMessagesURL(account, validatedURL), nil
+}
+
+// nativeAnthropicMessagesURL 由已校验的 Anthropic 协议基址拼出 messages 端点，转发与
+// 连接测试共用。按模型分流的聚合平台（OpenCode、Command Code 等）的基址可能沿用带 /v1
+// 的 Chat Completions 基址，用版本感知拼接避免 /v1/v1/messages；其余供应商朴素拼接。
+func nativeAnthropicMessagesURL(account *Account, validatedBaseURL string) string {
+	if account.routesByModel() {
+		return buildOpenAIEndpointURL(validatedBaseURL, "/v1/messages")
+	}
+	return strings.TrimRight(validatedBaseURL, "/") + "/v1/messages"
+}
+
+func resolveMappedUpstreamModel(account *Account, body []byte, defaultMappedModel string) string {
+	original := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	billing := resolveOpenAIForwardModel(account, original, defaultMappedModel)
+	return normalizeOpenAIModelForUpstream(account, billing)
 }
 
 func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
@@ -140,6 +159,7 @@ func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
 	body []byte,
 	apiKey string,
 	targetURL string,
+	sessionBodies ...[]byte,
 ) (*http.Request, []byte, error) {
 	// 能力维度 body sanitize：与 Anthropic 平台 passthrough 相同，按 beta
 	// header 决定是否保留 body 中的 beta 能力字段，避免客户端"body 带字段但
@@ -154,6 +174,11 @@ func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
 	if sanitized, changed := sanitizeAnthropicBodyForBetaTokens(body, clientBeta); changed {
 		body = sanitized
 	}
+
+	// Ollama Cloud DeepSeek 出站 max_tokens clamp：判定与 nativeAnthropicTargetURL
+	// 的 base 取值同源（GetAnthropicProtocolBaseURL，adaptive 时是 Anthropic 协议
+	// 地址而非 CC/Responses 地址），详见 helper 注释。
+	body = clampOllamaCloudAnthropicMessagesMaxTokens(account, account.GetAnthropicProtocolBaseURL(), body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -174,12 +199,13 @@ func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
 	}
 
 	// 覆盖入站鉴权残留，注入上游认证（默认 x-api-key；可经 extra
-	// anthropic_apikey_auth_scheme 切换 Authorization: Bearer）。
+	// anthropic_apikey_auth_scheme 切换 Authorization: Bearer；Ollama Cloud
+	// 上游按实际 base_url 强制 Bearer，与 nativeAnthropicTargetURL 同源）。
 	req.Header.Del("authorization")
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey)
+	setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey, account.GetAnthropicProtocolBaseURL())
 
 	if getHeaderRaw(req.Header, "content-type") == "" {
 		setHeaderRaw(req.Header, "content-type", "application/json")
@@ -188,9 +214,15 @@ func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
 		setHeaderRaw(req.Header, "anthropic-version", "2023-06-01")
 	}
 
+	// 官方 OpenCode / Command Code 上游收敛为规范客户端 UA：客户端透传的编程库
+	// UA 会命中其前置 Cloudflare bot 拦截（CF 1010/403），并被计入账号 403 strike。
+	applyOpenCodeUpstreamUserAgent(account, targetURL, req.Header)
+
 	// 账号级请求头覆写（最终生效，覆盖上面所有来源的同名头）
 	account.ApplyHeaderOverrides(req.Header)
 	filterSonnet55ToolsetBetaHeader(req.Header, body, gjson.GetBytes(body, "model").String())
+	payloads := append([][]byte{body}, sessionBodies...)
+	applyOpenCodeSessionHeader(c, account, targetURL, req.Header, payloads...)
 
 	return req, body, nil
 }
@@ -216,12 +248,15 @@ func (s *OpenAIGatewayService) handleNativeAnthropicBufferedResponse(
 	if err != nil {
 		return nil, err
 	}
-
-	ensureUpstreamResponseModelObserver(c).ObserveAnthropic(body)
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
+	observer.ObserveAnthropic(body)
 
 	var raw json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, nativeAnthropicInvalidJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, billingModel)
+		return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, billingModel)
 	}
 
 	usage := parseClaudeUsageFromResponseBody(body)
@@ -242,6 +277,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicBufferedResponse(
 
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
+		UpstreamHeaders:  resp.Header,
 		Usage:            claudeUsageToOpenAIUsage(usage),
 		Model:            originalModel,
 		BillingModel:     billingModel,
@@ -267,7 +303,10 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
-	observer := ensureUpstreamResponseModelObserver(c)
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -426,7 +465,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
-				parseSSEUsagePassthroughForNative(data, usage)
+				parseSSEUsagePassthrough(data, usage)
 			} else {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "event:") && anthropicStreamEventIsTerminal(strings.TrimSpace(strings.TrimPrefix(trimmed, "event:")), "") {
@@ -512,6 +551,7 @@ func (s *OpenAIGatewayService) nativeAnthropicStreamResult(
 	}
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
+		UpstreamHeaders:  resp.Header,
 		Usage:            claudeUsageToOpenAIUsage(usage),
 		Model:            originalModel,
 		BillingModel:     billingModel,
@@ -526,47 +566,17 @@ func (s *OpenAIGatewayService) nativeAnthropicStreamResult(
 }
 
 // claudeUsageToOpenAIUsage 把 Anthropic 格式 usage 映射到 OpenAI 网关统一的
-// 用量结构（字段一一对应）。
+// 用量结构。Anthropic 的 input_tokens 不含缓存读写，而 OpenAI 网关内部
+// 约定 InputTokens 是包含缓存明细的总输入；这里必须先合并，RecordUsage
+// 才能准确拆回互斥的计费桶。
 func claudeUsageToOpenAIUsage(u *ClaudeUsage) OpenAIUsage {
 	if u == nil {
 		return OpenAIUsage{}
 	}
 	return OpenAIUsage{
-		InputTokens:              u.InputTokens,
+		InputTokens:              u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens,
 		OutputTokens:             u.OutputTokens,
 		CacheCreationInputTokens: u.CacheCreationInputTokens,
 		CacheReadInputTokens:     u.CacheReadInputTokens,
 	}
-}
-
-// parseSSEUsagePassthroughForNative 按 fork 现有 GatewayService 方法形状解析 SSE usage，
-// 避免把 Anthropic passthrough 的方法改成包级函数。
-func parseSSEUsagePassthroughForNative(data string, usage *ClaudeUsage) {
-	(&GatewayService{}).parseSSEUsagePassthrough(data, usage)
-}
-
-func nativeAnthropicInvalidJSONFailoverError(
-	ctx context.Context,
-	rateLimitService *RateLimitService,
-	resp *http.Response,
-	account *Account,
-	body []byte,
-	parseErr error,
-	requestedModel ...string,
-) error {
-	return (&GatewayService{rateLimitService: rateLimitService}).invalidNonStreamingJSONFailoverError(
-		ctx, resp, account, body, parseErr, requestedModel...,
-	)
-}
-
-func classifyAnthropicResponseInputAsCacheRead(body []byte, usage *ClaudeUsage) ([]byte, error) {
-	classified, err := sjson.SetBytes(body, "usage.input_tokens", 0)
-	if err != nil {
-		return nil, fmt.Errorf("classify forced cache billing input tokens: %w", err)
-	}
-	classified, err = sjson.SetBytes(classified, "usage.cache_read_input_tokens", usage.CacheReadInputTokens+usage.InputTokens)
-	if err != nil {
-		return nil, fmt.Errorf("classify forced cache billing cache read tokens: %w", err)
-	}
-	return classified, nil
 }

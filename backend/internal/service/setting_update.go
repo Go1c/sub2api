@@ -51,21 +51,6 @@ func (s *SettingService) UpdateSettingsOmitting(ctx context.Context, settings *S
 	return nil
 }
 
-// UpdateChannelMonitorStatusBanner updates the standalone banner setting without
-// rewriting unrelated system settings from an intentionally partial admin request.
-func (s *SettingService) UpdateChannelMonitorStatusBanner(ctx context.Context, raw string) (string, error) {
-	banner := normalizeChannelMonitorStatusBanner(raw)
-	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
-		SettingKeyChannelMonitorStatusBanner: banner,
-	}); err != nil {
-		return "", err
-	}
-	if s.onUpdate != nil {
-		s.onUpdate()
-	}
-	return banner, nil
-}
-
 // UpdateSettingsWithAuthSourceDefaults persists system settings and auth-source defaults in a single write.
 func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Context, settings *SystemSettings, authDefaults *AuthSourceDefaultSettings) error {
 	return s.UpdateSettingsWithAuthSourceDefaultsOmitting(ctx, settings, authDefaults, nil)
@@ -125,6 +110,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		normalizedWhitelist = []string{}
 	}
 	settings.RegistrationEmailSuffixWhitelist = normalizedWhitelist
+	normalizedForwardedClientIPHeaders, err := config.NormalizeForwardedClientIPHeaders(settings.ForwardedClientIPHeaders)
+	if err != nil {
+		return nil, infraerrors.BadRequest("INVALID_FORWARDED_CLIENT_IP_HEADERS", err.Error())
+	}
+	settings.ForwardedClientIPHeaders = normalizedForwardedClientIPHeaders
 	alipaySource, err := normalizeVisibleMethodSettingSource("alipay", settings.PaymentVisibleMethodAlipaySource, settings.PaymentVisibleMethodAlipayEnabled)
 	if err != nil {
 		return nil, err
@@ -168,38 +158,6 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.GoogleOAuthFrontendRedirectURL == "" {
 		settings.GoogleOAuthFrontendRedirectURL = defaultGoogleOAuthFrontend
 	}
-	settings.SupportChatGatewayURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatGatewayURL), "/")
-	settings.SupportChatTitle = strings.TrimSpace(settings.SupportChatTitle)
-	settings.SupportChatWelcomeMessage = strings.TrimSpace(settings.SupportChatWelcomeMessage)
-	settings.SupportChatOfficialContactText = strings.TrimSpace(settings.SupportChatOfficialContactText)
-	settings.SupportChatOfficialContactURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatOfficialContactURL), "/")
-	if settings.SupportChatEnabled || settings.SupportChatGatewayURL != "" {
-		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatGatewayURL); err != nil {
-			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_GATEWAY_URL", "support chat gateway URL must be an absolute HTTP(S) URL")
-		}
-	}
-	if settings.SupportChatOfficialContactURL != "" {
-		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatOfficialContactURL); err != nil {
-			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_OFFICIAL_CONTACT_URL", "support chat official contact URL must be an absolute HTTP(S) URL")
-		}
-	}
-	if settings.SubscriptionQuotaResetUTCOffsetMinutes < SubscriptionQuotaResetMinOffsetMinutes ||
-		settings.SubscriptionQuotaResetUTCOffsetMinutes > SubscriptionQuotaResetMaxOffsetMinutes ||
-		settings.SubscriptionQuotaResetUTCOffsetMinutes%15 != 0 {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_UTC_OFFSET", "subscription quota reset UTC offset must be between UTC-12:00 and UTC+14:00 in 15-minute increments")
-	}
-	if settings.SubscriptionQuotaResetHour < 0 || settings.SubscriptionQuotaResetHour > 23 {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_HOUR", "subscription quota reset hour must be between 0 and 23")
-	}
-	lumioDesktopConfig, err := normalizeLumioDesktopConfigForWrite(settings.LumioDesktopConfig)
-	if err != nil {
-		return nil, err
-	}
-	settings.LumioDesktopConfig = lumioDesktopConfig
-	lumioDesktopConfigJSON, err := json.Marshal(lumioDesktopConfig)
-	if err != nil {
-		return nil, fmt.Errorf("marshal lumio desktop config: %w", err)
-	}
 
 	updates := make(map[string]string)
 
@@ -211,12 +169,13 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, fmt.Errorf("marshal registration email suffix whitelist: %w", err)
 	}
 	updates[SettingKeyRegistrationEmailSuffixWhitelist] = string(registrationEmailSuffixWhitelistJSON)
+	updates[SettingKeyRegistrationEmailDomainQuotaEnabled] = strconv.FormatBool(settings.RegistrationEmailDomainQuotaEnabled)
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
-	updates[SettingKeyInvitationRegistrationMode] = normalizeInvitationRegistrationMode(settings.InvitationRegistrationMode)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
+	updates[SettingKeyPasskeyEnabled] = strconv.FormatBool(settings.PasskeyEnabled)
 	updates[SettingKeySessionBindingEnabled] = strconv.FormatBool(settings.SessionBindingEnabled)
 	updates[SettingKeyStepUpEnabled] = strconv.FormatBool(settings.StepUpEnabled)
 	updates[SettingKeyAuditLogRetentionDays] = strconv.Itoa(settings.AuditLogRetentionDays)
@@ -251,7 +210,34 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.TurnstileSecretKey != "" {
 		updates[SettingKeyTurnstileSecretKey] = settings.TurnstileSecretKey
 	}
+
+	updates[SettingKeyTencentCaptchaEnabled] = strconv.FormatBool(settings.TencentCaptchaEnabled)
+	updates[SettingKeyTencentCaptchaAppID] = settings.TencentCaptchaAppID
+	if settings.TencentCaptchaAppSecretKey != "" {
+		updates[SettingKeyTencentCaptchaAppSecretKey] = settings.TencentCaptchaAppSecretKey
+	}
+	if settings.TencentCaptchaCloudSecretID != "" {
+		updates[SettingKeyTencentCaptchaCloudSecretID] = settings.TencentCaptchaCloudSecretID
+	}
+	if settings.TencentCaptchaCloudSecretKey != "" {
+		updates[SettingKeyTencentCaptchaCloudSecretKey] = settings.TencentCaptchaCloudSecretKey
+	}
+	updates[SettingKeyTencentCaptchaRegion] = normalizeTencentCaptchaRegion(settings.TencentCaptchaRegion)
+	// 阿里云验证码 2.0 设置（只有非空才更新密钥）
+	updates[SettingKeyAliyunCaptchaEnabled] = strconv.FormatBool(settings.AliyunCaptchaEnabled)
+	updates[SettingKeyAliyunCaptchaAccessKeyID] = settings.AliyunCaptchaAccessKeyID
+	if settings.AliyunCaptchaAccessKeySecret != "" {
+		updates[SettingKeyAliyunCaptchaAccessKeySecret] = settings.AliyunCaptchaAccessKeySecret
+	}
+	updates[SettingKeyAliyunCaptchaSceneID] = settings.AliyunCaptchaSceneID
+	updates[SettingKeyAliyunCaptchaPrefix] = settings.AliyunCaptchaPrefix
+	updates[SettingKeyAliyunCaptchaRegion] = normalizeAliyunCaptchaRegion(settings.AliyunCaptchaRegion)
 	updates[SettingKeyAPIKeyACLTrustForwardedIP] = strconv.FormatBool(settings.APIKeyACLTrustForwardedIP)
+	forwardedClientIPHeadersJSON, err := json.Marshal(settings.ForwardedClientIPHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("marshal forwarded client IP headers: %w", err)
+	}
+	updates[SettingKeyForwardedClientIPHeaders] = string(forwardedClientIPHeadersJSON)
 
 	// LinuxDo Connect OAuth 登录
 	updates[SettingKeyLinuxDoConnectEnabled] = strconv.FormatBool(settings.LinuxDoConnectEnabled)
@@ -355,39 +341,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
-	updates[SettingKeyContactChannels] = settings.ContactChannels
-	updates[SettingKeySupportChatEnabled] = strconv.FormatBool(settings.SupportChatEnabled)
-	updates[SettingKeySupportChatGatewayURL] = settings.SupportChatGatewayURL
-	updates[SettingKeySupportChatTitle] = settings.SupportChatTitle
-	updates[SettingKeySupportChatWelcomeMessage] = settings.SupportChatWelcomeMessage
-	updates[SettingKeySupportChatOfficialContactText] = settings.SupportChatOfficialContactText
-	updates[SettingKeySupportChatOfficialContactURL] = settings.SupportChatOfficialContactURL
 	updates[SettingKeyDocURL] = settings.DocURL
-	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
+	updates[SettingKeyCompactHomeEnabled] = strconv.FormatBool(settings.CompactHomeEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
-	frontendLocales, err := normalizeFrontendLocales(settings.FrontendLocales)
-	if err != nil {
-		return nil, err
-	}
-	settings.FrontendLocales = frontendLocales
-	frontendLocalesJSON, err := json.Marshal(frontendLocales)
-	if err != nil {
-		return nil, fmt.Errorf("marshal frontend locales: %w", err)
-	}
-	updates[SettingKeyFrontendLocales] = string(frontendLocalesJSON)
-	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
-	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
-	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
-	updates[SettingKeyCCSwitchDefaultModelAntigravity] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravity)
-	updates[SettingKeyCCSwitchDefaultModelAntigravityGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravityGemini)
-	updates[SettingKeyUserSubscriptionsVisible] = strconv.FormatBool(settings.UserSubscriptionsVisible)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
-	updates[SettingKeySubscriptionNotifyEmailEnabled] = strconv.FormatBool(settings.SubscriptionNotifyEmailEnabled)
-	updates[SettingKeySubscriptionMultiplePurchasesEnabled] = strconv.FormatBool(settings.SubscriptionMultiplePurchasesEnabled)
-	updates[SettingKeySubscriptionQuotaResetUTCOffsetMinutes] = strconv.Itoa(settings.SubscriptionQuotaResetUTCOffsetMinutes)
-	updates[SettingKeySubscriptionQuotaResetHour] = strconv.Itoa(settings.SubscriptionQuotaResetHour)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
 		settings.TableDefaultPageSize,
 		settings.TablePageSizeOptions,
@@ -400,11 +359,31 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyTablePageSizeOptions] = string(tablePageSizeOptionsJSON)
 	updates[SettingKeyCustomMenuItems] = settings.CustomMenuItems
 	updates[SettingKeyCustomEndpoints] = settings.CustomEndpoints
-	updates[SettingKeyLumioDesktopConfig] = string(lumioDesktopConfigJSON)
 
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
+	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
+	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
+	if settings.AffiliateRebateFreezeHours < 0 {
+		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
+	}
+	if settings.AffiliateRebateFreezeHours > AffiliateRebateFreezeHoursMax {
+		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursMax
+	}
+	updates[SettingKeyAffiliateRebateFreezeHours] = strconv.Itoa(settings.AffiliateRebateFreezeHours)
+	if settings.AffiliateRebateDurationDays < 0 {
+		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysDefault
+	}
+	if settings.AffiliateRebateDurationDays > AffiliateRebateDurationDaysMax {
+		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysMax
+	}
+	updates[SettingKeyAffiliateRebateDurationDays] = strconv.Itoa(settings.AffiliateRebateDurationDays)
+	if settings.AffiliateRebatePerInviteeCap < 0 {
+		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
+	}
+	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
+	updates[SettingKeyAffiliateAdminRechargeEnabled] = strconv.FormatBool(settings.AdminRechargeRebateEnabled)
 	updates[SettingKeyDefaultUserRPMLimit] = strconv.Itoa(settings.DefaultUserRPMLimit)
 	defaultSubsJSON, err := json.Marshal(settings.DefaultSubscriptions)
 	if err != nil {
@@ -433,11 +412,13 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// Channel monitor feature switch
 	updates[SettingKeyChannelMonitorEnabled] = strconv.FormatBool(settings.ChannelMonitorEnabled)
+	updates[SettingKeyChannelMonitorMode] = normalizeChannelMonitorMode(settings.ChannelMonitorMode)
 	if v := clampChannelMonitorInterval(settings.ChannelMonitorDefaultIntervalSeconds); v > 0 {
 		updates[SettingKeyChannelMonitorDefaultIntervalSeconds] = strconv.Itoa(v)
 	}
-	updates[SettingKeyChannelMonitorStatusBanner] = normalizeChannelMonitorStatusBanner(settings.ChannelMonitorStatusBanner)
+	updates[SettingKeyChannelMonitorHideThroughput] = strconv.FormatBool(settings.ChannelMonitorHideThroughput)
 	updates[SettingKeyChannelMonitorShowQuota] = strconv.FormatBool(settings.ChannelMonitorShowQuota)
+	updates[SettingKeyChannelMonitorHideUserRanking] = strconv.FormatBool(settings.ChannelMonitorHideUserRanking)
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {
@@ -446,78 +427,32 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		updates[SettingKeyGrokDefaultTextModel] = "grok-4.6"
 	}
 	updates[SettingKeyGrokCrossClientModelMapEnabled] = strconv.FormatBool(settings.GrokCrossClientModelMapEnabled)
+	updates[SettingKeyGrokDefaultBaseURLMode] = normalizeGrokDefaultBaseURLMode(settings.GrokDefaultBaseURLMode)
 
 	// Available channels feature switch
 	updates[SettingKeyAvailableChannelsEnabled] = strconv.FormatBool(settings.AvailableChannelsEnabled)
 
+	// Subscription feature switch
+	updates[SettingKeySubscriptionEnabled] = strconv.FormatBool(settings.SubscriptionEnabled)
+
+	// Model plaza feature switches + description
+	updates[SettingKeyModelPlazaEnabled] = strconv.FormatBool(settings.ModelPlazaEnabled)
+	updates[SettingKeyModelPlazaRequireAuth] = strconv.FormatBool(settings.ModelPlazaRequireAuth)
+	updates[SettingKeyModelPlazaDescription] = settings.ModelPlazaDescription
+	updates[SettingKeyPluginManagementEnabled] = strconv.FormatBool(settings.PluginManagementEnabled)
+
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)
-	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(clampAffiliateRebateRate(settings.AffiliateRebateRate), 'f', 8, 64)
-	affiliateRebateTiersJSON, err := marshalAffiliateRebateTiers(settings.AffiliateRebateTiers)
-	if err != nil {
-		return nil, fmt.Errorf("marshal affiliate rebate tiers: %w", err)
-	}
-	updates[SettingKeyAffiliateRebateTiers] = affiliateRebateTiersJSON
-	if settings.AffiliateRebateFreezeHours < 0 {
-		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
-	}
-	if settings.AffiliateRebateFreezeHours > AffiliateRebateFreezeHoursMax {
-		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursMax
-	}
-	updates[SettingKeyAffiliateRebateFreezeHours] = strconv.Itoa(settings.AffiliateRebateFreezeHours)
-	if settings.AffiliateRebateDurationDays < 0 {
-		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysDefault
-	}
-	if settings.AffiliateRebateDurationDays > AffiliateRebateDurationDaysMax {
-		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysMax
-	}
-	updates[SettingKeyAffiliateRebateDurationDays] = strconv.Itoa(settings.AffiliateRebateDurationDays)
-	if settings.AffiliateRebatePerInviteeCap < 0 || math.IsNaN(settings.AffiliateRebatePerInviteeCap) || math.IsInf(settings.AffiliateRebatePerInviteeCap, 0) {
-		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
-	}
-	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
-	updates[SettingKeyAffiliateSignupBonusEnabled] = strconv.FormatBool(settings.AffiliateSignupBonusEnabled)
-	if settings.AffiliateSignupBonusAmount < 0 {
-		settings.AffiliateSignupBonusAmount = AffiliateSignupBonusAmountDefault
-	}
-	updates[SettingKeyAffiliateSignupBonusAmount] = strconv.FormatFloat(settings.AffiliateSignupBonusAmount, 'f', 8, 64)
-	if settings.AffiliateSignupBonusTotalCap < 0 {
-		settings.AffiliateSignupBonusTotalCap = AffiliateSignupBonusTotalCapDefault
-	}
-	updates[SettingKeyAffiliateSignupBonusTotalCap] = strconv.FormatFloat(settings.AffiliateSignupBonusTotalCap, 'f', 8, 64)
-	if settings.AffiliateSignupBonusDailyCap < 0 {
-		settings.AffiliateSignupBonusDailyCap = AffiliateSignupBonusDailyCapDefault
-	}
-	updates[SettingKeyAffiliateSignupBonusDailyCap] = strconv.FormatFloat(settings.AffiliateSignupBonusDailyCap, 'f', 8, 64)
-	updates[SettingKeyBalanceUsageGateEnabled] = strconv.FormatBool(settings.BalanceUsageGateEnabled)
-	if settings.BalanceUsageGateMinBalance < 0 {
-		settings.BalanceUsageGateMinBalance = BalanceUsageGateMinBalanceDefault
-	}
-	updates[SettingKeyBalanceUsageGateMinBalance] = strconv.FormatFloat(settings.BalanceUsageGateMinBalance, 'f', 8, 64)
-	if settings.BalanceUsageGateMinRecharge < 0 {
-		settings.BalanceUsageGateMinRecharge = BalanceUsageGateMinRechargeDefault
-	}
-	updates[SettingKeyBalanceUsageGateMinRecharge] = strconv.FormatFloat(settings.BalanceUsageGateMinRecharge, 'f', 8, 64)
 
 	// 风控中心功能开关
 	updates[SettingKeyRiskControlEnabled] = strconv.FormatBool(settings.RiskControlEnabled)
 
-	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
-		Enabled:               settings.SiteMessagesEnabled,
-		DailySendLimit:        settings.SiteMessagesDailySendLimit,
-		RetentionDays:         settings.SiteMessagesRetentionDays,
-		DefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
-	})
-	settings.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
-	settings.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
-	settings.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
-	updates[SettingKeySiteMessagesEnabled] = strconv.FormatBool(settings.SiteMessagesEnabled)
-	updates[SettingKeySiteMessagesDailySendLimit] = strconv.Itoa(settings.SiteMessagesDailySendLimit)
-	updates[SettingKeySiteMessagesRetentionDays] = strconv.Itoa(settings.SiteMessagesRetentionDays)
-	updates[SettingKeySiteMessagesDefaultRecipientEmail] = settings.SiteMessagesDefaultRecipientEmail
-
 	// cyber 会话屏蔽开关 + TTL
 	updates[SettingKeyCyberSessionBlockEnabled] = strconv.FormatBool(settings.CyberSessionBlockEnabled)
+	if _, err := ParseCyberPolicyUserAllowlist(settings.CyberPolicyUserAllowlist); err != nil {
+		return nil, err
+	}
+	updates[SettingKeyCyberPolicyUserAllowlist] = settings.CyberPolicyUserAllowlist
 	if settings.CyberSessionBlockTTLSeconds > 0 {
 		updates[SettingKeyCyberSessionBlockTTLSeconds] = strconv.Itoa(settings.CyberSessionBlockTTLSeconds)
 	}
@@ -533,6 +468,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyBackendModeEnabled] = strconv.FormatBool(settings.BackendModeEnabled)
 
 	// Gateway forwarding behavior
+	mode := normalizeOpenAITTFTMode(settings.OpenAITTFTMode)
+	if strings.TrimSpace(settings.OpenAITTFTMode) != "" && strings.ToLower(strings.TrimSpace(settings.OpenAITTFTMode)) != OpenAITTFTModeSemantic && strings.ToLower(strings.TrimSpace(settings.OpenAITTFTMode)) != OpenAITTFTModeVisible {
+		return nil, fmt.Errorf("%s must be one of: %s/%s", SettingKeyOpenAITTFTMode, OpenAITTFTModeSemantic, OpenAITTFTModeVisible)
+	}
+	updates[SettingKeyOpenAITTFTMode] = mode
 	updates[SettingKeyEnableFingerprintUnification] = strconv.FormatBool(settings.EnableFingerprintUnification)
 	updates[SettingKeyEnableMetadataPassthrough] = strconv.FormatBool(settings.EnableMetadataPassthrough)
 	updates[SettingKeyEnableCCHSigning] = strconv.FormatBool(settings.EnableCCHSigning)
@@ -547,6 +487,14 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyEnableClientDatelineNormalization] = strconv.FormatBool(settings.EnableClientDatelineNormalization)
 	updates[SettingKeyAntigravityUserAgentVersion] = antigravity.NormalizeUserAgentVersion(settings.AntigravityUserAgentVersion)
 	updates[SettingKeyOpenAICodexUserAgent] = strings.TrimSpace(settings.OpenAICodexUserAgent)
+	updates[SettingKeyOpenAICodexClientVersion] = NormalizeCodexClientVersion(settings.OpenAICodexClientVersion)
+	updates[SettingKeyOpenAICodexVersionAutoSyncEnabled] = strconv.FormatBool(settings.OpenAICodexVersionAutoSyncEnabled)
+	// SettingKeyOpenAICodexClientVersionSynced 由自动同步任务独占写入，此处不得覆盖，
+	// 否则面板保存会把同步结果清空。
+	updates[SettingKeyClaudeCodeClientVersion] = NormalizeClaudeCodeClientVersion(settings.ClaudeCodeClientVersion)
+	updates[SettingKeyClaudeCodeVersionAutoSyncEnabled] = strconv.FormatBool(settings.ClaudeCodeVersionAutoSyncEnabled)
+	// SettingKeyClaudeCodeClientVersionSynced 由自动同步任务独占写入，此处不得覆盖，
+	// 否则面板保存会把同步结果清空。
 	// codex_cli_only 加固
 	updates[SettingKeyMinCodexVersion] = strings.TrimSpace(settings.MinCodexVersion)
 	updates[SettingKeyMaxCodexVersion] = strings.TrimSpace(settings.MaxCodexVersion)
@@ -559,7 +507,10 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingPaymentVisibleMethodAlipayEnabled] = strconv.FormatBool(settings.PaymentVisibleMethodAlipayEnabled)
 	updates[SettingPaymentVisibleMethodWxpayEnabled] = strconv.FormatBool(settings.PaymentVisibleMethodWxpayEnabled)
 	updates[SettingKeyOpenAILowUpstreamRatePriorityEnabled] = strconv.FormatBool(settings.OpenAILowUpstreamRatePriorityEnabled)
-	updates[SettingKeyOpenAIOAuthSchedulingRateMultiplier] = strconv.FormatFloat(settings.OpenAIOAuthSchedulingRateMultiplier, 'f', -1, 64)
+	updates[SettingKeyOpenAIOAuthSchedulingRateMultiplier] = ""
+	if rate := settings.OpenAIOAuthSchedulingRateMultiplier; rate != nil {
+		updates[SettingKeyOpenAIOAuthSchedulingRateMultiplier] = strconv.FormatFloat(*rate, 'f', -1, 64)
+	}
 	updates[openAIAdvancedSchedulerSettingKey] = strconv.FormatBool(settings.OpenAIAdvancedSchedulerEnabled)
 	updates[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled] = strconv.FormatBool(settings.OpenAIAdvancedSchedulerStickyWeightedEnabled)
 	updates[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled] = strconv.FormatBool(settings.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled)
@@ -594,10 +545,86 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		}
 		updates[SettingKeyDefaultPlatformQuotas] = string(blob)
 	}
+	if settings.AccountSchedulingThresholds != nil {
+		normalized, err := validateAndNormalizeAccountSchedulingThresholds(settings.AccountSchedulingThresholds)
+		if err != nil {
+			return nil, err
+		}
+		blob, err := json.Marshal(normalized)
+		if err != nil {
+			return nil, fmt.Errorf("marshal account scheduling thresholds: %w", err)
+		}
+		updates[SettingKeyAccountSchedulingThresholds] = string(blob)
+	}
 
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
+}
+
+func defaultAccountSchedulingThresholds() map[string]int {
+	return map[string]int{
+		PlatformOpenAI:    100,
+		PlatformAnthropic: 100,
+		PlatformGrok:      100,
+	}
+}
+
+func validateAndNormalizeAccountSchedulingThresholds(input map[string]int) (map[string]int, error) {
+	normalized := defaultAccountSchedulingThresholds()
+	for platform, value := range input {
+		allowed := false
+		for _, item := range AllowedSchedulingThresholdPlatforms {
+			if item == platform {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, infraerrors.BadRequest("INVALID_ACCOUNT_SCHEDULING_THRESHOLDS", fmt.Sprintf("unknown platform %q", platform))
+		}
+		if value < 1 || value > 100 {
+			return nil, infraerrors.BadRequest("INVALID_ACCOUNT_SCHEDULING_THRESHOLDS", "platform scheduling threshold must be between 1 and 100")
+		}
+		normalized[platform] = value
+	}
+	return normalized, nil
+}
+
+func parseAccountSchedulingThresholdsSetting(raw string) (map[string]int, error) {
+	thresholds := defaultAccountSchedulingThresholds()
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return thresholds, nil
+	}
+	parsed := map[string]int{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return thresholds, err
+	}
+	for _, platform := range AllowedSchedulingThresholdPlatforms {
+		if value, ok := parsed[platform]; ok {
+			thresholds[platform] = boundedIntOrDefault(value, 1, 100, 100)
+		}
+	}
+	return thresholds, nil
+}
+
+func boundedIntOrDefault(value, minValue, maxValue, defaultValue int) int {
+	if value < minValue || value > maxValue {
+		return defaultValue
+	}
+	return value
+}
+
+func cloneAccountSchedulingThresholds(input map[string]int) map[string]int {
+	if len(input) == 0 {
+		return defaultAccountSchedulingThresholds()
+	}
+	cloned := make(map[string]int, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 // validateDefaultPlatformQuotaMap 校验 platform quota map 的合法性：
@@ -690,6 +717,7 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 	})
 	gatewayForwardingSF.Forget("gateway_forwarding")
 	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
+		openAITTFTMode:                   normalizeOpenAITTFTMode(settings.OpenAITTFTMode),
 		fingerprintUnification:           settings.EnableFingerprintUnification,
 		metadataPassthrough:              settings.EnableMetadataPassthrough,
 		cchSigning:                       settings.EnableCCHSigning,
@@ -700,13 +728,6 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 		rewriteMessageCacheControl:       settings.RewriteMessageCacheControl,
 		clientDatelineNormalization:      settings.EnableClientDatelineNormalization,
 		expiresAt:                        time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
-	})
-	balanceUsageGateSF.Forget("balance_usage_gate")
-	balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{
-		enabled:     settings.BalanceUsageGateEnabled,
-		minBalance:  settings.BalanceUsageGateMinBalance,
-		minRecharge: settings.BalanceUsageGateMinRecharge,
-		expiresAt:   time.Now().Add(balanceUsageGateCacheTTL).UnixNano(),
 	})
 	s.antigravityUAVersionSF.Forget("antigravity_user_agent_version")
 	antigravityUserAgentVersion := antigravity.NormalizeUserAgentVersion(settings.AntigravityUserAgentVersion)
@@ -726,6 +747,10 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 		value:     codexUA,
 		expiresAt: time.Now().Add(openAICodexUserAgentCacheTTL).UnixNano(),
 	})
+	// 版本号缓存只做失效，不在此重算：生效值还取决于自动同步写入的 synced 键，
+	// 这里没有它的最新值，重算会把同步结果覆盖成陈旧值。
+	s.InvalidateOpenAICodexClientVersionCache()
+	s.InvalidateClaudeCodeClientVersionCache()
 	openAIAdvancedSchedulerSettingSF.Forget(openAIAdvancedSchedulerSettingKey)
 	openAIAdvancedSchedulerSettingCache.Store(&cachedOpenAIAdvancedSchedulerSetting{
 		lowUpstreamRatePriorityEnabled: settings.OpenAILowUpstreamRatePriorityEnabled,
@@ -759,15 +784,35 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 			expiresAt: 0,
 		})
 	}
+	accountSchedulingThresholdsSF.Forget(SettingKeyAccountSchedulingThresholds)
+	if settings.AccountSchedulingThresholds != nil {
+		normalizedThresholds, err := validateAndNormalizeAccountSchedulingThresholds(settings.AccountSchedulingThresholds)
+		if err != nil {
+			normalizedThresholds = defaultAccountSchedulingThresholds()
+		}
+		accountSchedulingThresholdsCache.Store(&cachedAccountSchedulingThresholds{
+			thresholds: cloneAccountSchedulingThresholds(normalizedThresholds),
+			expiresAt:  time.Now().Add(accountSchedulingThresholdsCacheTTL).UnixNano(),
+		})
+	} else {
+		// Partial/omitted payload: clear cache so the next hot-path read reloads from DB.
+		accountSchedulingThresholdsCache.Store(&cachedAccountSchedulingThresholds{})
+	}
 	if s.cfg != nil {
-		s.cfg.SetTrustForwardedIPForAPIKeyACL(settings.APIKeyACLTrustForwardedIP)
+		s.cfg.SetForwardedClientIPSettings(settings.APIKeyACLTrustForwardedIP, settings.ForwardedClientIPHeaders)
 	}
 	// codex_cli_only 加固策略缓存：设置更新后强制下次重载（涉及 4 个键 + JSON 解析，直接置过期）。
 	s.codexRestrictionPolicySF.Forget("codex_restriction_policy")
 	s.codexRestrictionPolicyCache.Store(&cachedCodexRestrictionPolicy{expiresAt: 0})
+	// Retain the successfully saved allowlist if the next DB refresh fails.
+	s.cyberSessionBlockRuntimeMu.Lock()
+	allowlistedUsers, _ := ParseCyberPolicyUserAllowlist(settings.CyberPolicyUserAllowlist)
+	s.cyberSessionBlockRuntimeCache.Store(&cachedCyberSessionBlockRuntime{allowlistedUsers: allowlistedUsers})
+	s.cyberSessionBlockRuntimeMu.Unlock()
 	if s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
 	}
+	s.notifyChannelMonitorRuntimeListeners()
 }
 
 func (s *SettingService) defaultRewriteMessageCacheControl() bool {

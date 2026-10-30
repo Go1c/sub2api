@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -86,34 +85,6 @@ func classifyCommandCodeUsageError(body []byte) commandCodeUsageErrorKind {
 // commandCodeResetAt 解析文案中的 "Resets in 2h 41m" / "resets in 3 days"；无法解析
 // 或超过 maxWait 时返回 nil。
 var openCodeGoUsageLimitResetToken = regexp.MustCompile(`(?i)(\d+)\s*(days?|d|hours?|hrs?|h|minutes?|mins?|m)\b`)
-
-func parseOpenCodeGoUsageLimitResetDuration(text string) time.Duration {
-	lower := strings.ToLower(text)
-	if idx := strings.Index(lower, "reset"); idx >= 0 {
-		text = text[idx:]
-	}
-	matches := openCodeGoUsageLimitResetToken.FindAllStringSubmatch(text, -1)
-	if len(matches) == 0 {
-		return 0
-	}
-	var total time.Duration
-	for _, match := range matches {
-		n, err := strconv.Atoi(match[1])
-		if err != nil || n < 0 {
-			continue
-		}
-		unit := strings.ToLower(match[2])
-		switch {
-		case strings.HasPrefix(unit, "d"):
-			total += time.Duration(n) * 24 * time.Hour
-		case strings.HasPrefix(unit, "h"):
-			total += time.Duration(n) * time.Hour
-		default:
-			total += time.Duration(n) * time.Minute
-		}
-	}
-	return total
-}
 
 func commandCodeResetAt(body []byte, now time.Time, maxWait time.Duration) *time.Time {
 	after := parseOpenCodeGoUsageLimitResetDuration(extractUpstreamErrorMessage(body))

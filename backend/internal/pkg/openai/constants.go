@@ -20,14 +20,16 @@ type Model struct {
 
 // DefaultModels OpenAI models list
 var DefaultModels = []Model{
+	{ID: "gpt-5.6-sol", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Sol"},
+	{ID: "gpt-6", Object: "model", Created: 1788480000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 (Astra)"},
 	{ID: "gpt-5.6", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 (Sol)"},
+	{ID: "gpt-5.6-terra", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Terra"},
+	{ID: "gpt-5.6-luna", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Luna"},
+	{ID: "gpt-6.1-terra", Object: "model", Created: 1704067200, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6.1 Terra"},
 	{ID: "gpt-6.1-sol", Object: "model", Created: 1790640000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6.1 Sol"},
 	{ID: "gpt-6-sol", Object: "model", Created: 1790035200, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Sol"},
 	{ID: "gpt-6-luna", Object: "model", Created: 1790035200, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Luna"},
 	{ID: "gpt-6-astra", Object: "model", Created: 1788480000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Astra"},
-	{ID: "gpt-6", Object: "model", Created: 1788480000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 (Astra)"},
-	{ID: "gpt-5.6-sol", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Sol"},
-	{ID: "gpt-5.6-terra", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Terra"},
 	{ID: "gpt-5.5", Object: "model", Created: 1776873600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.5"},
 	{ID: "gpt-5.4", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4"},
 	{ID: "gpt-5.4-mini", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 Mini"},
@@ -62,9 +64,9 @@ const CodexUsageProbeModel = "codex-auto-review"
 //go:embed instructions.txt
 var DefaultInstructions string
 
-// instructionsGPT51 / instructionsGPT52 / instructionsGPT55 为 gpt-5.1 / gpt-5.2 / gpt-5.5
-// 非 codex 模型对应的真实 Codex 编码 agent base prompt，用于模型感知的 instructions 选择。
-// GPT-5.5 同时作为最新版本的 fallback（覆盖 5.3 / 5.4 等未单独维护 prompt 的版本）。
+// instructionsGPT51 / instructionsGPT52 / instructionsGPT55 / instructionsGPT6Astra
+// 为对应非 codex 模型的真实 Codex 编码 agent base prompt，用于模型感知的 instructions 选择。
+// GPT-5.5 同时作为 GPT-5 系列的 fallback（覆盖 5.3 / 5.4 等未单独维护 prompt 的版本）。
 //
 //go:embed instructions_gpt5_1.txt
 var instructionsGPT51 string
@@ -95,23 +97,60 @@ func latestCodexInstructions() string {
 	return DefaultInstructions
 }
 
+// CanonicalizeOpenAIModelAliasSpelling normalizes provider prefixes, case,
+// separators, and known compact spellings used by OpenAI model aliases.
+func CanonicalizeOpenAIModelAliasSpelling(model string) string {
+	model = strings.TrimSpace(model)
+	if slash := strings.LastIndexByte(model, '/'); slash >= 0 {
+		model = strings.TrimSpace(model[slash+1:])
+	}
+	model = strings.ToLower(model)
+	if model == "" {
+		return ""
+	}
+
+	normalized := strings.ReplaceAll(model, "_", "-")
+	normalized = strings.Join(strings.Fields(normalized), "-")
+	for strings.Contains(normalized, "--") {
+		normalized = strings.ReplaceAll(normalized, "--", "-")
+	}
+
+	if strings.HasPrefix(normalized, "gpt5") {
+		normalized = "gpt-5" + strings.TrimPrefix(normalized, "gpt5")
+	}
+	if !strings.HasPrefix(normalized, "gpt-") && !strings.Contains(normalized, "codex") {
+		return ""
+	}
+
+	replacements := []struct {
+		from string
+		to   string
+	}{
+		{"gpt-5.4mini", "gpt-5.4-mini"},
+		{"gpt-5.4nano", "gpt-5.4-nano"},
+		{"gpt-5.3-codexspark", "gpt-5.3-codex-spark"},
+		{"gpt-5.3codexspark", "gpt-5.3-codex-spark"},
+		{"gpt-5.3codex", "gpt-5.3-codex"},
+	}
+	for _, replacement := range replacements {
+		normalized = strings.ReplaceAll(normalized, replacement.from, replacement.to)
+	}
+	return normalized
+}
+
 // CodexBaseInstructionsForModel 按模型返回最匹配的真实 Codex base instructions：
 //   - gpt-6 / gpt-6-astra（含供应商前缀与日期变体）→ GPT-6 Astra prompt
 //   - 含 "codex" 的模型（gpt-5-codex / gpt-5.x-codex / codex-max / spark 等）→ GPT-5-Codex prompt
 //   - gpt-5.5 系非 codex 模型 → GPT-5.5 prompt
 //   - gpt-5.2 系非 codex 模型 → GPT-5.2 prompt
 //   - gpt-5.1 系非 codex 模型 → GPT-5.1 prompt
-//   - 其它（含 gpt-5.3 / gpt-5.4 / 裸 gpt-5 / gpt-6-sol / gpt-6-luna / 未知模型）→ 回退到最新版本（当前 GPT-5.5）
+//   - 其它（含 gpt-5.3 / gpt-5.4 / 裸 gpt-5 / 未知模型）→ 回退到最新版本（当前 GPT-5.5）
 //
 // 任一专用 prompt 意外为空时回退链最终落到 DefaultInstructions，保证返回非空。
 func CodexBaseInstructionsForModel(model string) string {
-	m := strings.ToLower(strings.TrimSpace(model))
-	if slash := strings.LastIndexByte(m, '/'); slash >= 0 {
-		m = strings.TrimSpace(m[slash+1:])
-	}
-	m = strings.ReplaceAll(m, "_", "-")
+	canonical := CanonicalizeOpenAIModelAliasSpelling(model)
 	switch {
-	case IsGPT61SolModelSpelling(m):
+	case IsGPT61SolModelSpelling(canonical):
 		var metadata struct {
 			ModelMessages struct {
 				InstructionsTemplate string `json:"instructions_template"`
@@ -121,21 +160,19 @@ func CodexBaseInstructionsForModel(model string) string {
 			panic(err)
 		}
 		return metadata.ModelMessages.InstructionsTemplate
-	case m == "gpt-6" || m == "gpt-6-astra" || strings.HasPrefix(m, "gpt-6-astra-"):
+	case canonical == "gpt-6" || canonical == "gpt-6-astra" || strings.HasPrefix(canonical, "gpt-6-astra-"):
 		if v := strings.TrimSpace(instructionsGPT6Astra); v != "" {
 			return instructionsGPT6Astra
 		}
-	case strings.Contains(m, "codex"):
+	case strings.Contains(canonical, "codex"):
 		return DefaultInstructions
-	case strings.HasPrefix(m, "gpt-6"):
+	case strings.HasPrefix(canonical, "gpt-5.5"):
 		return latestCodexInstructions()
-	case strings.HasPrefix(m, "gpt-5.5"):
-		return latestCodexInstructions()
-	case strings.HasPrefix(m, "gpt-5.2"):
+	case strings.HasPrefix(canonical, "gpt-5.2"):
 		if v := strings.TrimSpace(instructionsGPT52); v != "" {
 			return instructionsGPT52
 		}
-	case strings.HasPrefix(m, "gpt-5.1"):
+	case strings.HasPrefix(canonical, "gpt-5.1"):
 		if v := strings.TrimSpace(instructionsGPT51); v != "" {
 			return instructionsGPT51
 		}
@@ -145,7 +182,7 @@ func CodexBaseInstructionsForModel(model string) string {
 
 // IsGPT6SolOrLunaModelSpelling recognizes official IDs and existing local effort/compact suffixes.
 func IsGPT6SolOrLunaModelSpelling(model string) bool {
-	canonical := canonicalizeGPT6SolLunaSpelling(model)
+	canonical := CanonicalizeOpenAIModelAliasSpelling(model)
 	for _, base := range []string{"gpt-6-sol", "gpt-6-luna"} {
 		if canonical == base {
 			return true
@@ -161,29 +198,10 @@ func IsGPT6SolOrLunaModelSpelling(model string) bool {
 	return false
 }
 
-func canonicalizeGPT6SolLunaSpelling(model string) string {
-	model = strings.ToLower(strings.TrimSpace(model))
-	if model == "" {
-		return ""
-	}
-	if idx := strings.LastIndex(model, "/"); idx >= 0 {
-		model = model[idx+1:]
-	}
-	model = strings.ReplaceAll(model, "_", "-")
-	model = strings.Join(strings.Fields(model), "-")
-	for strings.Contains(model, "--") {
-		model = strings.ReplaceAll(model, "--", "-")
-	}
-	if strings.HasPrefix(model, "gpt6") {
-		model = "gpt-6" + strings.TrimPrefix(model, "gpt6")
-	}
-	return model
-}
-
 // IsGPT61SolModelSpelling recognizes the published model and local effort/compact
 // spellings. Invalid effort suffixes remain identifiable for request validation.
 func IsGPT61SolModelSpelling(model string) bool {
-	canonical := canonicalizeGPT6SolLunaSpelling(model)
+	canonical := CanonicalizeOpenAIModelAliasSpelling(model)
 	if canonical == "gpt-6.1-sol" {
 		return true
 	}
@@ -197,6 +215,27 @@ func IsGPT61SolModelSpelling(model string) bool {
 	default:
 		return false
 	}
+}
+
+func IsGPT61TerraModelSpelling(model string) bool {
+	canonical := CanonicalizeOpenAIModelAliasSpelling(model)
+	if canonical == "gpt-6.1-terra" {
+		return true
+	}
+	suffix, ok := strings.CutPrefix(canonical, "gpt-6.1-terra-")
+	if !ok {
+		return false
+	}
+	switch suffix {
+	case "none", "low", "medium", "high", "xhigh", "max", "openai-compact":
+		return true
+	default:
+		return false
+	}
+}
+
+func RequiresResponsesForToolCalls(model string) bool {
+	return IsGPT61SolModelSpelling(model) || IsGPT61TerraModelSpelling(model)
 }
 
 // ValidateGPT61SolReasoningEffort rejects disabled reasoning instead of silently

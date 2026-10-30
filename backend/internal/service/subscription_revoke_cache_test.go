@@ -37,7 +37,7 @@ func (r *revokeCacheUserSubRepoStub) Delete(_ context.Context, id int64) error {
 
 func (r *revokeCacheUserSubRepoStub) GetActiveByUserIDAndGroupID(_ context.Context, userID, groupID int64) (*UserSubscription, error) {
 	r.getActiveCalls++
-	if r.deleted || r.sub == nil || r.sub.UserID != userID || r.sub.GroupID != groupID {
+	if r.deleted || r.sub == nil || r.sub.UserID != userID || r.sub.GroupID == nil || *r.sub.GroupID != groupID {
 		return nil, ErrSubscriptionNotFound
 	}
 	cp := *r.sub
@@ -49,7 +49,7 @@ func TestRevokeSubscription_InvalidatesL1CacheSynchronously(t *testing.T) {
 		sub: &UserSubscription{
 			ID:        1,
 			UserID:    10,
-			GroupID:   20,
+			GroupID:   int64Ptr(20),
 			Status:    SubscriptionStatusActive,
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -115,7 +115,7 @@ func TestRestoreSubscription_ExpiredActiveRestoresAsExpired(t *testing.T) {
 		sub: &UserSubscription{
 			ID:        1,
 			UserID:    10,
-			GroupID:   20,
+			GroupID:   int64Ptr(20),
 			Status:    SubscriptionStatusActive,
 			ExpiresAt: time.Now().Add(-time.Minute),
 			DeletedAt: &deletedAt,
@@ -137,7 +137,7 @@ func TestRestoreSubscription_NotRevokedReturnsConflict(t *testing.T) {
 		sub: &UserSubscription{
 			ID:        1,
 			UserID:    10,
-			GroupID:   20,
+			GroupID:   int64Ptr(20),
 			Status:    SubscriptionStatusActive,
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -157,7 +157,7 @@ func TestRestoreSubscription_LiveSubscriptionConflict(t *testing.T) {
 		sub: &UserSubscription{
 			ID:        1,
 			UserID:    10,
-			GroupID:   20,
+			GroupID:   int64Ptr(20),
 			Status:    SubscriptionStatusExpired,
 			ExpiresAt: time.Now().Add(-time.Hour),
 			DeletedAt: &deletedAt,

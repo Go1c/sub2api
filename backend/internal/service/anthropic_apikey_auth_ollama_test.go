@@ -135,7 +135,7 @@ func TestSetAnthropicAPIKeyAuthHeader_OllamaCloudForcesBearer(t *testing.T) {
 			account.Type = accountType
 
 			header := http.Header{}
-			setAnthropicAPIKeyAuthHeader(header, account, "ollama-cloud-key")
+			setAnthropicAPIKeyAuthHeader(header, account, "ollama-cloud-key", account.GetAnthropicProtocolBaseURL())
 			require.Equal(t, tt.wantAuth, header.Get("Authorization"), "Authorization 头不符")
 			require.Equal(t, tt.wantXAPIKey, header.Get("x-api-key"), "x-api-key 头不符")
 		})
@@ -165,7 +165,7 @@ func TestSetAnthropicAPIKeyAuthHeader_CNAdaptiveBaseURL(t *testing.T) {
 	anthropicBase := adaptiveOllamaAnthropic.GetCNProtocolBaseURL(APIProtocolAnthropic)
 	require.Equal(t, "https://ollama.com", anthropicBase)
 	header := http.Header{}
-	setAnthropicAPIKeyAuthHeader(header, adaptiveOllamaAnthropic, "kimi-key")
+	setAnthropicAPIKeyAuthHeader(header, adaptiveOllamaAnthropic, "kimi-key", adaptiveOllamaAnthropic.GetAnthropicProtocolBaseURL())
 	require.Equal(t, "Bearer kimi-key", header.Get("Authorization"))
 	require.Empty(t, header.Get("x-api-key"))
 
@@ -188,7 +188,7 @@ func TestSetAnthropicAPIKeyAuthHeader_CNAdaptiveBaseURL(t *testing.T) {
 	anthropicBase = adaptiveOllamaCC.GetCNProtocolBaseURL(APIProtocolAnthropic)
 	require.Equal(t, "https://api.moonshot.cn/anthropic", anthropicBase)
 	header = http.Header{}
-	setAnthropicAPIKeyAuthHeader(header, adaptiveOllamaCC, "kimi-key")
+	setAnthropicAPIKeyAuthHeader(header, adaptiveOllamaCC, "kimi-key", adaptiveOllamaCC.GetAnthropicProtocolBaseURL())
 	require.Empty(t, header.Get("Authorization"))
 	require.Equal(t, "kimi-key", header.Get("x-api-key"))
 
@@ -207,7 +207,7 @@ func TestSetAnthropicAPIKeyAuthHeader_CNAdaptiveBaseURL(t *testing.T) {
 	anthropicBase = anthropicProtocolOllama.GetAnthropicProtocolBaseURL()
 	require.Equal(t, "https://ollama.com", anthropicBase)
 	header = http.Header{}
-	setAnthropicAPIKeyAuthHeader(header, anthropicProtocolOllama, "kimi-key")
+	setAnthropicAPIKeyAuthHeader(header, anthropicProtocolOllama, "kimi-key", anthropicProtocolOllama.GetAnthropicProtocolBaseURL())
 	require.Equal(t, "Bearer kimi-key", header.Get("Authorization"))
 	require.Empty(t, header.Get("x-api-key"))
 
@@ -224,7 +224,7 @@ func TestSetAnthropicAPIKeyAuthHeader_CNAdaptiveBaseURL(t *testing.T) {
 		},
 	}
 	header = http.Header{}
-	setAnthropicAPIKeyAuthHeader(header, anthropicProtocolKimi, "kimi-key")
+	setAnthropicAPIKeyAuthHeader(header, anthropicProtocolKimi, "kimi-key", anthropicProtocolKimi.GetAnthropicProtocolBaseURL())
 	require.Empty(t, header.Get("Authorization"))
 	require.Equal(t, "kimi-key", header.Get("x-api-key"))
 }

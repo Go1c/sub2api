@@ -122,13 +122,6 @@ func (s *GatewayService) filterGrokFreeQuotaAccountsForGateway(ctx context.Conte
 	return filterGrokFreeQuotaAccountsCore(ctx, s.cfg, s.usageLogRepo, &gatewayGrokFreeQuotaGateCache, accounts)
 }
 
-func (s *OpenAIGatewayService) filterGrokFreeQuotaAccountsForOpenAI(ctx context.Context, accounts []Account) []Account {
-	if s == nil {
-		return accounts
-	}
-	return filterGrokFreeQuotaAccountsCore(ctx, s.cfg, s.usageLogRepo, &openaiGrokFreeQuotaGateCache, accounts)
-}
-
 // Shared caches for non-advanced-scheduler selection paths.
 // Advanced scheduler keeps per-instance sync.Map on defaultOpenAIAccountScheduler.
 var gatewayGrokFreeQuotaGateCache sync.Map

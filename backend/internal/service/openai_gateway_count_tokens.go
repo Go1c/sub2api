@@ -79,12 +79,11 @@ func (s *OpenAIGatewayService) ForwardResponsesInputTokens(
 		return fmt.Errorf("responses input_tokens: build upstream request: %w", err)
 	}
 
-	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
-	if proxyErr != nil {
-		return proxyErr
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
 	}
-	defer releaseProxy()
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
@@ -105,7 +104,7 @@ func (s *OpenAIGatewayService) ForwardResponsesInputTokens(
 			return nil
 		}
 		if s.rateLimitService != nil {
-			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, prepared.UpstreamModel)
 		}
 		upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
 		setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, "")
@@ -151,7 +150,7 @@ func prepareNativeOpenAIInputTokensCountRequest(body []byte, account *Account) (
 }
 
 func shouldEstimateOpenAIInputTokensLocally(account *Account) bool {
-	if account == nil || account.IsGrok() || account.IsCNProvider() || account.Type == AccountTypeUpstream {
+	if account == nil || account.IsGrok() || account.RoutesProtocolByInbound() || account.Type == AccountTypeUpstream {
 		return true
 	}
 	if account.Type != AccountTypeAPIKey {
@@ -212,6 +211,13 @@ func writeOpenAIResponsesInputTokensError(c *gin.Context, status int, errType, m
 	})
 }
 
+// EstimateGrokCountTokens estimates an Anthropic-compatible count_tokens request
+// locally. Grok does not expose a compatible token-counting endpoint, so this
+// path deliberately avoids account selection, credentials, and upstream calls.
+func EstimateGrokCountTokens(body []byte) (int, error) {
+	return estimateAnthropicCountTokensLocally(body)
+}
+
 // estimateAnthropicCountTokensLocally 走 Anthropic→Responses→tiktoken 链本地估算
 // count_tokens，不发任何上游请求（上游无兼容端点的平台使用）。
 func estimateAnthropicCountTokensLocally(body []byte) (int, error) {
@@ -258,14 +264,14 @@ func (s *OpenAIGatewayService) ForwardCountTokensAsAnthropic(
 		return fmt.Errorf("count_tokens: missing account")
 	}
 
-	// 国产供应商（全部协议，含 anthropic）：一律本地估算，不发上游请求。
+	// 多协议 API Key 供应商（国产厂商与聚合平台，全部协议，含 anthropic）：一律本地估算，不发上游请求。
 	// 依据（2026-08 核实）：三家的 Anthropic 兼容层均未提供
 	// /v1/messages/count_tokens——DeepSeek 官方 anthropic_api 文档无此端点
 	// （且注明 anthropic-version 头被忽略），聚合网关 OpenModel 明确标注
 	// count_tokens 为 "Anthropic only"，Kimi/智谱亦无任何文档承诺。转发上游
 	// 只会常态 404，且错误还会流入账号处置逻辑误伤整账号调度；Claude Code
 	// 高频调用此端点，本地 tiktoken 估算是与 Grok 一致的既有方案。
-	if account.IsCNProvider() {
+	if account.IsMultiProtocolAPIKey() {
 		estimated, err := estimateAnthropicCountTokensLocally(body)
 		if err != nil {
 			writeAnthropicCountTokensError(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
@@ -313,12 +319,11 @@ func (s *OpenAIGatewayService) ForwardCountTokensAsAnthropic(
 		return fmt.Errorf("build input_tokens request: %w", err)
 	}
 
-	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
-	if proxyErr != nil {
-		return proxyErr
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
 	}
-	defer releaseProxy()
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
@@ -341,7 +346,7 @@ func (s *OpenAIGatewayService) ForwardCountTokensAsAnthropic(
 		}
 
 		if s.rateLimitService != nil {
-			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, prepared.UpstreamModel)
 		}
 
 		if isOpenAIInputTokensUnsupported(resp.StatusCode, respBody) {
@@ -541,10 +546,24 @@ func isOpenAIOAuthInputTokensUnsupported(statusCode int, body []byte) bool {
 		return true
 	}
 
+	// OAuth's platform endpoint can be blocked by an upstream proxy before it
+	// reaches the API and return an HTML 403 page without a structured error.
+	// Treat that endpoint-level response like the other unsupported cases so
+	// count_tokens remains a local, non-health-affecting convenience request.
+	if statusCode == http.StatusForbidden && isHTMLResponse(body) {
+		return true
+	}
+
 	return strings.Contains(msg, "input_tokens") &&
 		(strings.Contains(msg, "not found") ||
 			strings.Contains(msg, "not supported") ||
 			strings.Contains(msg, "unsupported"))
+}
+
+func isHTMLResponse(body []byte) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(string(body)))
+	return strings.HasPrefix(trimmed, "<!doctype html") ||
+		strings.HasPrefix(trimmed, "<html")
 }
 
 func estimateOpenAIInputTokens(req openAIInputTokensCountRequest) (int, error) {

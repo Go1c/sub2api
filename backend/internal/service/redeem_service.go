@@ -33,7 +33,7 @@ const RedeemRateLimitWindow = time.Hour
 const (
 	redeemMaxErrorsPerHour  = 20
 	redeemMaxFailedAttempts = 20
-	redeemLockDuration     = 10 * time.Second // 锁超时时间，防止死锁
+	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
 )
 
 type redeemRateLimitPolicy uint8

@@ -44,9 +44,7 @@ func TestPlatformSchedulingThresholds_RoundTrip_DefaultsAndStoredValues(t *testi
 func TestBuildSystemSettingsUpdates_PersistsAccountSchedulingThresholds(t *testing.T) {
 	svc := newSettingServiceForPlatformThresholdTest(nil)
 
-	updates, err := svc.buildSystemSettingsUpdates(context.Background(), &SystemSettings{
-		
-	})
+	updates, err := svc.buildSystemSettingsUpdates(context.Background(), &SystemSettings{})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"openai":91,"anthropic":88,"grok":77}`, updates[SettingKeyAccountSchedulingThresholds])
 }
@@ -74,9 +72,7 @@ func TestValidateAndNormalizeAccountSchedulingThresholds_RejectsUnsupportedPlatf
 func TestUpdateSettings_StoresAccountSchedulingThresholds(t *testing.T) {
 	svc := newSettingServiceForPlatformThresholdTest(nil)
 
-	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		
-	})
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{})
 	require.NoError(t, err)
 
 	got := svc.parseSettings(map[string]string{

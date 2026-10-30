@@ -130,13 +130,11 @@ func TestIPGroupSoft429FailoverRetriesSameAccount(t *testing.T) {
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"slow down"}}`)
 	require.False(t, svc.handleOpenAIAccountUpstreamError(ctx, account, http.StatusTooManyRequests, http.Header{}, body))
 	failoverErr := newOpenAIUpstreamFailoverError(
-		ctx,
 		http.StatusTooManyRequests,
 		http.Header{},
 		body,
 		"slow down",
 		false,
-		account,
 	)
 	require.True(t, failoverErr.RetryableOnSameAccount)
 	require.True(t, failoverErr.RequestScopedTransient)
@@ -182,13 +180,11 @@ func TestIPGroupTwoPass429ThenSwitchAccountWithoutRateLimit(t *testing.T) {
 		require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
 
 		failoverErr := newOpenAIUpstreamFailoverError(
-			ctx,
 			http.StatusTooManyRequests,
 			http.Header{},
 			body,
 			"slow down",
 			false,
-			account,
 		)
 		require.True(t, failoverErr.RequestScopedTransient)
 		require.Equal(t, NextAccountRetry, failoverErr.NextAccountAction)

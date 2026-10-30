@@ -19,7 +19,7 @@ func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
 // AnthropicToResponsesWithMinOutputTokens converts an Anthropic request using
 // the supplied max_output_tokens floor.
 func AnthropicToResponsesWithMinOutputTokens(req *AnthropicRequest, minOutputTokens int) (*ResponsesRequest, error) {
-	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, anthropicRequestedReasoningEffort(req)); err != nil {
+	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, anthropicReasoningEffort(req)); err != nil {
 		return nil, err
 	}
 	input, err := convertAnthropicToResponsesInput(req.System, req.Messages)
@@ -66,25 +66,16 @@ func AnthropicToResponsesWithMinOutputTokens(req *AnthropicRequest, minOutputTok
 		out.Tools = convertAnthropicToolsToResponses(req.Tools)
 	}
 
-	// Determine reasoning effort: only output_config.effort controls the
-	// level; thinking.type is ignored. Default follows Codex CLI / airgate's
-	// Anthropic bridge shape, which uses medium when unset.
-	// Anthropic levels map 1:1 to OpenAI: low→low, medium→medium, high→high, max→xhigh.
-	effort := "medium"
-	if req.OutputConfig != nil && req.OutputConfig.Effort != "" {
-		effort = req.OutputConfig.Effort
+	// An explicit thinking disable takes precedence over output_config.effort.
+	effort := anthropicReasoningEffort(req)
+	if (openai.IsGPT61SolModelSpelling(req.Model) || openai.IsGPT61TerraModelSpelling(req.Model)) && req.OutputConfig != nil && req.OutputConfig.Effort == "max" && effort != "none" {
+		effort = "max"
 	}
-	// GPT-6.1 Sol publishes max as its own effort. Other models still map max to xhigh.
-	if openai.IsGPT61SolModelSpelling(req.Model) && effort == "max" {
-		out.Reasoning = &ResponsesReasoning{
-			Effort:  "max",
-			Summary: "auto",
-		}
-	} else {
-		out.Reasoning = &ResponsesReasoning{
-			Effort:  mapAnthropicEffortToResponses(effort),
-			Summary: "auto",
-		}
+	out.Reasoning = &ResponsesReasoning{
+		Effort: effort,
+	}
+	if effort != "none" {
+		out.Reasoning.Summary = "auto"
 	}
 
 	// Convert tool_choice
@@ -440,30 +431,22 @@ func extractAnthropicTextFromBlocks(blocks []AnthropicContentBlock) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// anthropicRequestedReasoningEffort is the effort the client asked for before
-// the bridge default. Disabled thinking is "none" so GPT-6.1 Sol can reject it;
-// an empty result means the later mapping may still apply its medium default.
-func anthropicRequestedReasoningEffort(req *AnthropicRequest) string {
-	if req != nil && req.Thinking != nil && req.Thinking.Type == "disabled" {
+// anthropicReasoningEffort resolves the Anthropic request preference for both
+// OpenAI bridges. Explicitly disabled thinking overrides output_config.effort;
+// otherwise the bridge keeps its medium default.
+func anthropicReasoningEffort(req *AnthropicRequest) string {
+	if req.Thinking != nil && req.Thinking.Type == "disabled" {
 		return "none"
 	}
-	if req != nil && req.OutputConfig != nil {
-		return req.OutputConfig.Effort
+	effort := "medium"
+	if req.OutputConfig != nil && req.OutputConfig.Effort != "" {
+		effort = req.OutputConfig.Effort
 	}
-	return ""
+	return mapAnthropicEffortToResponses(effort)
 }
 
-// mapAnthropicEffortToResponses converts Anthropic reasoning effort levels to
-// OpenAI Responses API effort levels.
-//
-// Both APIs default to "high". The mapping is 1:1 for shared levels;
-// only Anthropic's "max" (Opus 4.6 exclusive) maps to OpenAI's "xhigh"
-// (GPT-5.2+ exclusive) as both represent the highest reasoning tier.
-//
-//	low    → low
-//	medium → medium
-//	high   → high
-//	max    → xhigh
+// mapAnthropicEffortToResponses maps shared effort levels directly and maps
+// Anthropic's max to OpenAI's xhigh.
 func mapAnthropicEffortToResponses(effort string) string {
 	if effort == "max" {
 		return "xhigh"

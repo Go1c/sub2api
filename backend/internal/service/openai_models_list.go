@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"slices"
 	"sort"
@@ -13,18 +12,6 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
-
-type openAIModelsRequest struct {
-	url                 string
-	headers             http.Header
-	proxyURL            string
-	accountID           int64
-	credentialAccountID int64
-	credentialAccount   *Account
-	accountConcurrency  int
-	useAPIKeyUpstream   bool
-	standardModelsList  bool
-}
 
 // FetchOpenAIModelsList discovers a single account's raw public model catalog.
 // API keys use the standard endpoint; OAuth reuses the authenticated, cached
@@ -83,47 +70,6 @@ func (s *OpenAIGatewayService) FetchOpenAIModelsList(ctx context.Context, accoun
 		return nil, invalidOpenAIModelsList(fmt.Errorf("upstream returned 304 without a cached catalog"))
 	}
 	return response, nil
-}
-
-func (s *OpenAIGatewayService) fetchCachedOpenAIModels(ctx context.Context, request openAIModelsRequest, fetch func(context.Context, string) (*OpenAIModelsResponse, error), ifNoneMatch string) (*OpenAIModelsResponse, error) {
-	_ = request
-	response, err := fetch(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-	return openAIModelsResponseForClient(response, ifNoneMatch), nil
-}
-
-func (s *OpenAIGatewayService) fetchOpenAIModelsUpstream(ctx context.Context, request openAIModelsRequest, ifNoneMatch string) (*OpenAIModelsResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, request.url, nil)
-	if err != nil {
-		return nil, err
-	}
-	if request.headers != nil {
-		req.Header = request.headers.Clone()
-	}
-	if ifNoneMatch = strings.TrimSpace(ifNoneMatch); ifNoneMatch != "" {
-		req.Header.Set("If-None-Match", ifNoneMatch)
-	}
-	if s == nil || s.httpUpstream == nil {
-		return nil, fmt.Errorf("models upstream is not configured")
-	}
-	resp, err := s.httpUpstream.Do(req, request.proxyURL, request.accountID, request.accountConcurrency)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusNotModified {
-		return &OpenAIModelsResponse{ETag: resp.Header.Get("ETag"), NotModified: true}, nil
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("upstream model list status %d", resp.StatusCode)
-	}
-	return &OpenAIModelsResponse{Body: body, ETag: resp.Header.Get("ETag")}, nil
 }
 
 func invalidOpenAIModelsList(err error) error {

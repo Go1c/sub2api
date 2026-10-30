@@ -175,7 +175,7 @@ func TestChatCompletionsResponseToResponses_CustomToolCallOutputItem(t *testing.
 		}},
 	}
 
-	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", map[string]bool{"exec": true}, false, nil)
+	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", map[string]bool{"exec": true}, nil, false, nil)
 	require.Len(t, out.Output, 2)
 
 	assert.Equal(t, "custom_tool_call", out.Output[0].Type)
@@ -298,7 +298,7 @@ func TestChatCompletionsResponseToResponses_ToolSearchCallOutputItem(t *testing.
 		}},
 	}
 
-	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, true, nil)
+	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, nil, true, nil)
 	require.Len(t, out.Output, 1)
 
 	item := out.Output[0]
@@ -330,7 +330,7 @@ func TestChatCompletionsResponseToResponses_ToolSearchNotDeclaredKeepsFunctionCa
 	}
 
 	// 客户端未声明 type=tool_search 时，同名普通 function 工具不受影响。
-	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, false, nil)
+	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, nil, false, nil)
 	require.Len(t, out.Output, 1)
 	assert.Equal(t, "function_call", out.Output[0].Type)
 }
@@ -797,7 +797,7 @@ func TestChatCompletionsResponseToResponses_NamespacedToolCallRestored(t *testin
 		"mcp__svc__echo": {Namespace: "mcp__svc", Name: "echo"},
 	}
 
-	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, false, nsTools)
+	out := ChatCompletionsResponseToResponses(resp, "glm-5.2", nil, nil, false, nsTools)
 	require.Len(t, out.Output, 2)
 
 	item := out.Output[0]

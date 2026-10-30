@@ -300,3 +300,7 @@ func TestAdminServiceBindUserAuthIdentityRejectsInvalidProviderType(t *testing.T
 	require.Error(t, err)
 	require.Equal(t, "INVALID_INPUT", infraerrors.Reason(err))
 }
+
+func (x *userRepoStub) UpdateBalanceNoStat(_ context.Context, _ int64, _ float64) error {
+	return nil
+}

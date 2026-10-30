@@ -261,3 +261,23 @@ func TestWithOpenAIWSStateStoreRedisTimeout_WithParentContext(t *testing.T) {
 	_, ok := ctx.Deadline()
 	require.True(t, ok, "应附加短超时")
 }
+
+func (p *openAIWSStateStoreTimeoutProbeCache) ClaimGrokVideoBilled(_ context.Context, _ string, _ time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (p *openAIWSStateStoreTimeoutProbeCache) GetGrokVideoPendingBilling(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
+
+func (p *openAIWSStateStoreTimeoutProbeCache) SetGrokVideoPendingBilling(_ context.Context, _ string, _ []byte, _ time.Duration) error {
+	return nil
+}
+
+func (p *openAIWSStateStoreTimeoutProbeCache) UpsertGrokVideoPendingBilling(_ context.Context, _ *GrokVideoPendingBilling) error {
+	return nil
+}
+
+func (p *openAIWSStateStoreTimeoutProbeCache) ReleaseGrokVideoBilled(_ context.Context, _ string) error {
+	return nil
+}

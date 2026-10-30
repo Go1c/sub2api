@@ -18,79 +18,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
-var defaultFrontendLocales = []string{"en", "zh", "zh-Hant"}
-
-func normalizeFrontendLocaleCode(value string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "en", "en-us", "en-gb":
-		return "en", true
-	case "zh", "zh-cn", "zh-hans", "zh-sg":
-		return "zh", true
-	case "zh-hant", "zh-tw", "zh-hk", "zh-mo":
-		return "zh-Hant", true
-	default:
-		return "", false
-	}
-}
-
-func normalizeFrontendLocales(values []string) ([]string, error) {
-	if len(values) == 0 {
-		return append([]string(nil), defaultFrontendLocales...), nil
-	}
-	result := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		code, ok := normalizeFrontendLocaleCode(value)
-		if !ok {
-			return nil, infraerrors.BadRequest("INVALID_FRONTEND_LOCALE", "frontend locale must be one of en, zh, zh-Hant")
-		}
-		if _, exists := seen[code]; exists {
-			continue
-		}
-		seen[code] = struct{}{}
-		result = append(result, code)
-	}
-	if len(result) == 0 {
-		return append([]string(nil), defaultFrontendLocales...), nil
-	}
-	return result, nil
-}
-
-func parseFrontendLocales(raw string) []string {
-	var values []string
-	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &values); err != nil {
-		return append([]string(nil), defaultFrontendLocales...)
-	}
-	result := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		code, ok := normalizeFrontendLocaleCode(value)
-		if !ok {
-			continue
-		}
-		if _, exists := seen[code]; exists {
-			continue
-		}
-		seen[code] = struct{}{}
-		result = append(result, code)
-	}
-	if len(result) == 0 {
-		return append([]string(nil), defaultFrontendLocales...)
-	}
-	return result
-}
-
-func parseSubscriptionQuotaResetConfig(settings map[string]string) SubscriptionQuotaResetConfig {
-	cfg := SubscriptionQuotaResetConfig{}
-	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetUTCOffsetMinutes])); err == nil {
-		cfg.UTCOffsetMinutes = v
-	}
-	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetHour])); err == nil {
-		cfg.ResetHour = v
-	}
-	return NormalizeSubscriptionQuotaResetConfig(cfg)
-}
-
 // InitializeDefaultSettings 初始化默认设置
 func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	// 检查是否已有设置
@@ -117,9 +44,13 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	lumioDesktopConfigJSON, err := json.Marshal(DefaultLumioDesktopConfig())
+	forwardedClientIPHeaders := []string{}
+	if s != nil && s.cfg != nil {
+		forwardedClientIPHeaders = s.cfg.ForwardedClientIPSettings().Headers
+	}
+	forwardedClientIPHeadersJSON, err := json.Marshal(forwardedClientIPHeaders)
 	if err != nil {
-		return fmt.Errorf("marshal default lumio desktop config: %w", err)
+		return fmt.Errorf("marshal default forwarded client IP headers: %w", err)
 	}
 
 	// 初始化默认设置
@@ -127,40 +58,23 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyRegistrationEnabled:                       "true",
 		SettingKeyEmailVerifyEnabled:                        "false",
 		SettingKeyRegistrationEmailSuffixWhitelist:          "[]",
+		SettingKeyRegistrationEmailDomainQuotaEnabled:       "false",
 		SettingKeyPromoCodeEnabled:                          "true", // 默认启用优惠码功能
 		SettingKeyLoginAgreementEnabled:                     "false",
 		SettingKeyLoginAgreementMode:                        defaultLoginAgreementMode,
 		SettingKeyLoginAgreementUpdatedAt:                   defaultLoginAgreementDate,
 		SettingKeyLoginAgreementDocuments:                   loginAgreementDocumentsJSON,
-		SettingKeyAPIKeyACLTrustForwardedIP:                 "false",
+		SettingKeyAPIKeyACLTrustForwardedIP:                 "true",
+		SettingKeyForwardedClientIPHeaders:                  string(forwardedClientIPHeadersJSON),
+		settingKeyForwardedClientIPModeV2:                   "true",
 		SettingKeySiteName:                                  "Sub2API",
 		SettingKeySiteLogo:                                  "",
-		SettingKeyContactChannels:                           "[]",
-		SettingKeySupportChatEnabled:                        "false",
-		SettingKeySupportChatGatewayURL:                     "",
-		SettingKeySupportChatTitle:                          "",
-		SettingKeySupportChatWelcomeMessage:                 "",
-		SettingKeySupportChatOfficialContactText:            "",
-		SettingKeySupportChatOfficialContactURL:             "",
-		SettingKeySitePages:                                 "[]",
-		SettingKeyFrontendLocales:                           `["en","zh","zh-Hant"]`,
-		SettingKeyCCSwitchDefaultModelAnthropic:             "",
-		SettingKeyCCSwitchDefaultModelOpenAI:                "gpt-5.4",
-		SettingKeyCCSwitchDefaultModelGemini:                "",
-		SettingKeyCCSwitchDefaultModelAntigravity:           "",
-		SettingKeyCCSwitchDefaultModelAntigravityGemini:     "",
-		SettingKeyUserSubscriptionsVisible:                  "true",
 		SettingKeyPurchaseSubscriptionEnabled:               "false",
 		SettingKeyPurchaseSubscriptionURL:                   "",
-		SettingKeySubscriptionMultiplePurchasesEnabled:      "false",
-		SettingKeySubscriptionQuotaResetUTCOffsetMinutes:    "0",
-		SettingKeySubscriptionQuotaResetHour:                "0",
-		SettingKeySubscriptionNotifyEmailEnabled:            "false",
 		SettingKeyTableDefaultPageSize:                      "20",
 		SettingKeyTablePageSizeOptions:                      "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                           "[]",
 		SettingKeyCustomEndpoints:                           "[]",
-		SettingKeyLumioDesktopConfig:                        string(lumioDesktopConfigJSON),
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -211,6 +125,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOIDCConnectUserInfoUsernamePath:           "",
 		SettingKeyDefaultConcurrency:                        strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                            strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyAffiliateRebateRate:                       strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateRebateFreezeHours:                strconv.Itoa(AffiliateRebateFreezeHoursDefault),
+		SettingKeyAffiliateRebateDurationDays:               strconv.Itoa(AffiliateRebateDurationDaysDefault),
+		SettingKeyAffiliateRebatePerInviteeCap:              strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
 		SettingKeyDefaultUserRPMLimit:                       "0",
 		SettingKeyDefaultSubscriptions:                      "[]",
 		SettingKeyAuthSourceDefaultEmailBalance:             "0",
@@ -249,7 +167,6 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAuthSourceDefaultDingTalkGrantOnSignup:    "false",
 		SettingKeyAuthSourceDefaultDingTalkGrantOnFirstBind: "false",
 		SettingKeyForceEmailOnThirdPartySignup:              "false",
-		SettingKeyInvitationRegistrationMode:                InvitationRegistrationModeDefault,
 		SettingKeySMTPPort:                                  "587",
 		SettingKeySMTPUseTLS:                                "false",
 		// Model fallback defaults
@@ -270,41 +187,40 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 
 		// Channel monitor defaults (enabled, 60s)
 		SettingKeyChannelMonitorEnabled:                "true",
+		SettingKeyChannelMonitorMode:                   ChannelMonitorModeV1,
 		SettingKeyChannelMonitorDefaultIntervalSeconds: "60",
-		SettingKeyChannelMonitorStatusBanner:           "",
+		SettingKeyChannelMonitorHideThroughput:         "true",
 		SettingKeyChannelMonitorShowQuota:              "false",
+		SettingKeyChannelMonitorHideUserRanking:        "false",
 
-		// Grok: default text model grok-4.6; cross-client wildcards on so Codex/Claude keep working.
+		// Grok compatibility defaults: cross-client mapping stays enabled unless
+		// operators explicitly disable it.
 		SettingKeyGrokDefaultTextModel:           "grok-4.6",
 		SettingKeyGrokCrossClientModelMapEnabled: "true",
+		SettingKeyGrokDefaultBaseURLMode:         GrokDefaultBaseURLModeCLI,
 
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
 
+		// Subscription feature (default enabled; opt-out)
+		SettingKeySubscriptionEnabled: "true",
+
+		// Model plaza feature (default disabled; opt-in, public unless require_auth)
+		SettingKeyModelPlazaEnabled:       "false",
+		SettingKeyModelPlazaRequireAuth:   "false",
+		SettingKeyModelPlazaDescription:   "",
+		SettingKeyPluginManagementEnabled: "false",
+
 		// Affiliate (邀请返利) feature (default disabled; opt-in)
-		SettingKeyAffiliateEnabled:             "false",
-		SettingKeyAffiliateRebateRate:          strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 2, 64),
-		SettingKeyAffiliateRebateTiers:         "[]",
-		SettingKeyAffiliateRebateFreezeHours:   strconv.Itoa(AffiliateRebateFreezeHoursDefault),
-		SettingKeyAffiliateRebateDurationDays:  strconv.Itoa(AffiliateRebateDurationDaysDefault),
-		SettingKeyAffiliateRebatePerInviteeCap: strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
-		SettingKeyAffiliateSignupBonusEnabled:  strconv.FormatBool(AffiliateSignupBonusEnabledDefault),
-		SettingKeyAffiliateSignupBonusAmount:   strconv.FormatFloat(AffiliateSignupBonusAmountDefault, 'f', 2, 64),
-		SettingKeyAffiliateSignupBonusTotalCap: strconv.FormatFloat(AffiliateSignupBonusTotalCapDefault, 'f', 2, 64),
-		SettingKeyAffiliateSignupBonusDailyCap: strconv.FormatFloat(AffiliateSignupBonusDailyCapDefault, 'f', 2, 64),
-		SettingKeyBalanceUsageGateEnabled:      strconv.FormatBool(BalanceUsageGateEnabledDefault),
-		SettingKeyBalanceUsageGateMinBalance:   strconv.FormatFloat(BalanceUsageGateMinBalanceDefault, 'f', 2, 64),
-		SettingKeyBalanceUsageGateMinRecharge:  strconv.FormatFloat(BalanceUsageGateMinRechargeDefault, 'f', 2, 64),
+		SettingKeyAffiliateEnabled:              "false",
+		SettingKeyAffiliateAdminRechargeEnabled: strconv.FormatBool(AdminRechargeRebateEnabledDefault),
 
 		// 风控中心功能（默认关闭，显式启用）
-		SettingKeyRiskControlEnabled:                "false",
-		SettingKeySiteMessagesEnabled:               strconv.FormatBool(SiteMessagesEnabledDefault),
-		SettingKeySiteMessagesDailySendLimit:        strconv.Itoa(SiteMessagesDailySendLimitDefault),
-		SettingKeySiteMessagesRetentionDays:         strconv.Itoa(SiteMessagesRetentionDaysDefault),
-		SettingKeySiteMessagesDefaultRecipientEmail: "",
+		SettingKeyRiskControlEnabled: "false",
 
 		// cyber 会话屏蔽（默认关闭，TTL 默认 3600s）
 		SettingKeyCyberSessionBlockEnabled:    "false",
+		SettingKeyCyberPolicyUserAllowlist:    "",
 		SettingKeyCyberSessionBlockTTLSeconds: "3600",
 
 		// Claude Code version check (default: empty = disabled)
@@ -328,6 +244,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEnableClientDatelineNormalization:                  "true",
 		SettingKeyAntigravityUserAgentVersion:                        "",
 		SettingKeyOpenAICodexUserAgent:                               "",
+		SettingKeyOpenAICodexClientVersion:                           "",
+		SettingKeyOpenAICodexClientVersionSynced:                     "",
+		SettingKeyOpenAICodexVersionAutoSyncEnabled:                  "true",
+		SettingKeyClaudeCodeClientVersion:                            "",
+		SettingKeyClaudeCodeClientVersionSynced:                      "",
+		SettingKeyClaudeCodeVersionAutoSyncEnabled:                   "true",
 		SettingPaymentVisibleMethodAlipaySource:                      "",
 		SettingPaymentVisibleMethodWxpaySource:                       "",
 		SettingPaymentVisibleMethodAlipayEnabled:                     "false",
@@ -348,14 +270,24 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAIAdvancedSchedulerWeightSessionSticky:         "",
 
 		SettingKeyAllowUserViewErrorRequests: "false",
-
-		// 余额不足邮件提醒：系统默认阈值 $10（用户未自定义时使用）
-		SettingKeyBalanceLowNotifyEnabled:     "false",
-		SettingKeyBalanceLowNotifyThreshold:   "10",
-		SettingKeyBalanceLowNotifyRechargeURL: "",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
+}
+
+func parseForwardedClientIPHeadersSetting(value string) ([]string, error) {
+	var headers []string
+	if err := json.Unmarshal([]byte(value), &headers); err != nil {
+		return nil, fmt.Errorf("parse forwarded_client_ip_headers: %w", err)
+	}
+	if headers == nil {
+		return nil, fmt.Errorf("parse forwarded_client_ip_headers: value must be a JSON array")
+	}
+	normalized, err := config.NormalizeForwardedClientIPHeaders(headers)
+	if err != nil {
+		return nil, fmt.Errorf("parse forwarded_client_ip_headers: %w", err)
+	}
+	return normalized, nil
 }
 
 // parseSettings 解析设置到结构体
@@ -367,21 +299,36 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		loginAgreementUpdatedAt = defaultLoginAgreementDate
 	}
 	apiKeyACLTrustForwardedIP := false
+	forwardedClientIPHeaders := []string{}
+	if s != nil && s.cfg != nil {
+		runtimeSettings := s.cfg.ForwardedClientIPSettings()
+		apiKeyACLTrustForwardedIP = runtimeSettings.TrustForwardedIP
+		forwardedClientIPHeaders = runtimeSettings.Headers
+	}
 	if value, ok := settings[SettingKeyAPIKeyACLTrustForwardedIP]; ok {
 		apiKeyACLTrustForwardedIP = value == "true"
-	} else if s != nil && s.cfg != nil {
-		apiKeyACLTrustForwardedIP = s.cfg.Security.TrustForwardedIPForAPIKeyACL
+	}
+	if value, ok := settings[SettingKeyForwardedClientIPHeaders]; ok {
+		parsed, err := parseForwardedClientIPHeadersSetting(value)
+		if err != nil {
+			slog.Error("invalid persisted forwarded client IP headers; forwarded trust disabled", "error", err)
+			apiKeyACLTrustForwardedIP = false
+			forwardedClientIPHeaders = []string{}
+		} else {
+			forwardedClientIPHeaders = parsed
+		}
 	}
 	result := &SystemSettings{
 		RegistrationEnabled:                    settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:                     emailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:       ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
+		RegistrationEmailDomainQuotaEnabled:    settings[SettingKeyRegistrationEmailDomainQuotaEnabled] == "true",
 		PromoCodeEnabled:                       settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:                   emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                            settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:                  settings[SettingKeyInvitationCodeEnabled] == "true",
-		InvitationRegistrationMode:             normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                            settings[SettingKeyTotpEnabled] == "true",
+		PasskeyEnabled:                         s.passkeySettingEnabled(settings),
 		SessionBindingEnabled:                  settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
 		StepUpEnabled:                          settings[SettingKeyStepUpEnabled] == "true",         // 默认关闭
 		AuditLogRetentionDays:                  parseAuditLogRetentionDays(settings[SettingKeyAuditLogRetentionDays]),
@@ -398,43 +345,34 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileEnabled:                       settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                       settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:           settings[SettingKeyTurnstileSecretKey] != "",
+		TencentCaptchaEnabled:                  settings[SettingKeyTencentCaptchaEnabled] == "true",
+		TencentCaptchaAppID:                    settings[SettingKeyTencentCaptchaAppID],
+		TencentCaptchaAppSecretKeyConfigured:   settings[SettingKeyTencentCaptchaAppSecretKey] != "",
+		TencentCaptchaCloudSecretIDConfigured:  settings[SettingKeyTencentCaptchaCloudSecretID] != "",
+		TencentCaptchaCloudSecretKeyConfigured: settings[SettingKeyTencentCaptchaCloudSecretKey] != "",
+		TencentCaptchaRegion:                   normalizeTencentCaptchaRegion(settings[SettingKeyTencentCaptchaRegion]),
+		AliyunCaptchaEnabled:                   settings[SettingKeyAliyunCaptchaEnabled] == "true",
+		AliyunCaptchaAccessKeyID:               settings[SettingKeyAliyunCaptchaAccessKeyID],
+		AliyunCaptchaAccessKeySecretConfigured: settings[SettingKeyAliyunCaptchaAccessKeySecret] != "",
+		AliyunCaptchaSceneID:                   settings[SettingKeyAliyunCaptchaSceneID],
+		AliyunCaptchaPrefix:                    settings[SettingKeyAliyunCaptchaPrefix],
+		AliyunCaptchaRegion:                    normalizeAliyunCaptchaRegion(settings[SettingKeyAliyunCaptchaRegion]),
 		APIKeyACLTrustForwardedIP:              apiKeyACLTrustForwardedIP,
+		ForwardedClientIPHeaders:               forwardedClientIPHeaders,
 		SiteName:                               s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                               settings[SettingKeySiteLogo],
 		SiteSubtitle:                           s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                             settings[SettingKeyAPIBaseURL],
 		ContactInfo:                            settings[SettingKeyContactInfo],
-		ContactChannels:                        settings[SettingKeyContactChannels],
-		SupportChatEnabled:                     settings[SettingKeySupportChatEnabled] == "true",
-		SupportChatGatewayURL:                  strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
-		SupportChatTitle:                       strings.TrimSpace(settings[SettingKeySupportChatTitle]),
-		SupportChatWelcomeMessage:              strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
-		SupportChatOfficialContactText:         strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
-		SupportChatOfficialContactURL:          strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatOfficialContactURL]), "/"),
 		DocURL:                                 settings[SettingKeyDocURL],
-		SitePages:                              settings[SettingKeySitePages],
 		HomeContent:                            settings[SettingKeyHomeContent],
+		CompactHomeEnabled:                     settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                    settings[SettingKeyHideCcsImportButton] == "true",
-		FrontendLocales:                        parseFrontendLocales(settings[SettingKeyFrontendLocales]),
-		CCSwitchDefaultModelAnthropic:          strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
-		CCSwitchDefaultModelOpenAI:             firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4"),
-		CCSwitchDefaultModelGemini:             strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
-		CCSwitchDefaultModelAntigravity:        strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravity]),
-		CCSwitchDefaultModelAntigravityGemini:  strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravityGemini]),
-		UserSubscriptionsVisible:               !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
 		PurchaseSubscriptionEnabled:            settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:                strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
-		SubscriptionNotifyEmailEnabled:         settings[SettingKeySubscriptionNotifyEmailEnabled] == "true",
-		SubscriptionMultiplePurchasesEnabled:   settings[SettingKeySubscriptionMultiplePurchasesEnabled] == "true",
-		SubscriptionQuotaResetUTCOffsetMinutes: parseSubscriptionQuotaResetConfig(settings).UTCOffsetMinutes,
-		SubscriptionQuotaResetHour:             parseSubscriptionQuotaResetConfig(settings).ResetHour,
 		CustomMenuItems:                        settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                        settings[SettingKeyCustomEndpoints],
-		LumioDesktopConfig: normalizeLumioDesktopConfig(
-			settings[SettingKeyLumioDesktopConfig],
-			settings[SettingKeyCCSwitchDefaultModelOpenAI],
-		),
-		BackendModeEnabled: settings[SettingKeyBackendModeEnabled] == "true",
+		BackendModeEnabled:                     settings[SettingKeyBackendModeEnabled] == "true",
 	}
 	result.TableDefaultPageSize, result.TablePageSizeOptions = parseTablePreferences(
 		settings[SettingKeyTableDefaultPageSize],
@@ -450,7 +388,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	if concurrency, err := strconv.Atoi(settings[SettingKeyDefaultConcurrency]); err == nil {
 		result.DefaultConcurrency = concurrency
-	} else if s != nil && s.cfg != nil {
+	} else {
 		result.DefaultConcurrency = s.cfg.Default.UserConcurrency
 	}
 
@@ -461,14 +399,39 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// 解析浮点数类型
 	if balance, err := strconv.ParseFloat(settings[SettingKeyDefaultBalance], 64); err == nil {
 		result.DefaultBalance = balance
-	} else if s != nil && s.cfg != nil {
+	} else {
 		result.DefaultBalance = s.cfg.Default.UserBalance
 	}
+	if rebateRate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
+		result.AffiliateRebateRate = clampAffiliateRebateRate(rebateRate)
+	} else {
+		result.AffiliateRebateRate = AffiliateRebateRateDefault
+	}
+	if freezeHours, err := strconv.Atoi(settings[SettingKeyAffiliateRebateFreezeHours]); err == nil && freezeHours >= 0 {
+		if freezeHours > AffiliateRebateFreezeHoursMax {
+			freezeHours = AffiliateRebateFreezeHoursMax
+		}
+		result.AffiliateRebateFreezeHours = freezeHours
+	}
+	if durationDays, err := strconv.Atoi(settings[SettingKeyAffiliateRebateDurationDays]); err == nil && durationDays >= 0 {
+		if durationDays > AffiliateRebateDurationDaysMax {
+			durationDays = AffiliateRebateDurationDaysMax
+		}
+		result.AffiliateRebateDurationDays = durationDays
+	}
+	if perInviteeCap, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebatePerInviteeCap], 64); err == nil && perInviteeCap >= 0 {
+		result.AffiliateRebatePerInviteeCap = perInviteeCap
+	}
+	result.AdminRechargeRebateEnabled = settings[SettingKeyAffiliateAdminRechargeEnabled] == "true"
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]
 	result.TurnstileSecretKey = settings[SettingKeyTurnstileSecretKey]
+	result.TencentCaptchaAppSecretKey = settings[SettingKeyTencentCaptchaAppSecretKey]
+	result.TencentCaptchaCloudSecretID = settings[SettingKeyTencentCaptchaCloudSecretID]
+	result.TencentCaptchaCloudSecretKey = settings[SettingKeyTencentCaptchaCloudSecretKey]
+	result.AliyunCaptchaAccessKeySecret = settings[SettingKeyAliyunCaptchaAccessKeySecret]
 
 	// LinuxDo Connect 设置：
 	// - 兼容 config.yaml/env（避免老部署因为未迁移到数据库设置而被意外关闭）
@@ -839,15 +802,17 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	// Channel monitor feature (default: enabled, 60s)
 	result.ChannelMonitorEnabled = !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled])
+	result.ChannelMonitorMode = normalizeChannelMonitorMode(settings[SettingKeyChannelMonitorMode])
 	result.ChannelMonitorDefaultIntervalSeconds = parseChannelMonitorInterval(
 		settings[SettingKeyChannelMonitorDefaultIntervalSeconds],
 	)
-	result.ChannelMonitorStatusBanner = normalizeChannelMonitorStatusBanner(
-		settings[SettingKeyChannelMonitorStatusBanner],
-	)
+	// 默认隐藏吞吐（迁移 206 的隐私默认）：未配置时必须与 setting_public.go 的
+	// 公开读取路径给出同一个值，否则管理端看到“未隐藏”而用户端实际已隐藏。
+	result.ChannelMonitorHideThroughput = !isFalseSettingValue(settings[SettingKeyChannelMonitorHideThroughput])
 	// 配额展示默认关闭且 fail-closed：仅字面 "true" 视为开启
 	// （与 setting_public.go 公开读取路径保持一致）。
 	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
+	result.ChannelMonitorHideUserRanking = isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking])
 
 	// Grok default mapping policy
 	result.GrokDefaultTextModel = strings.TrimSpace(settings[SettingKeyGrokDefaultTextModel])
@@ -857,58 +822,29 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Default true (missing/empty → enabled) so Claude/Codex→Grok mapping keeps working.
 	// Operators can set false to disable silent cross-client rewrite.
 	result.GrokCrossClientModelMapEnabled = !isFalseSettingValue(settings[SettingKeyGrokCrossClientModelMapEnabled])
+	result.GrokDefaultBaseURLMode = normalizeGrokDefaultBaseURLMode(settings[SettingKeyGrokDefaultBaseURLMode])
 
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
 
+	// Subscription feature (default: enabled; only an explicit false disables)
+	result.SubscriptionEnabled = !isFalseSettingValue(settings[SettingKeySubscriptionEnabled])
+
+	// Model plaza feature (default: disabled; strict true)
+	result.ModelPlazaEnabled = settings[SettingKeyModelPlazaEnabled] == "true"
+	result.ModelPlazaRequireAuth = settings[SettingKeyModelPlazaRequireAuth] == "true"
+	result.ModelPlazaDescription = settings[SettingKeyModelPlazaDescription]
+	result.PluginManagementEnabled = settings[SettingKeyPluginManagementEnabled] == "true"
+
+	// Affiliate (邀请返利) feature (default: disabled; strict true)
+	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"
+
 	// 风控中心功能（默认关闭，严格 true 才启用）
 	result.RiskControlEnabled = settings[SettingKeyRiskControlEnabled] == "true"
-	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
-		Enabled:               settings[SettingKeySiteMessagesEnabled] == "true",
-		DailySendLimit:        parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
-		RetentionDays:         parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
-		DefaultRecipientEmail: settings[SettingKeySiteMessagesDefaultRecipientEmail],
-	})
-	result.SiteMessagesEnabled = siteMessageSettings.Enabled
-	result.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
-	result.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
-	result.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
-	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"
-	if rate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
-		result.AffiliateRebateRate = clampAffiliateRebateRate(rate)
-	} else {
-		result.AffiliateRebateRate = AffiliateRebateRateDefault
-	}
-	result.AffiliateRebateTiers = parseAffiliateRebateTiers(settings[SettingKeyAffiliateRebateTiers])
-	if hours, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeyAffiliateRebateFreezeHours])); err == nil && hours >= 0 {
-		if hours > AffiliateRebateFreezeHoursMax {
-			hours = AffiliateRebateFreezeHoursMax
-		}
-		result.AffiliateRebateFreezeHours = hours
-	} else {
-		result.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
-	}
-	if days, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeyAffiliateRebateDurationDays])); err == nil && days >= 0 {
-		if days > AffiliateRebateDurationDaysMax {
-			days = AffiliateRebateDurationDaysMax
-		}
-		result.AffiliateRebateDurationDays = days
-	} else {
-		result.AffiliateRebateDurationDays = AffiliateRebateDurationDaysDefault
-	}
-	if perInviteeCap, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebatePerInviteeCap], 64); err == nil && perInviteeCap >= 0 {
-		result.AffiliateRebatePerInviteeCap = perInviteeCap
-	}
-	result.AffiliateSignupBonusEnabled = settings[SettingKeyAffiliateSignupBonusEnabled] == "true"
-	result.AffiliateSignupBonusAmount = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusAmount], AffiliateSignupBonusAmountDefault)
-	result.AffiliateSignupBonusTotalCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusTotalCap], AffiliateSignupBonusTotalCapDefault)
-	result.AffiliateSignupBonusDailyCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusDailyCap], AffiliateSignupBonusDailyCapDefault)
-	result.BalanceUsageGateEnabled = settings[SettingKeyBalanceUsageGateEnabled] == "true"
-	result.BalanceUsageGateMinBalance = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault)
-	result.BalanceUsageGateMinRecharge = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault)
 
 	// cyber 会话屏蔽（默认关闭，TTL 默认 3600s）
 	result.CyberSessionBlockEnabled = settings[SettingKeyCyberSessionBlockEnabled] == "true"
+	result.CyberPolicyUserAllowlist = settings[SettingKeyCyberPolicyUserAllowlist]
 	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeyCyberSessionBlockTTLSeconds])); err == nil && v > 0 {
 		result.CyberSessionBlockTTLSeconds = v
 	} else {
@@ -924,6 +860,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	// Gateway forwarding behavior (defaults: fingerprint=true, metadata_passthrough=false,
 	// cch_signing=false, claude_oauth_system_prompt_injection=true)
+	result.OpenAITTFTMode = normalizeOpenAITTFTMode(settings[SettingKeyOpenAITTFTMode])
 	if v, ok := settings[SettingKeyEnableFingerprintUnification]; ok && v != "" {
 		result.EnableFingerprintUnification = v == "true"
 	} else {
@@ -951,6 +888,22 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	result.AntigravityUserAgentVersion = antigravity.NormalizeUserAgentVersion(settings[SettingKeyAntigravityUserAgentVersion])
 	result.OpenAICodexUserAgent = strings.TrimSpace(settings[SettingKeyOpenAICodexUserAgent])
+	result.OpenAICodexClientVersion = NormalizeCodexClientVersion(settings[SettingKeyOpenAICodexClientVersion])
+	result.OpenAICodexClientVersionSynced = NormalizeCodexClientVersion(settings[SettingKeyOpenAICodexClientVersionSynced])
+	// 自动同步默认开启：缺失/空值一律视为开启，与 enable_client_dateline_normalization 同一惯例。
+	if v, ok := settings[SettingKeyOpenAICodexVersionAutoSyncEnabled]; ok && v != "" {
+		result.OpenAICodexVersionAutoSyncEnabled = v == "true"
+	} else {
+		result.OpenAICodexVersionAutoSyncEnabled = true
+	}
+	result.ClaudeCodeClientVersion = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersion])
+	result.ClaudeCodeClientVersionSynced = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersionSynced])
+	// 自动同步默认开启：缺失/空值一律视为开启，与 openai_codex_version_auto_sync_enabled 同一惯例。
+	if v, ok := settings[SettingKeyClaudeCodeVersionAutoSyncEnabled]; ok && v != "" {
+		result.ClaudeCodeVersionAutoSyncEnabled = v == "true"
+	} else {
+		result.ClaudeCodeVersionAutoSyncEnabled = true
+	}
 	// codex_cli_only 加固
 	result.MinCodexVersion = settings[SettingKeyMinCodexVersion]
 	result.MaxCodexVersion = settings[SettingKeyMaxCodexVersion]
@@ -975,7 +928,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.PaymentVisibleMethodAlipayEnabled = settings[SettingPaymentVisibleMethodAlipayEnabled] == "true"
 	result.PaymentVisibleMethodWxpayEnabled = settings[SettingPaymentVisibleMethodWxpayEnabled] == "true"
 	result.OpenAILowUpstreamRatePriorityEnabled = settings[SettingKeyOpenAILowUpstreamRatePriorityEnabled] == "true"
-	result.OpenAIOAuthSchedulingRateMultiplier = parseOpenAIOAuthSchedulingRateMultiplier(settings[SettingKeyOpenAIOAuthSchedulingRateMultiplier])
+	result.OpenAIOAuthSchedulingRateMultiplier = parseOpenAIOAuthSchedulingRateMultiplier(settings)
 	result.OpenAIAdvancedSchedulerEnabled = settings[openAIAdvancedSchedulerSettingKey] == "true"
 	result.OpenAIAdvancedSchedulerStickyWeightedEnabled = settings[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled] == "true"
 	result.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled = settings[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled] == "true"
@@ -1029,6 +982,14 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 			result.DefaultPlatformQuotas = parsed
 		}
 	}
+	result.AccountSchedulingThresholds = defaultAccountSchedulingThresholds()
+	if raw := strings.TrimSpace(settings[SettingKeyAccountSchedulingThresholds]); raw != "" {
+		if thresholds, err := parseAccountSchedulingThresholdsSetting(raw); err != nil {
+			slog.Warn("[Setting] parseSettings: unmarshal account_scheduling_thresholds failed", "error", err)
+		} else {
+			result.AccountSchedulingThresholds = thresholds
+		}
+	}
 
 	result.AllowUserViewErrorRequests = settings[SettingKeyAllowUserViewErrorRequests] == "true" // default false
 
@@ -1041,6 +1002,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	return result
 }
 
+func normalizeOpenAITTFTMode(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), OpenAITTFTModeVisible) {
+		return OpenAITTFTModeVisible
+	}
+	return OpenAITTFTModeSemantic
+}
+
 func clampAffiliateRebateRate(value float64) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return AffiliateRebateRateDefault
@@ -1050,22 +1018,6 @@ func clampAffiliateRebateRate(value float64) float64 {
 	}
 	if value > AffiliateRebateRateMax {
 		return AffiliateRebateRateMax
-	}
-	return value
-}
-
-func parseNonNegativeFloat(raw string, fallback float64) float64 {
-	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-		return fallback
-	}
-	return value
-}
-
-func parseIntSetting(raw string, fallback int) int {
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil {
-		return fallback
 	}
 	return value
 }
@@ -1141,7 +1093,7 @@ func formatOpenAIAdvancedSchedulerFloat(value float64) string {
 }
 
 func (s *SettingService) normalizeOpenAIAdvancedSchedulerOverrides(settings *SystemSettings) error {
-	if rate := settings.OpenAIOAuthSchedulingRateMultiplier; rate < 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+	if rate := settings.OpenAIOAuthSchedulingRateMultiplier; rate != nil && (*rate < 0 || math.IsNaN(*rate) || math.IsInf(*rate, 0)) {
 		return infraerrors.BadRequest("INVALID_OPENAI_OAUTH_SCHEDULING_RATE_MULTIPLIER", "OpenAI OAuth scheduling rate multiplier must be a finite non-negative number")
 	}
 
@@ -1193,12 +1145,18 @@ func (s *SettingService) normalizeOpenAIAdvancedSchedulerOverrides(settings *Sys
 	return nil
 }
 
-func parseOpenAIOAuthSchedulingRateMultiplier(raw string) float64 {
+func parseOpenAIOAuthSchedulingRateMultiplier(settings map[string]string) *float64 {
+	raw, exists := settings[SettingKeyOpenAIOAuthSchedulingRateMultiplier]
+	if !exists {
+		// Preserve the legacy default until an administrator explicitly clears it.
+		value := defaultOpenAIOAuthSchedulingRateMultiplier
+		return &value
+	}
 	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-		return defaultOpenAIOAuthSchedulingRateMultiplier
+		return nil
 	}
-	return value
+	return &value
 }
 
 // resolveOpenAIAdvancedSchedulerWeight 返回覆盖值（已归一化的非空字符串），空则回退默认值。
@@ -1396,3 +1354,92 @@ func normalizeTablePreferences(defaultPageSize int, options []int) (int, []int) 
 
 	return defaultPageSize, normalizedOptions
 }
+
+func normalizeFrontendLocaleCode(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "en", "en-us", "en-gb":
+		return "en", true
+	case "zh", "zh-cn", "zh-hans", "zh-sg":
+		return "zh", true
+	case "zh-hant", "zh-tw", "zh-hk", "zh-mo":
+		return "zh-Hant", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeFrontendLocales(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			return nil, infraerrors.BadRequest("INVALID_FRONTEND_LOCALE", "frontend locale must be one of en, zh, zh-Hant")
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	return result, nil
+}
+
+func parseFrontendLocales(raw string) []string {
+	var values []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &values); err != nil {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	return result
+}
+
+func parseIntSetting(raw string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func parseSubscriptionQuotaResetConfig(settings map[string]string) SubscriptionQuotaResetConfig {
+	cfg := SubscriptionQuotaResetConfig{}
+	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetUTCOffsetMinutes])); err == nil {
+		cfg.UTCOffsetMinutes = v
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetHour])); err == nil {
+		cfg.ResetHour = v
+	}
+	return NormalizeSubscriptionQuotaResetConfig(cfg)
+}
+
+func parseNonNegativeFloat(raw string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
+var defaultFrontendLocales = []string{"en", "zh", "zh-Hant"}

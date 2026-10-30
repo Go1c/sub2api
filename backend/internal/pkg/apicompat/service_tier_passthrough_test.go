@@ -164,12 +164,3 @@ func TestChatCompletionsChunkToResponsesEvents_NoTierStaysClean(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "service_tier")
 }
-
-func findEvent(events []ResponsesStreamEvent, eventType string) *ResponsesStreamEvent {
-	for i := range events {
-		if events[i].Type == eventType {
-			return &events[i]
-		}
-	}
-	return nil
-}

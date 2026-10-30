@@ -128,6 +128,28 @@ func TestApplyCodexOAuthTransform_ToolContinuationNormalizesToolReferenceIDsOnly
 	require.Equal(t, "fc_1", second["call_id"])
 }
 
+func TestApplyCodexOAuthTransform_NormalizesIsolatedLegacyReferenceAcrossTurns(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.2",
+		"input": []any{
+			map[string]any{"type": "item_reference", "id": "call_previous_turn"},
+			map[string]any{"type": "item_reference", "id": "fc_remote_item"},
+			map[string]any{"type": "item_reference", "id": "vendor_remote_item"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, false, false)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 3)
+	for i, expectedID := range []string{"fc_previous_turn", "fc_remote_item", "vendor_remote_item"} {
+		item, itemOK := input[i].(map[string]any)
+		require.True(t, itemOK)
+		require.Equal(t, expectedID, item["id"])
+	}
+}
+
 func TestApplyCodexOAuthTransform_BoundsLongCallIDsAndPreservesPairing(t *testing.T) {
 	suffix := strings.Repeat("z", 62)
 	for _, tc := range []struct {
@@ -168,8 +190,48 @@ func TestApplyCodexOAuthTransform_BoundsLongCallIDsAndPreservesPairing(t *testin
 	}
 }
 
-func TestApplyCodexOAuthTransform_PreservesLongCallIDsWhenRequested(t *testing.T) {
-	callID := "call-" + strings.Repeat("x", 70)
+func TestApplyCodexOAuthTransform_PreservesCallIDsWithinLimitWhenRequested(t *testing.T) {
+	// preserve 模式下 ≤64 字符的 id 必须原样透传（含 64 字符等长边界），
+	// 不做任何前缀改写或压缩。
+	for _, tc := range []struct {
+		name   string
+		callID string
+	}{
+		{name: "anthropic toolu id", callID: "toolu_01ABCdefGHIjklMNOpqrsTUV"},
+		{name: "boundary 64 chars", callID: "toolu_" + strings.Repeat("x", codexCallIDMaxLength-len("toolu_"))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.LessOrEqual(t, len(tc.callID), codexCallIDMaxLength)
+			reqBody := map[string]any{
+				"model": "gpt-5.2",
+				"input": []any{
+					map[string]any{"type": "function_call", "call_id": tc.callID, "name": "shell"},
+					map[string]any{"type": "function_call_output", "call_id": tc.callID, "output": "done"},
+				},
+			}
+
+			applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{
+				PreserveToolCallIDs: true,
+			})
+
+			input, ok := reqBody["input"].([]any)
+			require.True(t, ok)
+			call, ok := input[0].(map[string]any)
+			require.True(t, ok)
+			output, ok := input[1].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, tc.callID, call["call_id"])
+			require.Equal(t, tc.callID, output["call_id"])
+		})
+	}
+}
+
+func TestApplyCodexOAuthTransform_CompactsOverlongCallIDsWhenPreserveRequested(t *testing.T) {
+	// preserve 模式下超过 64 字符的 id 若原样透传，上游必然 400
+	// （"Invalid 'input[N].call_id': string too long"），需退回确定性压缩；
+	// function_call 与 function_call_output 两侧压缩结果一致，配对保持。
+	callID := "srvtoolu_" + strings.Repeat("x", 69) // 78 字符，对应生产环境真实报错长度
+	require.Len(t, callID, 78)
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
 		"input": []any{
@@ -188,8 +250,13 @@ func TestApplyCodexOAuthTransform_PreservesLongCallIDsWhenRequested(t *testing.T
 	require.True(t, ok)
 	output, ok := input[1].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, callID, call["call_id"])
-	require.Equal(t, callID, output["call_id"])
+
+	compacted, ok := call["call_id"].(string)
+	require.True(t, ok)
+	require.Len(t, compacted, codexCallIDMaxLength)
+	require.True(t, strings.HasPrefix(compacted, codexCallIDPrefix))
+	require.Equal(t, compacted, output["call_id"], "两侧压缩结果必须一致以保持配对")
+	require.Equal(t, normalizeCodexCallID(callID), compacted, "压缩必须是确定性的")
 }
 
 func TestApplyCodexOAuthTransform_ToolSearchOutputPreservesCallID(t *testing.T) {
@@ -209,7 +276,7 @@ func TestApplyCodexOAuthTransform_ToolSearchOutputPreservesCallID(t *testing.T) 
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "tool_search_output", first["type"])
-	require.Equal(t, "fc_1", first["call_id"])
+	require.Equal(t, "tsc_1", first["call_id"])
 }
 
 func TestApplyCodexOAuthTransform_CustomAndMCPToolOutputsPreserveCallID(t *testing.T) {
@@ -229,11 +296,103 @@ func TestApplyCodexOAuthTransform_CustomAndMCPToolOutputsPreserveCallID(t *testi
 
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "fc_custom", first["call_id"])
+	require.Equal(t, "ctc_custom", first["call_id"])
 
 	second, ok := input[1].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "fc_mcp", second["call_id"])
+}
+
+func TestApplyCodexOAuthTransform_NormalizesNativeToolCallPairsByType(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.6-sol",
+		"input": []any{
+			map[string]any{"type": "custom_tool_call", "id": "fc_custom", "call_id": "call_custom", "name": "apply_patch"},
+			map[string]any{"type": "custom_tool_call_output", "call_id": "fc_custom", "output": "done"},
+			map[string]any{"type": "tool_search_call", "id": "fc_search", "call_id": "call_search"},
+			map[string]any{"type": "tool_search_output", "call_id": "fc_search", "output": "result"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, false, false)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 4)
+	custom, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	customOutput, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	search, ok := input[2].(map[string]any)
+	require.True(t, ok)
+	searchOutput, ok := input[3].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, custom, "id", "the invalid replay item id must be removed, not fabricated")
+	require.Equal(t, "ctc_custom", custom["call_id"])
+	require.Equal(t, custom["call_id"], customOutput["call_id"])
+	require.NotContains(t, search, "id", "the invalid replay item id must be removed, not fabricated")
+	require.Equal(t, "tsc_search", search["call_id"])
+	require.Equal(t, search["call_id"], searchOutput["call_id"])
+}
+
+func TestApplyCodexOAuthTransform_PreservesNativeCallIDsWhenRequested(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.6-sol",
+		"input": []any{
+			map[string]any{"type": "custom_tool_call", "id": "ctc_custom", "call_id": "call_custom", "name": "apply_patch"},
+			map[string]any{"type": "custom_tool_call_output", "call_id": "call_custom", "output": "done"},
+			map[string]any{"type": "tool_search_call", "id": "tsc_search", "call_id": "call_search"},
+			map[string]any{"type": "tool_search_output", "call_id": "call_search", "output": "result"},
+		},
+	}
+
+	applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{PreserveToolCallIDs: true})
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 4)
+	first, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	second, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	third, ok := input[2].(map[string]any)
+	require.True(t, ok)
+	fourth, ok := input[3].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "ctc_custom", first["id"])
+	require.Equal(t, "call_custom", first["call_id"])
+	require.Equal(t, "call_custom", second["call_id"])
+	require.Equal(t, "tsc_search", third["id"])
+	require.Equal(t, "call_search", third["call_id"])
+	require.Equal(t, "call_search", fourth["call_id"])
+}
+
+func TestApplyCodexOAuthTransform_BoundsEquivalentNativeToolCallIDsWithPairing(t *testing.T) {
+	suffix := strings.Repeat("x", 70)
+	reqBody := map[string]any{
+		"model": "gpt-5.6-sol",
+		"input": []any{
+			map[string]any{"type": "custom_tool_call", "call_id": "call_" + suffix, "name": "apply_patch"},
+			map[string]any{"type": "custom_tool_call_output", "call_id": "fc_" + suffix, "output": "done"},
+		},
+	}
+
+	applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{PreserveToolCallIDs: true})
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 2)
+	first, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	second, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	callID, ok := first["call_id"].(string)
+	require.True(t, ok)
+	outputCallID, ok := second["call_id"].(string)
+	require.True(t, ok)
+	require.LessOrEqual(t, len(callID), codexCallIDMaxLength)
+	require.True(t, strings.HasPrefix(callID, "ctc_"))
+	require.Equal(t, callID, outputCallID)
 }
 
 func TestApplyCodexOAuthTransform_ImageAndWebSearchCallsDoNotGainCallID(t *testing.T) {
@@ -492,7 +651,7 @@ func TestApplyCodexOAuthTransform_PreservesFunctionCallInputName(t *testing.T) {
 	item, ok := input[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "shell", item["name"])
-	require.Equal(t, "fc_1", item["call_id"])
+	require.Equal(t, "ctc_1", item["call_id"])
 }
 
 func TestApplyCodexOAuthTransform_PreservesMCPToolCallIDAndName(t *testing.T) {
@@ -1282,8 +1441,7 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 		"gpt5.5-pro":                "gpt-5.5-pro",
 		"openai/gpt5.5-pro":         "gpt-5.5-pro",
 		"gpt-5.5-pro-high":          "gpt-5.5-pro",
-		"codex-auto-review":         "gpt-5.6-luna",
-		"gpt-5.6-luna":              "gpt-5.6-luna",
+		"codex-auto-review":         "codex-auto-review",
 		"gpt5.4":                    "gpt-5.4",
 		"gpt-5.4-high":              "gpt-5.4",
 		"gpt-5.4-chat-latest":       "gpt-5.4",
@@ -1305,11 +1463,6 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt 5.3 codex":             "gpt-5.3-codex",
-		"gpt-6-astra":               "gpt-6-astra",
-		"gpt-6":                     "gpt-6-astra",
-		"gpt6-astra":                "gpt-6-astra",
-		"openai/gpt-6-astra":        "gpt-6-astra",
-		"openai/gpt-6":              "gpt-6-astra",
 	}
 
 	for input, expected := range cases {
@@ -1861,6 +2014,7 @@ func TestFilterCodexInput_PreservesReasoningStripsID(t *testing.T) {
 			map[string]any{
 				"type":              "reasoning",
 				"id":                "rs_0672f12450da0b9c0169f07220a6c08198b68c2455ced99344",
+				"call_id":           "remove_non_pair_call_id",
 				"encrypted_content": "gAAAAAB-enc-payload",
 				"summary":           []any{},
 			},
@@ -1883,6 +2037,8 @@ func TestFilterCodexInput_PreservesReasoningStripsID(t *testing.T) {
 			// PreserveReferences=true (id lookup, not the item, triggers the 404).
 			_, hasID := item["id"]
 			require.False(t, hasID)
+			_, hasCallID := item["call_id"]
+			require.False(t, hasCallID)
 			// summary passed through untouched.
 			summary, ok := item["summary"].([]any)
 			require.True(t, ok)

@@ -171,10 +171,6 @@ func (s *userRepoStub) UpdateBalance(ctx context.Context, id int64, amount float
 	panic("unexpected UpdateBalance call")
 }
 
-func (s *userRepoStub) UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error {
-	panic("unexpected UpdateBalanceNoStat call")
-}
-
 func (s *userRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
 	panic("unexpected DeductBalance call")
 }
@@ -193,7 +189,6 @@ func (s *userRepoStub) UpdateConcurrency(ctx context.Context, id int64, amount i
 
 func (s *userRepoStub) BatchSetConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
 func (s *userRepoStub) BatchAddConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
-
 func (s *userRepoStub) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) {
 	return 0, nil
 }
@@ -305,10 +300,6 @@ func (s *groupRepoStub) ExistsByName(ctx context.Context, name string) (bool, er
 	panic("unexpected ExistsByName call")
 }
 
-func (s *groupRepoStub) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
-	return 0, nil
-}
-
 func (s *groupRepoStub) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {
 	panic("unexpected GetAccountCount call")
 }
@@ -406,10 +397,18 @@ func (s *proxyRepoStub) CountAccountsByProxyID(ctx context.Context, proxyID int6
 func (s *proxyRepoStub) ListAccountSummariesByProxyID(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error) {
 	panic("unexpected ListAccountSummariesByProxyID call")
 }
-func (s *proxyRepoStub) SweepExpiredProxies(context.Context, time.Time) (int64, error) { return 0, nil }
-func (s *proxyRepoStub) ListAllForFallback(context.Context) ([]Proxy, error)           { return nil, nil }
-func (s *proxyRepoStub) CountExpired(context.Context) (int64, error)                   { return 0, nil }
-func (s *proxyRepoStub) CountExpiringSoon(context.Context, time.Time) (int64, error)   { return 0, nil }
+func (s *proxyRepoStub) SweepExpiredProxies(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
+func (s *proxyRepoStub) ListAllForFallback(_ context.Context) ([]Proxy, error) {
+	return nil, nil
+}
+func (s *proxyRepoStub) CountExpired(_ context.Context) (int64, error) {
+	return 0, nil
+}
+func (s *proxyRepoStub) CountExpiringSoon(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 type redeemRepoStub struct {
 	deleteErrByID map[int64]error
@@ -812,4 +811,8 @@ func TestAdminService_BatchDeleteRedeemCodes_PartialFailures(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), deleted)
 	require.Equal(t, []int64{1, 2, 3}, repo.deletedIDs)
+}
+
+func (x *apiKeyRepoStub) GetByUserIDAndName(_ context.Context, _ int64, _ string) (*APIKey, error) {
+	return nil, nil
 }

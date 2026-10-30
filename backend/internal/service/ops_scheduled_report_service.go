@@ -287,12 +287,12 @@ func opsScheduledReportLocalizedEmailVariables(report *opsScheduledReport, now t
 		start = end.Add(-report.TimeRange)
 	}
 	variables := map[string]string{
-		"report_name":           opsScheduledReportLocalizedName(report, locale),
-		"report_type":           "",
-		"report_start_time":     start.Format(time.RFC3339),
-		"report_end_time":       end.Format(time.RFC3339),
-		"report_html":           "",
-		"report_detail_display": "block",
+		"report_name":            opsScheduledReportLocalizedName(report, locale),
+		"report_type":            "",
+		"report_start_time":      start.Format(time.RFC3339),
+		"report_end_time":        end.Format(time.RFC3339),
+		"report_html":            "",
+		"report_detail_display":  "block",
 		"report_summary_display": "none",
 	}
 	if report != nil {

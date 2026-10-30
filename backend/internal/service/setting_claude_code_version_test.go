@@ -46,9 +46,7 @@ func TestUpdateSettingsClaudeCodeVersionTakesEffectImmediately(t *testing.T) {
 	defer svc.refreshCachedSettings(&SystemSettings{})
 	require.Equal(t, "2.1.281", svc.GetClaudeCodeClientVersion(ctx))
 
-	settings := &SystemSettings{
-		
-	}
+	settings := &SystemSettings{}
 	require.NoError(t, svc.UpdateSettings(ctx, settings))
 	require.Equal(t, "2.1.280", svc.GetClaudeCodeClientVersion(ctx), "保存手动版本后应立即生效")
 	require.NotContains(t, repo.updates, SettingKeyClaudeCodeClientVersionSynced)

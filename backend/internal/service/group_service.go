@@ -21,7 +21,6 @@ type GroupRepository interface {
 	Update(ctx context.Context, group *Group) error
 	Delete(ctx context.Context, id int64) error
 	DeleteCascade(ctx context.Context, id int64) ([]int64, error)
-	DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error)
 
 	List(ctx context.Context, params pagination.PaginationParams) ([]Group, *pagination.PaginationResult, error)
 	ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, status, search string, isExclusive *bool) ([]Group, *pagination.PaginationResult, error)
@@ -30,9 +29,6 @@ type GroupRepository interface {
 
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	GetAccountCount(ctx context.Context, groupID int64) (total int64, active int64, err error)
-	// CountExhaustedFallbackReferers 返回将指定分组设为「账号耗尽兜底」目标的其它分组数量，
-	// 用于在配置时阻止形成兜底链（A -> 当前 -> C）。
-	CountExhaustedFallbackReferers(ctx context.Context, groupID int64) (int64, error)
 	DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error)
 	// GetAccountIDsByGroupIDs 获取多个分组的所有账号 ID（去重）
 	GetAccountIDsByGroupIDs(ctx context.Context, groupIDs []int64) ([]int64, error)
@@ -56,6 +52,12 @@ type GroupDuplicateRepository interface {
 type AdminGroupRepository interface {
 	GroupRepository
 	GroupDuplicateRepository
+	EmptyGroupDeleteRepository
+}
+
+// EmptyGroupDeleteRepository provides the guarded cascade used by simple mode.
+type EmptyGroupDeleteRepository interface {
+	DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error)
 }
 
 // GroupSortOrderUpdate 分组排序更新
@@ -71,6 +73,7 @@ type CreateGroupRequest struct {
 	RateMultiplier       float64  `json:"rate_multiplier"`
 	IsExclusive          bool     `json:"is_exclusive"`
 	AllowImageGeneration bool     `json:"allow_image_generation"`
+	ImageCountBilling    bool     `json:"image_count_billing"`
 	ImageRateIndependent bool     `json:"image_rate_independent"`
 	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
 }
@@ -83,6 +86,7 @@ type UpdateGroupRequest struct {
 	IsExclusive          *bool    `json:"is_exclusive"`
 	Status               *string  `json:"status"`
 	AllowImageGeneration *bool    `json:"allow_image_generation"`
+	ImageCountBilling    *bool    `json:"image_count_billing"`
 	ImageRateIndependent *bool    `json:"image_rate_independent"`
 	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
 }
@@ -103,6 +107,11 @@ func NewGroupService(groupRepo GroupRepository, authCacheInvalidator APIKeyAuthC
 
 // Create 创建分组
 func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Group, error) {
+	// 该入口固定创建 Anthropic 分组，而按张计费只支持 composite / openai 平台，
+	// 必须拒绝，避免写入永远不生效的开关。
+	if req.ImageCountBilling {
+		return nil, fmt.Errorf("image_count_billing is only supported for composite or openai groups with image generation enabled")
+	}
 	imageRateMultiplier := 1.0
 	if req.ImageRateMultiplier != nil {
 		if *req.ImageRateMultiplier < 0 {
@@ -129,6 +138,7 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 		Status:               StatusActive,
 		SubscriptionType:     SubscriptionTypeStandard,
 		AllowImageGeneration: req.AllowImageGeneration,
+		ImageCountBilling:    req.ImageCountBilling,
 		ImageRateIndependent: req.ImageRateIndependent,
 		ImageRateMultiplier:  imageRateMultiplier,
 	}
@@ -204,6 +214,16 @@ func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequ
 	}
 	if req.AllowImageGeneration != nil {
 		group.AllowImageGeneration = *req.AllowImageGeneration
+	}
+	if req.ImageCountBilling != nil {
+		if *req.ImageCountBilling &&
+			(!group.AllowImageGeneration || (group.Platform != PlatformComposite && group.Platform != PlatformOpenAI)) {
+			return nil, fmt.Errorf("image_count_billing requires image generation enabled on composite or openai groups")
+		}
+		group.ImageCountBilling = *req.ImageCountBilling
+	}
+	if !group.AllowImageGeneration || (group.Platform != PlatformComposite && group.Platform != PlatformOpenAI) {
+		group.ImageCountBilling = false
 	}
 	if req.ImageRateIndependent != nil {
 		group.ImageRateIndependent = *req.ImageRateIndependent

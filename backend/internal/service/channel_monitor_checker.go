@@ -17,25 +17,25 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var monitorIQHTTPClient = newSSRFSafeHTTPClient(monitorIQRequestTimeout)
+
 // monitorHTTPClient 共享一个 http.Client，避免每次检测重建 transport。
 // 自定义 Transport 在 dial 时强制再次校验 IP，防止 DNS rebinding 绕过 validateEndpoint。
-var monitorHTTPClient = newSSRFSafeHTTPClient(monitorRequestTimeout, monitorResponseHeaderTimeout)
-
-var monitorIQHTTPClient = newSSRFSafeHTTPClient(monitorIQRequestTimeout, monitorIQRequestTimeout)
+var monitorHTTPClient = newSSRFSafeHTTPClient(monitorRequestTimeout)
 
 // monitorPingHTTPClient 用于 endpoint origin 的 HEAD ping，超时更短。
-var monitorPingHTTPClient = newSSRFSafeHTTPClient(monitorPingTimeout, monitorResponseHeaderTimeout)
+var monitorPingHTTPClient = newSSRFSafeHTTPClient(monitorPingTimeout)
 
 // newSSRFSafeHTTPClient 返回一个使用 safeDialContext 的 http.Client。
 // 仅供监控模块对外发起请求使用——所有目标都应是公网 endpoint。
-func newSSRFSafeHTTPClient(timeout, headerTimeout time.Duration) *http.Client {
+func newSSRFSafeHTTPClient(timeout time.Duration) *http.Client {
 	tr := &http.Transport{
 		DialContext:           safeDialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       monitorIdleConnTimeout,
 		TLSHandshakeTimeout:   monitorTLSHandshakeTimeout,
-		ResponseHeaderTimeout: headerTimeout,
+		ResponseHeaderTimeout: monitorResponseHeaderTimeout,
 	}
 	return &http.Client{Timeout: timeout, Transport: servertiming.WrapRoundTripper(tr)}
 }
@@ -43,6 +43,7 @@ func newSSRFSafeHTTPClient(timeout, headerTimeout time.Duration) *http.Client {
 // CheckOptions 承载一次检测的自定义入参。
 // 所有字段都是可选（零值即等价于"用默认行为"）。
 type CheckOptions struct {
+	httpClient *http.Client
 	// APIMode 仅对 OpenAI provider 生效；空串等同 chat_completions。
 	APIMode string
 	// ExtraHeaders 用户自定义 HTTP 头（merge 到 adapter 默认 headers，用户优先）。
@@ -52,14 +53,11 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
-	// IQPrompt 非空时由 runIQCheckForModel 发糖果题；算术探活不得带这个字段。
 	IQPrompt     string
 	IQAnswer     string
 	IQFuzzyMatch bool
-	// MaxTokens > 0 时覆盖 adapter 默认 max_tokens / max_output_tokens。
 	MaxTokens int
-	// Only the IQ request selects the longer-lived client.
-	httpClient *http.Client
+
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -88,12 +86,17 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		return res
 	}
 	if statusCode < 200 || statusCode >= 300 {
+		// 错误路径：用 rawBody 而非 respText（gjson textPath 抽取在错误响应里通常为空，
+		// 会丢掉真正的上游错误信息，例如 `{"error":{"message":"No available accounts ..."}}`）。
 		res.Status = MonitorStatusError
 		bodySnippet := truncateForErrorBody(rawBody)
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("upstream HTTP %d: %s", statusCode, bodySnippet)))
 		return res
 	}
 
+	// Replace 模式：跳过 challenge 校验（用户 body 是静态的，challenge 没法嵌入）。
+	// 改用「HTTP 2xx + 响应文本（adapter.textPath 抽取）非空」作为 operational 判定。
+	// 响应文本为空则降级为 failed（视为上游回了 200 但没实际内容）。
 	if mode == MonitorBodyOverrideModeReplace {
 		if strings.TrimSpace(respText) == "" {
 			res.Status = MonitorStatusFailed
@@ -110,42 +113,6 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 	}
 
 	return finalizeOperationalOrDegraded(res, latency, latencyMs)
-}
-
-func runIQCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *CheckResult {
-	res := &CheckResult{
-		Model:     model,
-		Status:    MonitorStatusFailed,
-		CheckedAt: time.Now(),
-	}
-	prompt := defaultIQQuestion("")
-	expected := defaultIQAnswer("")
-	fuzzy := true
-	if opts != nil {
-		prompt = defaultIQQuestion(opts.IQPrompt)
-		expected = defaultIQAnswer(opts.IQAnswer)
-		fuzzy = opts.IQFuzzyMatch
-	}
-	opts = cloneCheckOptions(opts)
-	opts.httpClient = monitorIQHTTPClient
-
-	start := time.Now()
-	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, prompt, opts)
-	latency := time.Since(start)
-	latencyMs := int(latency / time.Millisecond)
-	res.LatencyMs = &latencyMs
-
-	iqStatus, message := classifyIQOutcome(iqClassifyInput{
-		err:        err,
-		statusCode: statusCode,
-		respText:   respText,
-		rawBody:    rawBody,
-		expected:   expected,
-		fuzzy:      fuzzy,
-	})
-	res.IqStatus = iqStatus
-	res.Message = message
-	return res
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
@@ -211,6 +178,12 @@ type providerAdapter struct {
 var providerAdapters = map[string]providerAdapter{
 	MonitorProviderOpenAI: providerOpenAIChatAdapter,
 	MonitorProviderGrok:   providerGrokChatAdapter,
+	// 国产 3 家（配额模式引入）：均为 OpenAI 兼容 Chat Completions，
+	// 仅智谱路径前缀不同（/api/paas/v4/chat/completions）。
+	MonitorProviderKimi:     providerKimiChatAdapter,
+	MonitorProviderZhipu:    providerZhipuChatAdapter,
+	MonitorProviderDeepseek: providerDeepseekChatAdapter,
+	MonitorProviderMiniMax:  providerMiniMaxChatAdapter,
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
 		buildBody: func(model, prompt string) ([]byte, error) {
@@ -252,6 +225,18 @@ var providerOpenAIChatAdapter = newOpenAICompatibleChatAdapter(providerOpenAIPat
 
 //nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
 var providerGrokChatAdapter = newOpenAICompatibleChatAdapter(providerGrokPath)
+
+//nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
+var providerKimiChatAdapter = newOpenAICompatibleChatAdapter(providerOpenAIPath)
+
+//nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
+var providerZhipuChatAdapter = newOpenAICompatibleChatAdapter(providerZhipuPath)
+
+//nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
+var providerDeepseekChatAdapter = newOpenAICompatibleChatAdapter(providerOpenAIPath)
+
+//nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
+var providerMiniMaxChatAdapter = newOpenAICompatibleChatAdapter(providerOpenAIPath)
 
 func newOpenAICompatibleChatAdapter(path string) providerAdapter {
 	return providerAdapter{
@@ -320,12 +305,8 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 		return "", "", 0, err
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
-	full := joinURL(endpoint, adapter.buildPath(model))
-	client := monitorHTTPClient
-	if opts != nil && opts.httpClient != nil {
-		client = opts.httpClient
-	}
-	respBytes, status, err := postRawJSON(ctx, client, full, body, headers)
+	full := joinURL(endpoint, monitorRequestPath(provider, endpoint, adapter, model))
+	respBytes, status, err := postRawJSON(ctx, full, body, headers)
 	if err != nil {
 		return "", "", status, err
 	}
@@ -453,7 +434,7 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		return nil, fmt.Errorf("marshal default body: %w", err)
 	}
 	if mode != MonitorBodyOverrideModeMerge || opts == nil || len(opts.BodyOverride) == 0 {
-		return applyMaxTokensOverride(defaultBody, provider, apiMode, opts)
+		return defaultBody, nil
 	}
 
 	var defaultMap map[string]any
@@ -471,34 +452,7 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged body: %w", err)
 	}
-	return applyMaxTokensOverride(merged, provider, apiMode, opts)
-}
-
-func applyMaxTokensOverride(body []byte, provider, apiMode string, opts *CheckOptions) ([]byte, error) {
-	if opts == nil || opts.MaxTokens <= 0 {
-		return body, nil
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("unmarshal body for max_tokens: %w", err)
-	}
-	if provider == MonitorProviderGemini {
-		cfg, _ := payload["generationConfig"].(map[string]any)
-		if cfg == nil {
-			cfg = map[string]any{}
-		}
-		cfg["maxOutputTokens"] = opts.MaxTokens
-		payload["generationConfig"] = cfg
-	} else if provider == MonitorProviderOpenAI && defaultAPIMode(apiMode) == MonitorAPIModeResponses {
-		payload["max_output_tokens"] = opts.MaxTokens
-	} else {
-		payload["max_tokens"] = opts.MaxTokens
-	}
-	out, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal body with max_tokens: %w", err)
-	}
-	return out, nil
+	return merged, nil
 }
 
 // bodyMergeKeyDenyList 在 merge 模式下，禁止用户覆盖这些 provider-specific 的关键字段。
@@ -584,12 +538,9 @@ func hasNonEmptyBodyValue(v any) bool {
 	}
 }
 
-
-
-
 // postRawJSON 发送 POST + 已序列化好的 JSON 字节，限制响应体大小，返回响应字节、HTTP status、错误。
 // adapter 自行 marshal 是为了精确控制字段顺序与类型，所以这里直接收 []byte 而不是 any。
-func postRawJSON(ctx context.Context, client *http.Client, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
+func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
@@ -600,7 +551,7 @@ func postRawJSON(ctx context.Context, client *http.Client, fullURL string, paylo
 		req.Header.Set(k, v)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := monitorHTTPClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("do request: %w", err)
 	}
@@ -702,7 +653,7 @@ var monitorAPIKeyPatterns = []struct {
 // sanitizeErrorMessage 擦除错误/响应文本中可能泄露的 API key。
 // 处理两类来源：
 //  1. URL query 中的 ?key= / ?api_key= 等（Go *url.Error 会回填完整 URL）
-//  2. 上游 HTTP body 文本里直接出现的 sk-* / xai-* / AIza* / JWT 等密钥碎片
+//  2. 上游 HTTP body 文本里直接出现的 sk-* / xai-* / AIza* / AQ.* / JWT 等密钥碎片
 //
 // 注意：与 gemini_messages_compat_service.go 的 sanitizeUpstreamErrorMessage 关注点类似但参数集更广，
 // 监控模块独立维护，避免互相耦合。
@@ -744,4 +695,67 @@ func truncateForErrorBody(body string) string {
 		cutoff = 0
 	}
 	return body[:cutoff] + ellipsis
+}
+
+func runIQCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *CheckResult {
+	res := &CheckResult{
+		Model:     model,
+		Status:    MonitorStatusFailed,
+		CheckedAt: time.Now(),
+	}
+	prompt := defaultIQQuestion("")
+	expected := defaultIQAnswer("")
+	fuzzy := true
+	if opts != nil {
+		prompt = defaultIQQuestion(opts.IQPrompt)
+		expected = defaultIQAnswer(opts.IQAnswer)
+		fuzzy = opts.IQFuzzyMatch
+	}
+	opts = cloneCheckOptions(opts)
+	opts.httpClient = monitorIQHTTPClient
+
+	start := time.Now()
+	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, prompt, opts)
+	latency := time.Since(start)
+	latencyMs := int(latency / time.Millisecond)
+	res.LatencyMs = &latencyMs
+
+	iqStatus, message := classifyIQOutcome(iqClassifyInput{
+		err:        err,
+		statusCode: statusCode,
+		respText:   respText,
+		rawBody:    rawBody,
+		expected:   expected,
+		fuzzy:      fuzzy,
+	})
+	res.IqStatus = iqStatus
+	res.Message = message
+	return res
+}
+
+func applyMaxTokensOverride(body []byte, provider, apiMode string, opts *CheckOptions) ([]byte, error) {
+	if opts == nil || opts.MaxTokens <= 0 {
+		return body, nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal body for max_tokens: %w", err)
+	}
+	if provider == MonitorProviderGemini {
+		cfg, _ := payload["generationConfig"].(map[string]any)
+		if cfg == nil {
+			cfg = map[string]any{}
+		}
+		cfg["maxOutputTokens"] = opts.MaxTokens
+		payload["generationConfig"] = cfg
+	} else if provider == MonitorProviderOpenAI && defaultAPIMode(apiMode) == MonitorAPIModeResponses {
+		payload["max_output_tokens"] = opts.MaxTokens
+	} else {
+		payload["max_tokens"] = opts.MaxTokens
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body with max_tokens: %w", err)
+	}
+	return out, nil
 }

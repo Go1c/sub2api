@@ -88,26 +88,26 @@ type AccountStatsPricingRule struct {
 
 // ChannelModelPricing 渠道模型定价条目
 type ChannelModelPricing struct {
-	ID               int64
-	ChannelID        int64
-	Platform         string            // 所属平台（anthropic/openai/gemini/...）
-	Models           []string          // 绑定的模型列表
-	BillingMode      BillingMode       // 计费模式
-	InputPrice       *float64          // 每 token 输入价格（USD）— 向后兼容 flat 定价
-	OutputPrice      *float64          // 每 token 输出价格（USD）
-	CacheWritePrice            *float64          // 缓存写入价格
-	CacheWrite1hPrice          *float64          // 1 小时缓存写入价格
-	CacheReadPrice             *float64          // 缓存读取价格
+	ID                         int64
+	ChannelID                  int64
+	Platform                   string      // 所属平台（anthropic/openai/gemini/...）
+	Models                     []string    // 绑定的模型列表
+	BillingMode                BillingMode // 计费模式
+	InputPrice                 *float64    // 每 token 输入价格（USD）— 向后兼容 flat 定价
+	OutputPrice                *float64    // 每 token 输出价格（USD）
+	CacheWritePrice            *float64    // 缓存写入价格
+	CacheWrite1hPrice          *float64    // 1 小时缓存写入价格
+	CacheReadPrice             *float64    // 缓存读取价格
 	ReasoningEffortMultipliers map[string]float64
-	FastMultiplier   *float64          // Fast/priority 档位倍率；nil 时沿用模型目录行为
-	FlexMultiplier   *float64          // Flex 档位倍率；nil 时沿用默认行为
-	ImageInputPrice  *float64          // 图片输入 token 价格（如 gpt-image-2 图片编辑）；未配置时回退文本输入价
-	ImageOutputPrice *float64          // 图片输出价格（向后兼容）
-	PerRequestPrice  *float64          // 默认按次计费价格（USD）
-	Intervals        []PricingInterval // 区间定价列表
-	TimePricing      *ChannelTimePricing
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	FastMultiplier             *float64          // Fast/priority 档位倍率；nil 时沿用模型目录行为
+	FlexMultiplier             *float64          // Flex 档位倍率；nil 时沿用默认行为
+	ImageInputPrice            *float64          // 图片输入 token 价格（如 gpt-image-2 图片编辑）；未配置时回退文本输入价
+	ImageOutputPrice           *float64          // 图片输出价格（向后兼容）
+	PerRequestPrice            *float64          // 默认按次计费价格（USD）
+	Intervals                  []PricingInterval // 区间定价列表
+	TimePricing                *ChannelTimePricing
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
 }
 
 // ChannelTimePricing 渠道模型定价的分时倍率配置。

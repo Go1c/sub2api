@@ -62,7 +62,9 @@ type AnthropicContentBlock struct {
 	Text string `json:"text,omitempty"`
 
 	// type=thinking
-	Thinking  string `json:"thinking,omitempty"`
+	Thinking string `json:"thinking,omitempty"`
+	// Signature carries provider encrypted reasoning (e.g. xAI encrypted_content)
+	// so multi-turn Claude clients can round-trip it back on subsequent turns.
 	Signature string `json:"signature,omitempty"`
 	Data      string `json:"data,omitempty"` // redacted_thinking
 
@@ -93,10 +95,14 @@ func (b AnthropicContentBlock) MarshalJSON() ([]byte, error) {
 			anthropicContentBlock
 		}{Text: b.Text, anthropicContentBlock: anthropicContentBlock(b)})
 	case "thinking":
+		// Anthropic always sends `signature` on thinking blocks (empty on
+		// content_block_start); strict clients such as Grok Build reject the
+		// block with "missing field `signature`" when the key is absent.
 		return json.Marshal(struct {
-			Thinking string `json:"thinking"`
+			Thinking  string `json:"thinking"`
+			Signature string `json:"signature"`
 			anthropicContentBlock
-		}{Thinking: b.Thinking, anthropicContentBlock: anthropicContentBlock(b)})
+		}{Thinking: b.Thinking, Signature: b.Signature, anthropicContentBlock: anthropicContentBlock(b)})
 	default:
 		return json.Marshal(base)
 	}
@@ -225,6 +231,7 @@ type AnthropicDelta struct {
 
 // ResponsesRequest is the request body for POST /v1/responses.
 type ResponsesRequest struct {
+	PromptCacheOptions json.RawMessage     `json:"prompt_cache_options,omitempty"`
 	Model              string              `json:"model"`
 	Instructions       string              `json:"instructions,omitempty"`
 	Input              json.RawMessage     `json:"input"` // string or []ResponsesInputItem
@@ -241,7 +248,6 @@ type ResponsesRequest struct {
 	ToolChoice         json.RawMessage     `json:"tool_choice,omitempty"`
 	ServiceTier        string              `json:"service_tier,omitempty"`
 	PromptCacheKey     string              `json:"prompt_cache_key,omitempty"`
-	PromptCacheOptions json.RawMessage     `json:"prompt_cache_options,omitempty"`
 	PreviousResponseID string              `json:"previous_response_id,omitempty"`
 }
 
@@ -312,11 +318,13 @@ type ResponsesContentPart struct {
 	PromptCacheBreakpoint json.RawMessage `json:"prompt_cache_breakpoint,omitempty"`
 	Type                  string          `json:"type"` // "input_text" | "output_text" | "refusal" | "input_image" | "input_file"
 	Text                  string          `json:"text,omitempty"`
-	Refusal               string          `json:"refusal,omitempty"`
+	Refusal               string          `json:"refusal,omitempty"`   // type=refusal
 	ImageURL              string          `json:"image_url,omitempty"` // data URI for input_image
-	Filename              string          `json:"filename,omitempty"`
-	FileData              string          `json:"file_data,omitempty"`
-	FileID                string          `json:"file_id,omitempty"`
+
+	// input_file fields.
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data,omitempty"` // data URI
+	FileID   string `json:"file_id,omitempty"`
 }
 
 // ResponsesTool describes a tool in the Responses API.
@@ -586,7 +594,6 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 type ResponsesInputTokensDetails struct {
 	CachedTokens        int `json:"cached_tokens,omitempty"`
 	AudioTokens         int `json:"audio_tokens,omitempty"`
-	ImageTokens         int `json:"image_tokens,omitempty"`
 	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
 	CacheWriteTokens    int `json:"cache_write_tokens,omitempty"`
 }
@@ -595,7 +602,6 @@ type ResponsesInputTokensDetails struct {
 type ResponsesOutputTokensDetails struct {
 	ReasoningTokens          int `json:"reasoning_tokens,omitempty"`
 	AudioTokens              int `json:"audio_tokens,omitempty"`
-	ImageTokens              int `json:"image_tokens,omitempty"`
 	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitempty"`
 	RejectedPredictionTokens int `json:"rejected_prediction_tokens,omitempty"`
 }
@@ -636,7 +642,8 @@ type ResponsesStreamEvent struct {
 	// Reuses Text/Delta fields above, SummaryIndex identifies which summary part
 	SummaryIndex int `json:"summary_index,omitempty"`
 
-	// response.content_part.added / done and response.reasoning_summary_part.added / done
+	// response.content_part.added / done and
+	// response.reasoning_summary_part.added / done
 	Part *ResponsesContentPart `json:"part,omitempty"`
 
 	// error event fields
@@ -672,7 +679,7 @@ type ChatCompletionsRequest struct {
 	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high" | "xhigh"
 	ServiceTier         string             `json:"service_tier,omitempty"`
 	Stop                json.RawMessage    `json:"stop,omitempty"` // string or []string
-	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
+	ResponseFormat      json.RawMessage    `json:"response_format,omitempty"`
 
 	// Legacy function calling (deprecated but still supported)
 	Functions    []ChatFunction  `json:"functions,omitempty"`
@@ -701,10 +708,11 @@ type ChatMessage struct {
 
 // ChatContentPart is a typed content part in a multi-modal message.
 type ChatContentPart struct {
-	Type                  string          `json:"type"` // "text" | "image_url"
+	PromptCacheBreakpoint json.RawMessage `json:"prompt_cache_breakpoint,omitempty"`
+	Type                  string          `json:"type"` // "text" | "image_url" | "file"
 	Text                  string          `json:"text,omitempty"`
 	ImageURL              *ChatImageURL   `json:"image_url,omitempty"`
-	PromptCacheBreakpoint json.RawMessage `json:"prompt_cache_breakpoint,omitempty"`
+	File                  *ChatFile       `json:"file,omitempty"`
 }
 
 // ChatImageURL contains the URL for an image content part.
@@ -722,7 +730,7 @@ type ChatFile struct {
 
 // ChatTool describes a tool available to the model.
 type ChatTool struct {
-	Type     string        `json:"type"` // "function" | "x_search"
+	Type     string        `json:"type"` // "function" | "web_search" | "code_execution" | "x_search"
 	Function *ChatFunction `json:"function,omitempty"`
 
 	// type=x_search

@@ -29,13 +29,11 @@ func (s *PaymentConfigService) GetAvailableMethodLimits(ctx context.Context) (*M
 	for pt, insts := range typeInstances {
 		currency, ok := s.pcAggregateMethodCurrency(insts)
 		if !ok {
-			// Mixed currencies for one user-facing method — omit until operators fix config.
 			continue
 		}
 		ml := pcAggregateMethodLimits(pt, insts)
 		ml.DisplayName = s.pcAggregateMethodDisplayName(pt, insts)
 		ml.Currency = currency
-		ml.BalanceRechargeMultiplier = s.pcAggregateMethodBalanceRechargeMultiplier(insts)
 		resp.Methods[ml.PaymentType] = ml
 	}
 	resp.GlobalMin, resp.GlobalMax = pcComputeGlobalRange(resp.Methods)
@@ -104,8 +102,6 @@ func (s *PaymentConfigService) GetMethodLimits(ctx context.Context, types []stri
 	return result, nil
 }
 
-// ValidateMethodCurrencyConsistency returns the shared currency for a user-facing
-// payment method, or an error when enabled instances disagree.
 func (s *PaymentConfigService) ValidateMethodCurrencyConsistency(ctx context.Context, paymentType string) (string, error) {
 	method := NormalizeVisibleMethod(paymentType)
 	if method == "" || s == nil || s.entClient == nil {
@@ -204,6 +200,7 @@ func (s *PaymentConfigService) pcInstanceEasyPayCustomMethodDisplayName(inst *db
 	if raw == "" {
 		return ""
 	}
+
 	var methods []easyPayCustomMethodDisplayConfig
 	if err := json.Unmarshal([]byte(raw), &methods); err != nil {
 		return ""
@@ -317,43 +314,6 @@ func pcAggregateMethodLimits(pt string, instances []*dbent.PaymentProviderInstan
 		ml.DailyLimit = 0
 	}
 	return ml
-}
-
-// pcAggregateMethodBalanceRechargeMultiplier returns a method-level credit
-// multiplier when every enabled instance agrees on the same positive value.
-// Mixed/missing instance multipliers fall back to the global setting (0 here),
-// so the checkout page can still use checkout.balance_recharge_multiplier.
-func (s *PaymentConfigService) pcAggregateMethodBalanceRechargeMultiplier(instances []*dbent.PaymentProviderInstance) float64 {
-	if s == nil || len(instances) == 0 {
-		return 0
-	}
-	var common float64
-	have := false
-	for _, inst := range instances {
-		if inst == nil {
-			continue
-		}
-		cfg, err := s.decryptConfig(inst.Config)
-		if err != nil || cfg == nil {
-			return 0
-		}
-		mult := payment.ProviderBalanceRechargeMultiplier(inst.ProviderKey, cfg, 0)
-		if mult <= 0 {
-			return 0
-		}
-		if !have {
-			common = mult
-			have = true
-			continue
-		}
-		if mult != common {
-			return 0
-		}
-	}
-	if !have {
-		return 0
-	}
-	return common
 }
 
 // pcComputeGlobalRange computes the widest [min, max] across all methods.

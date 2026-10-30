@@ -12,22 +12,23 @@ func firstNonEmpty(values ...string) string {
 }
 
 type SystemSettings struct {
-	RegistrationEnabled              bool
-	EmailVerifyEnabled               bool
-	RegistrationEmailSuffixWhitelist []string
-	PromoCodeEnabled                 bool
-	PasswordResetEnabled             bool
-	FrontendURL                      string
-	InvitationCodeEnabled            bool
-	InvitationRegistrationMode       string
-	TotpEnabled                      bool // TOTP 双因素认证
-	SessionBindingEnabled            bool // 会话 IP/UA 绑定（变更即失效）
-	StepUpEnabled                    bool // 敏感操作 step-up 2FA 门控
-	AuditLogRetentionDays            int  // 审计日志保留天数（<=0 永久保留）
-	LoginAgreementEnabled            bool
-	LoginAgreementMode               string
-	LoginAgreementUpdatedAt          string
-	LoginAgreementDocuments          []LoginAgreementDocument
+	RegistrationEnabled                 bool
+	EmailVerifyEnabled                  bool
+	RegistrationEmailSuffixWhitelist    []string
+	RegistrationEmailDomainQuotaEnabled bool // 白名单非空时放行非白名单域名限量注册（默认关闭）
+	PromoCodeEnabled                    bool
+	PasswordResetEnabled                bool
+	FrontendURL                         string
+	InvitationCodeEnabled               bool
+	TotpEnabled                         bool // TOTP 双因素认证
+	PasskeyEnabled                      bool // Passkey 登录
+	SessionBindingEnabled               bool // 会话 IP/UA 绑定（变更即失效）
+	StepUpEnabled                       bool // 敏感操作 step-up 2FA 门控
+	AuditLogRetentionDays               int  // 审计日志保留天数（<=0 永久保留）
+	LoginAgreementEnabled               bool
+	LoginAgreementMode                  string
+	LoginAgreementUpdatedAt             string
+	LoginAgreementDocuments             []LoginAgreementDocument
 
 	SMTPHost               string
 	SMTPPort               int
@@ -38,11 +39,28 @@ type SystemSettings struct {
 	SMTPFromName           string
 	SMTPUseTLS             bool
 
-	TurnstileEnabled             bool
-	TurnstileSiteKey             string
-	TurnstileSecretKey           string
-	TurnstileSecretKeyConfigured bool
-	APIKeyACLTrustForwardedIP    bool
+	TurnstileEnabled                       bool
+	TurnstileSiteKey                       string
+	TurnstileSecretKey                     string
+	TurnstileSecretKeyConfigured           bool
+	TencentCaptchaEnabled                  bool
+	TencentCaptchaAppID                    string
+	TencentCaptchaAppSecretKey             string
+	TencentCaptchaAppSecretKeyConfigured   bool
+	TencentCaptchaCloudSecretID            string
+	TencentCaptchaCloudSecretIDConfigured  bool
+	TencentCaptchaCloudSecretKey           string
+	TencentCaptchaCloudSecretKeyConfigured bool
+	TencentCaptchaRegion                   string
+	AliyunCaptchaEnabled                   bool
+	AliyunCaptchaAccessKeyID               string
+	AliyunCaptchaAccessKeySecret           string
+	AliyunCaptchaAccessKeySecretConfigured bool
+	AliyunCaptchaSceneID                   string
+	AliyunCaptchaPrefix                    string
+	AliyunCaptchaRegion                    string
+	APIKeyACLTrustForwardedIP              bool
+	ForwardedClientIPHeaders               []string
 
 	// LinuxDo Connect OAuth 登录
 	LinuxDoConnectEnabled                bool
@@ -131,65 +149,36 @@ type SystemSettings struct {
 	GoogleOAuthRedirectURL            string
 	GoogleOAuthFrontendRedirectURL    string
 
-	SiteName                               string
-	SiteLogo                               string
-	SiteSubtitle                           string
-	APIBaseURL                             string
-	ContactInfo                            string
-	ContactChannels                        string
-	SupportChatEnabled                     bool
-	SupportChatGatewayURL                  string
-	SupportChatTitle                       string
-	SupportChatWelcomeMessage              string
-	SupportChatOfficialContactText         string
-	SupportChatOfficialContactURL          string
-	DocURL                                 string
-	SitePages                              string // JSON array of public site pages
-	HomeContent                            string
-	HideCcsImportButton                    bool
-	FrontendLocales                        []string
-	CCSwitchDefaultModelAnthropic          string
-	CCSwitchDefaultModelOpenAI             string
-	CCSwitchDefaultModelGemini             string
-	CCSwitchDefaultModelAntigravity        string
-	CCSwitchDefaultModelAntigravityGemini  string
-	UserSubscriptionsVisible               bool
-	PurchaseSubscriptionEnabled            bool
-	PurchaseSubscriptionURL                string
-	SubscriptionNotifyEmailEnabled         bool
-	SubscriptionMultiplePurchasesEnabled   bool
-	SubscriptionQuotaResetUTCOffsetMinutes int
-	SubscriptionQuotaResetHour             int
-	TableDefaultPageSize                   int
-	TablePageSizeOptions                   []int
-	CustomMenuItems                        string // JSON array of custom menu items
-	CustomEndpoints                        string // JSON array of custom endpoints
-	LumioDesktopConfig                     LumioDesktopConfig
+	SiteName                    string
+	SiteLogo                    string
+	SiteSubtitle                string
+	APIBaseURL                  string
+	ContactInfo                 string
+	DocURL                      string
+	HomeContent                 string
+	CompactHomeEnabled          bool
+	HideCcsImportButton         bool
+	PurchaseSubscriptionEnabled bool
+	PurchaseSubscriptionURL     string
+	TableDefaultPageSize        int
+	TablePageSizeOptions        []int
+	CustomMenuItems             string // JSON array of custom menu items
+	CustomEndpoints             string // JSON array of custom endpoints
 
-	DefaultConcurrency                int
-	DefaultBalance                    float64
-	RiskControlEnabled                bool
-	SiteMessagesEnabled               bool
-	SiteMessagesDailySendLimit        int
-	SiteMessagesRetentionDays         int
-	SiteMessagesDefaultRecipientEmail string
-	CyberSessionBlockEnabled          bool
-	CyberSessionBlockTTLSeconds       int
-	AffiliateEnabled                  bool
-	AffiliateRebateRate               float64
-	AffiliateRebateTiers              []AffiliateRebateTier
-	AffiliateRebateFreezeHours        int
-	AffiliateRebateDurationDays       int
-	AffiliateRebatePerInviteeCap      float64
-	AffiliateSignupBonusEnabled       bool
-	AffiliateSignupBonusAmount        float64
-	AffiliateSignupBonusTotalCap      float64
-	AffiliateSignupBonusDailyCap      float64
-	BalanceUsageGateEnabled           bool
-	BalanceUsageGateMinBalance        float64
-	BalanceUsageGateMinRecharge       float64
-	DefaultUserRPMLimit               int
-	DefaultSubscriptions              []DefaultSubscriptionSetting
+	DefaultConcurrency           int
+	DefaultBalance               float64
+	RiskControlEnabled           bool
+	CyberSessionBlockEnabled     bool
+	CyberPolicyUserAllowlist     string
+	CyberSessionBlockTTLSeconds  int
+	AffiliateEnabled             bool
+	AffiliateRebateRate          float64
+	AffiliateRebateFreezeHours   int
+	AffiliateRebateDurationDays  int
+	AffiliateRebatePerInviteeCap float64
+	AdminRechargeRebateEnabled   bool
+	DefaultUserRPMLimit          int
+	DefaultSubscriptions         []DefaultSubscriptionSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -212,12 +201,14 @@ type SystemSettings struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
+	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
+	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
-	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
+	// Grok model mapping policy (admin settings; empty mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
+	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -245,6 +236,7 @@ type SystemSettings struct {
 	BackendModeEnabled bool
 
 	// Gateway forwarding behavior
+	OpenAITTFTMode                         string // Responses first_token_ms 统计口径（默认 semantic）
 	EnableFingerprintUnification           bool   // 是否统一 OAuth 账号的指纹头（默认 true）
 	EnableMetadataPassthrough              bool   // 是否透传客户端原始 metadata（默认 false）
 	EnableCCHSigning                       bool   // 已废弃 no-op：新版 CLI 取消 cch 签名后网关不再注入/签名 cch，开关无效果
@@ -255,7 +247,7 @@ type SystemSettings struct {
 	EnableClientDatelineNormalization      bool   // 是否对 Anthropic OAuth/SetupToken 请求体做客户端 dateline 归一化（默认 true）
 	RewriteMessageCacheControl             bool   // 是否改写 messages[*].content[*].cache_control（默认 false）
 	AntigravityUserAgentVersion            string // Antigravity 上游 User-Agent 版本号；空值使用配置/默认值
-	OpenAICodexUserAgent                   string // OpenAI Codex 上游完整 User-Agent；空值使用内置默认
+	OpenAICodexUserAgent                   string // OpenAI Codex 上游完整 User-Agent；空值由 Codex 客户端版本号拼出标准 CLI UA
 	OpenAICodexClientVersion               string // 出站声明的 Codex 客户端版本号（管理员覆写）；空值跟随自动同步值
 	OpenAICodexClientVersionSynced         string // 自动同步到的官方最新稳定版版本号（只读展示）
 	OpenAICodexVersionAutoSyncEnabled      bool   // 是否启用 Codex 客户端版本号自动同步（默认 true）
@@ -280,7 +272,7 @@ type SystemSettings struct {
 
 	// OpenAI 账号调度
 	OpenAILowUpstreamRatePriorityEnabled                   bool
-	OpenAIOAuthSchedulingRateMultiplier                    float64
+	OpenAIOAuthSchedulingRateMultiplier                    *float64
 	OpenAIAdvancedSchedulerEnabled                         bool
 	OpenAIAdvancedSchedulerStickyWeightedEnabled           bool
 	OpenAIAdvancedSchedulerSubscriptionPriorityEnabled     bool
@@ -322,8 +314,45 @@ type SystemSettings struct {
 	// 系统全局默认平台配额（key = platform，nil/缺省 = 不限制）
 	DefaultPlatformQuotas map[string]*DefaultPlatformQuotaSetting `json:"default_platform_quotas"`
 
+	// 系统全局账号自动停调阈值（key = platform，100 = disabled）
+	AccountSchedulingThresholds map[string]int `json:"account_scheduling_thresholds"`
+
 	// 允许终端用户在用量页查看自己的失败请求
-	AllowUserViewErrorRequests bool
+	AllowUserViewErrorRequests             bool
+	InvitationRegistrationMode             string
+	ContactChannels                        string
+	SupportChatEnabled                     bool
+	SupportChatGatewayURL                  string
+	SupportChatTitle                       string
+	SupportChatWelcomeMessage              string
+	SupportChatOfficialContactText         string
+	SupportChatOfficialContactURL          string
+	SitePages                              string // JSON array of public site pages
+	CCSwitchDefaultModelAnthropic          string
+	CCSwitchDefaultModelOpenAI             string
+	CCSwitchDefaultModelGemini             string
+	CCSwitchDefaultModelAntigravity        string
+	CCSwitchDefaultModelAntigravityGemini  string
+	UserSubscriptionsVisible               bool
+	SubscriptionNotifyEmailEnabled         bool
+	SubscriptionMultiplePurchasesEnabled   bool
+	SubscriptionQuotaResetUTCOffsetMinutes int
+	SubscriptionQuotaResetHour             int
+	LumioDesktopConfig                     LumioDesktopConfig
+	SiteMessagesEnabled                    bool
+	SiteMessagesDailySendLimit             int
+	SiteMessagesRetentionDays              int
+	SiteMessagesDefaultRecipientEmail      string
+	AffiliateSignupBonusEnabled            bool
+	AffiliateSignupBonusAmount             float64
+	AffiliateSignupBonusTotalCap           float64
+	AffiliateSignupBonusDailyCap           float64
+	BalanceUsageGateEnabled                bool
+	BalanceUsageGateMinBalance             float64
+	BalanceUsageGateMinRecharge            float64
+	ChannelMonitorStatusBanner             string `json:"channel_monitor_status_banner"`
+	FrontendLocales                        []string
+	AffiliateRebateTiers                   []AffiliateRebateTier
 }
 
 type DefaultSubscriptionSetting struct {
@@ -332,45 +361,39 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
-	RegistrationEnabled                   bool
-	EmailVerifyEnabled                    bool
-	ForceEmailOnThirdPartySignup          bool
-	RegistrationEmailSuffixWhitelist      []string
-	PromoCodeEnabled                      bool
-	PasswordResetEnabled                  bool
-	InvitationCodeEnabled                 bool
-	InvitationRegistrationMode            string
-	TotpEnabled                           bool // TOTP 双因素认证
-	LoginAgreementEnabled                 bool
-	LoginAgreementMode                    string
-	LoginAgreementUpdatedAt               string
-	LoginAgreementRevision                string
-	LoginAgreementDocuments               []LoginAgreementDocument
-	TurnstileEnabled                      bool
-	TurnstileSiteKey                      string
-	SiteName                              string
-	SiteLogo                              string
-	SiteSubtitle                          string
-	APIBaseURL                            string
-	ContactInfo                           string
-	ContactChannels                       string
-	SupportChatEnabled                    bool
-	SupportChatGatewayURL                 string
-	SupportChatTitle                      string
-	SupportChatWelcomeMessage             string
-	SupportChatOfficialContactText        string
-	SupportChatOfficialContactURL         string
-	DocURL                                string
-	SitePages                             string // JSON array of public site pages
-	HomeContent                           string
-	HideCcsImportButton                   bool
-	FrontendLocales                       []string
-	CCSwitchDefaultModelAnthropic         string
-	CCSwitchDefaultModelOpenAI            string
-	CCSwitchDefaultModelGemini            string
-	CCSwitchDefaultModelAntigravity       string
-	CCSwitchDefaultModelAntigravityGemini string
-	UserSubscriptionsVisible              bool
+	RegistrationEnabled                 bool
+	EmailVerifyEnabled                  bool
+	ForceEmailOnThirdPartySignup        bool
+	RegistrationEmailSuffixWhitelist    []string
+	RegistrationEmailDomainQuotaEnabled bool
+	PromoCodeEnabled                    bool
+	PasswordResetEnabled                bool
+	InvitationCodeEnabled               bool
+	TotpEnabled                         bool // TOTP 双因素认证
+	PasskeyEnabled                      bool
+	LoginAgreementEnabled               bool
+	LoginAgreementMode                  string
+	LoginAgreementUpdatedAt             string
+	LoginAgreementRevision              string
+	LoginAgreementDocuments             []LoginAgreementDocument
+	TurnstileEnabled                    bool
+	TurnstileSiteKey                    string
+	TencentCaptchaEnabled               bool
+	TencentCaptchaAppID                 string
+	TencentCaptchaRegion                string
+	AliyunCaptchaEnabled                bool
+	AliyunCaptchaSceneID                string
+	AliyunCaptchaPrefix                 string
+	AliyunCaptchaRegion                 string
+	SiteName                            string
+	SiteLogo                            string
+	SiteSubtitle                        string
+	APIBaseURL                          string
+	ContactInfo                         string
+	DocURL                              string
+	HomeContent                         string
+	CompactHomeEnabled                  bool
+	HideCcsImportButton                 bool
 
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
@@ -403,8 +426,14 @@ type PublicSettings struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
+	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
+	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
+
+	// Grok model mapping policy (admin settings).
+	GrokDefaultTextModel           string `json:"grok_default_text_model"`
+	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
+	GrokDefaultBaseURLMode         string `json:"grok_default_base_url_mode"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -423,12 +452,27 @@ type PublicSettings struct {
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
-	// 站内信功能
-	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
-	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
-
 	// 允许终端用户在用量页查看自己的失败请求
-	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
+	AllowUserViewErrorRequests            bool `json:"allow_user_view_error_requests"`
+	InvitationRegistrationMode            string
+	ContactChannels                       string
+	SupportChatEnabled                    bool
+	SupportChatGatewayURL                 string
+	SupportChatTitle                      string
+	SupportChatWelcomeMessage             string
+	SupportChatOfficialContactText        string
+	SupportChatOfficialContactURL         string
+	SitePages                             string // JSON array of public site pages
+	FrontendLocales                       []string
+	CCSwitchDefaultModelAnthropic         string
+	CCSwitchDefaultModelOpenAI            string
+	CCSwitchDefaultModelGemini            string
+	CCSwitchDefaultModelAntigravity       string
+	CCSwitchDefaultModelAntigravityGemini string
+	UserSubscriptionsVisible              bool
+	ChannelMonitorStatusBanner            string `json:"channel_monitor_status_banner"`
+	SiteMessagesEnabled                   bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail     string `json:"site_messages_default_recipient_email"`
 }
 
 type LoginAgreementDocument struct {
@@ -591,6 +635,16 @@ type RateLimit429CooldownSettings struct {
 	CooldownSeconds int `json:"cooldown_seconds"`
 }
 
+// OpenAIImagesOAuthUnavailableCooldownSettings controls how long an OAuth account's image capability is paused when unavailable.
+type OpenAIImagesOAuthUnavailableCooldownSettings struct {
+	CooldownMinutes int `json:"cooldown_minutes"`
+}
+
+const (
+	openAIImagesOAuthUnavailableDefaultCooldownMinutes = 30
+	openAIImagesOAuthUnavailableMaxCooldownMinutes     = 120
+)
+
 // OpenAIAPIKeyHealthBreakerSettings controls cross-instance failure counting for OpenAI pool API keys.
 type OpenAIAPIKeyHealthBreakerSettings struct {
 	Enabled          bool `json:"enabled"`
@@ -622,6 +676,10 @@ func DefaultRateLimit429CooldownSettings() *RateLimit429CooldownSettings {
 		Enabled:         true,
 		CooldownSeconds: 5,
 	}
+}
+
+func DefaultOpenAIImagesOAuthUnavailableCooldownSettings() *OpenAIImagesOAuthUnavailableCooldownSettings {
+	return &OpenAIImagesOAuthUnavailableCooldownSettings{CooldownMinutes: openAIImagesOAuthUnavailableDefaultCooldownMinutes}
 }
 
 // DefaultBetaPolicySettings 返回默认的 Beta 策略配置
@@ -691,6 +749,7 @@ const (
 	OpenAIFastTierPriority  = "priority"  // 仅匹配 fast（priority）
 	OpenAIFastTierUltrafast = "ultrafast" // 仅匹配 ultrafast
 	OpenAIFastTierFlex      = "flex"      // 仅匹配 flex
+	OpenAIFastTierMissing   = "missing"   // 仅匹配省略 service_tier 的请求
 
 	// OpenAIFastPolicyActionForcePriority 会保留 service_tier 字段并强制写成
 	// priority，用于把 flex/auto/default/scale 等已识别 tier 收敛为 fast。
@@ -699,7 +758,7 @@ const (
 
 // OpenAIFastPolicyRule 单条 OpenAI fast/flex 策略规则
 type OpenAIFastPolicyRule struct {
-	ServiceTier          string   `json:"service_tier"`                     // "priority" | "flex" | "auto" | "default" | "scale" | "all"
+	ServiceTier          string   `json:"service_tier"`                     // "priority" | "ultrafast" | "flex" | "missing" | "all"
 	Action               string   `json:"action"`                           // "pass" | "filter" | "block" | "force_priority"
 	Scope                string   `json:"scope"`                            // "all" | "oauth" | "apikey" | "bedrock"
 	UserIDs              []int64  `json:"user_ids,omitempty"`               // 空=所有 Sub2API 用户；非空=仅指定 API Key 所属用户

@@ -21,6 +21,15 @@ type runtimeSettingRepoStub struct {
 	deleteFn         func(key string) error
 }
 
+type runtimeCleanupReloader struct {
+	calls int
+}
+
+func (r *runtimeCleanupReloader) Reload(context.Context) error {
+	r.calls++
+	return nil
+}
+
 func newRuntimeSettingRepoStub() *runtimeSettingRepoStub {
 	return &runtimeSettingRepoStub{
 		values:  map[string]string{},

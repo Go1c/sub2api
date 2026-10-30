@@ -233,10 +233,9 @@ func TestAdminService_UpdateUserBalance_AdminRechargeAffiliateRebate(t *testing.
 			redeemRepo := &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}}
 			affiliate := &adminRechargeAffiliateAccruerStub{}
 			svc := &adminServiceImpl{
-				userRepo:         repo,
-				redeemCodeRepo:   redeemRepo,
-				settingService:   adminRechargeSettingService(tt.enabled),
-				
+				userRepo:       repo,
+				redeemCodeRepo: redeemRepo,
+				settingService: adminRechargeSettingService(tt.enabled),
 			}
 
 			_, err := svc.UpdateUserBalance(context.Background(), 7, tt.amount, tt.operation, "")
@@ -252,10 +251,9 @@ func TestAdminService_UpdateUserBalance_AffiliateFailureDoesNotRollbackRecharge(
 	redeemRepo := &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}}
 	affiliate := &adminRechargeAffiliateAccruerStub{err: errors.New("affiliate unavailable")}
 	svc := &adminServiceImpl{
-		userRepo:         repo,
-		redeemCodeRepo:   redeemRepo,
-		settingService:   adminRechargeSettingService(true),
-		
+		userRepo:       repo,
+		redeemCodeRepo: redeemRepo,
+		settingService: adminRechargeSettingService(true),
 	}
 
 	user, err := svc.UpdateUserBalance(context.Background(), 7, 5, "add", "")

@@ -378,7 +378,7 @@ func TestSettingService_UpdateSettings_SubscriptionQuotaResetSettings(t *testing
 		PaymentVisibleMethodAlipayEnabled:                  true,
 		PaymentVisibleMethodWxpayEnabled:                   false,
 		OpenAILowUpstreamRatePriorityEnabled:               true,
-		OpenAIOAuthSchedulingRateMultiplier:                0.05,
+		OpenAIOAuthSchedulingRateMultiplier:                float64Ptr(0.05),
 		OpenAIAdvancedSchedulerEnabled:                     true,
 		OpenAIAdvancedSchedulerStickyWeightedEnabled:       true,
 		OpenAIAdvancedSchedulerSubscriptionPriorityEnabled: true,
@@ -422,7 +422,7 @@ func TestSettingService_UpdateSettingsRejectsInvalidOpenAIOAuthSchedulingRateMul
 	svc := NewSettingService(repo, &config.Config{})
 
 	for _, rate := range []float64{-0.01, math.NaN(), math.Inf(1)} {
-		err := svc.UpdateSettings(context.Background(), &SystemSettings{OpenAIOAuthSchedulingRateMultiplier: rate})
+		err := svc.UpdateSettings(context.Background(), &SystemSettings{OpenAIOAuthSchedulingRateMultiplier: float64Ptr(rate)})
 		require.Error(t, err)
 	}
 }
@@ -646,7 +646,7 @@ func TestSettingService_PasskeySwitchPersistsAndDefaultsToConfigured(t *testing.
 		RPID:      "sub3.nebula-spaces.com",
 		RPOrigins: []string{"https://sub3.nebula-spaces.com"},
 	}}
-	runtimeRepo := &forwardedIPMigrationRepoStub{values: map[string]string{}}
+	runtimeRepo := &settingGetAllRepoStub{values: map[string]string{}}
 	runtimeService := NewSettingService(runtimeRepo, cfg)
 
 	enabled, err := runtimeService.PasskeyEnabled(context.Background())

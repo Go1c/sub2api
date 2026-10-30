@@ -182,7 +182,7 @@ func TestUpdatePaymentConfigRechargeBonus(t *testing.T) {
 		notice := "  活动文案  "
 		require.NoError(t, svc.UpdatePaymentConfig(ctx, UpdatePaymentConfigRequest{
 			RechargeBonusTiers:  &tiers,
-			
+			RechargeBonusNotice: &notice,
 		}))
 		require.Equal(t, `[{"min_amount":100,"bonus_percent":20},{"min_amount":500,"bonus_percent":30}]`, repo.updates[SettingRechargeBonusTiers])
 		require.Equal(t, "活动文案", repo.updates[SettingRechargeBonusNotice])

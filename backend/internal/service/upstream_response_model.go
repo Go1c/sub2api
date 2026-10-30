@@ -141,7 +141,7 @@ func normalizeObservedOpenAIServiceTier(raw string) string {
 	switch value := strings.ToLower(strings.TrimSpace(raw)); value {
 	case "priority", "fast":
 		return OpenAIFastTierPriority
-	case "default", "flex", "scale", OpenAIFastTierUltrafast:
+	case "default", "flex", "scale":
 		return value
 	default:
 		return ""
@@ -193,29 +193,6 @@ func beginUpstreamResponseModelObservation(c *gin.Context) *upstreamResponseMode
 	return observer
 }
 
-func ensureUpstreamResponseModelObserver(c *gin.Context) *upstreamResponseModelObserver {
-	if observer := upstreamResponseModelObserverFromContext(c); observer != nil {
-		return observer
-	}
-	return beginUpstreamResponseModelObservation(c)
-}
-
-func attachObservedForwardResult(c *gin.Context, result *ForwardResult) {
-	if result == nil {
-		return
-	}
-	result.UpstreamResponseModel = observedUpstreamResponseModel(c)
-	result.UpstreamResponseModelConflict = observedUpstreamResponseModelConflict(c)
-}
-
-func attachObservedOpenAIForwardResult(c *gin.Context, result *OpenAIForwardResult) {
-	if result == nil {
-		return
-	}
-	result.UpstreamResponseModel = observedUpstreamResponseModel(c)
-	result.UpstreamResponseModelConflict = observedUpstreamResponseModelConflict(c)
-}
-
 func upstreamResponseModelObserverFromContext(c *gin.Context) *upstreamResponseModelObserver {
 	if c == nil {
 		return nil
@@ -240,9 +217,18 @@ func observedUpstreamResponseServiceTier(c *gin.Context) string {
 	return upstreamResponseModelObserverFromContext(c).ServiceTier()
 }
 
-func resolvedOpenAIUpstreamServiceTier(c *gin.Context, outboundBodyTier *string) *string {
-	_ = c
+// resolvedOpenAIUpstreamServiceTierFromObserver preserves the final outbound
+// request tier. The observed response tier remains separate on
+// OpenAIForwardResult.UpstreamResponseServiceTier and is reconciled once, at
+// usage time, where the account protocol is available. In particular, the
+// private ChatGPT Codex backend commonly reports default even for effective
+// Fast turns, while public API response tiers remain authoritative.
+func resolvedOpenAIUpstreamServiceTierFromObserver(_ *upstreamResponseModelObserver, outboundBodyTier *string) *string {
 	return outboundBodyTier
+}
+
+func resolvedOpenAIUpstreamServiceTier(c *gin.Context, outboundBodyTier *string) *string {
+	return resolvedOpenAIUpstreamServiceTierFromObserver(upstreamResponseModelObserverFromContext(c), outboundBodyTier)
 }
 
 func observeOpenAISSEBody(observer *upstreamResponseModelObserver, body string) {
@@ -326,39 +312,4 @@ func upstreamSentModel(requestedModel, upstreamModel string) string {
 		sentModel = strings.TrimSpace(requestedModel)
 	}
 	return sentModel
-}
-
-func forEachOpenAISSEFrame(body string, fn func(string, []byte)) {
-	if fn == nil || strings.TrimSpace(body) == "" {
-		return
-	}
-	var parser openAICompatSSEFrameParser
-	emit := func(frame openAICompatSSEFrame, ok bool) {
-		if !ok {
-			return
-		}
-		emitData := func(value string) {
-			value = strings.TrimSpace(value)
-			if value == "" || value == "[DONE]" {
-				return
-			}
-			data := []byte(value)
-			eventType := strings.TrimSpace(frame.EventType)
-			if eventType == "" {
-				eventType = strings.TrimSpace(gjson.GetBytes(data, "type").String())
-			}
-			fn(eventType, data)
-		}
-		if gjson.Valid(frame.Data) {
-			emitData(frame.Data)
-			return
-		}
-		for _, value := range strings.Split(frame.Data, "\n") {
-			emitData(value)
-		}
-	}
-	for _, line := range strings.Split(body, "\n") {
-		emit(parser.AddLine(strings.TrimRight(line, "\r")))
-	}
-	emit(parser.Finish())
 }

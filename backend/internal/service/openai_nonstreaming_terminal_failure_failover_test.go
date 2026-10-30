@@ -192,7 +192,7 @@ func TestNonStreamingPassthroughSSEToJSON_CapacityFailedEventFailsOver(t *testin
 	body := sseTerminalBody("response.failed",
 		`{"type":"response.failed","error":{"message":"Selected model is at capacity. Please try a different model.","type":"invalid_request_error"}}`)
 
-	result, err := svc.handlePassthroughSSEToJSON(newNonStreamingSSEResponse(), c, body, "model", "model")
+	result, err := svc.handlePassthroughSSEToJSON(newNonStreamingSSEResponse(), c, newNonStreamingFailoverAccount(), body, "model", "model")
 
 	require.Nil(t, result)
 	var failoverErr *UpstreamFailoverError

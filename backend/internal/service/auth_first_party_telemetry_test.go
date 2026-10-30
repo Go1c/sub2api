@@ -27,7 +27,7 @@ func (s *telemetryRecorderStub) RecordServerAuthEvent(_ context.Context, userID 
 }
 
 func TestRecordSuccessfulLoginRecordsFirstPartyTelemetry(t *testing.T) {
-	svc := newAuthService(&userRepoStub{}, nil, nil)
+	svc := newAuthService(&userRepoStub{}, nil, nil, nil)
 	rec := &telemetryRecorderStub{}
 	svc.SetFirstPartyTelemetry(rec)
 
@@ -39,7 +39,7 @@ func TestRecordSuccessfulLoginRecordsFirstPartyTelemetry(t *testing.T) {
 }
 
 func TestPostAuthUserBootstrapRecordsRegisterSuccessWhenTouchLogin(t *testing.T) {
-	svc := newAuthService(&userRepoStub{}, nil, nil)
+	svc := newAuthService(&userRepoStub{}, nil, nil, nil)
 	rec := &telemetryRecorderStub{}
 	svc.SetFirstPartyTelemetry(rec)
 
@@ -51,7 +51,7 @@ func TestPostAuthUserBootstrapRecordsRegisterSuccessWhenTouchLogin(t *testing.T)
 }
 
 func TestPostAuthUserBootstrapSkipsTelemetryWhenNotTouchLogin(t *testing.T) {
-	svc := newAuthService(&userRepoStub{}, nil, nil)
+	svc := newAuthService(&userRepoStub{}, nil, nil, nil)
 	rec := &telemetryRecorderStub{}
 	svc.SetFirstPartyTelemetry(rec)
 
@@ -61,7 +61,7 @@ func TestPostAuthUserBootstrapSkipsTelemetryWhenNotTouchLogin(t *testing.T) {
 }
 
 func TestRecordSuccessfulLoginTelemetryFailureDoesNotFailLogin(t *testing.T) {
-	svc := newAuthService(&userRepoStub{}, nil, nil)
+	svc := newAuthService(&userRepoStub{}, nil, nil, nil)
 	rec := &telemetryRecorderStub{err: errors.New("db down")}
 	svc.SetFirstPartyTelemetry(rec)
 

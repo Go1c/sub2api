@@ -12,12 +12,9 @@ import (
 
 // AdminService interface defines admin management operations
 type AdminService interface {
-	// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
 	SetAccountErrorHistoryService(svc *AccountErrorHistoryService)
-
 	// User management
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
-	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
 	GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
@@ -33,9 +30,6 @@ type AdminService interface {
 	// codeType is optional - pass empty string to return all types.
 	// Also returns totalRecharged (sum of all positive balance top-ups).
 	GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]RedeemCode, int64, float64, error)
-	// GetUserWalletDebits returns the user's external wallet debit ledger.
-	// Fields match the user-facing ListTransactions payload; secrets are never included.
-	GetUserWalletDebits(ctx context.Context, userID int64, page, pageSize int) (*BalanceTransactionPage, error)
 	BindUserAuthIdentity(ctx context.Context, userID int64, input AdminBindAuthIdentityInput) (*AdminBoundAuthIdentity, error)
 
 	// Group management
@@ -47,11 +41,6 @@ type AdminService interface {
 	GetAllGroupsIncludingInactive(ctx context.Context) ([]Group, error)
 	GetGroup(ctx context.Context, id int64) (*Group, error)
 	GetGroupModelsListCandidates(ctx context.Context, id int64, platform string) ([]string, error)
-	ListCompositeRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error)
-	CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
-	UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
-	DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error
-	PreviewCompositeRoute(ctx context.Context, groupID int64, input CompositeRoutePreviewRequest) (*CompositeRouteDecision, error)
 	CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error)
 	// DuplicateGroup creates an inactive independent copy of a group's configuration
 	// and account bindings while preserving each binding's priority.
@@ -62,6 +51,11 @@ type AdminService interface {
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
 	DeleteGroupIfEmpty(ctx context.Context, id int64) error
+	ListCompositeRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error)
+	CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error
+	PreviewCompositeRoute(ctx context.Context, groupID int64, input CompositeRoutePreviewRequest) (*CompositeRouteDecision, error)
 	GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]APIKey, int64, error)
 	GetGroupRateMultipliers(ctx context.Context, groupID int64) ([]UserGroupRateEntry, error)
 	ClearGroupRateMultipliers(ctx context.Context, groupID int64) error
@@ -88,6 +82,7 @@ type AdminService interface {
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
+	ValidateAccountGroupBindings(ctx context.Context, groupIDs []int64) error
 	// DuplicateAccount creates an independent account from an existing account's configuration.
 	// First-class runtime columns are intentionally reset by the normal account creation path.
 	DuplicateAccount(ctx context.Context, id int64, actorScope, operationKey string) (*Account, error)
@@ -136,14 +131,6 @@ type AdminService interface {
 	TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error)
 	CheckProxyQuality(ctx context.Context, id int64) (*ProxyQualityCheckResult, error)
 
-	// Proxy IP group management
-	ListProxyIPGroups(ctx context.Context) ([]ProxyIPGroup, error)
-	GetProxyIPGroup(ctx context.Context, id int64) (*ProxyIPGroup, error)
-	CreateProxyIPGroup(ctx context.Context, input *CreateProxyIPGroupInput) (*ProxyIPGroup, error)
-	UpdateProxyIPGroup(ctx context.Context, id int64, input *UpdateProxyIPGroupInput) (*ProxyIPGroup, error)
-	DeleteProxyIPGroup(ctx context.Context, id int64) error
-	SetProxyIPGroupMembers(ctx context.Context, id int64, proxyIDs []int64) (*ProxyIPGroup, error)
-
 	// Redeem code management
 	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string, sortBy, sortOrder string) ([]RedeemCode, int64, error)
 	GetRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
@@ -152,6 +139,14 @@ type AdminService interface {
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	ResetAccountQuota(ctx context.Context, id int64) error
+	ListProxyIPGroups(ctx context.Context) ([]ProxyIPGroup, error)
+	GetProxyIPGroup(ctx context.Context, id int64) (*ProxyIPGroup, error)
+	CreateProxyIPGroup(ctx context.Context, input *CreateProxyIPGroupInput) (*ProxyIPGroup, error)
+	UpdateProxyIPGroup(ctx context.Context, id int64, input *UpdateProxyIPGroupInput) (*ProxyIPGroup, error)
+	DeleteProxyIPGroup(ctx context.Context, id int64) error
+	SetProxyIPGroupMembers(ctx context.Context, id int64, proxyIDs []int64) (*ProxyIPGroup, error)
+	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
+	GetUserWalletDebits(ctx context.Context, userID int64, page, pageSize int) (*BalanceTransactionPage, error)
 }
 
 type AdminGroupOperation string
@@ -174,40 +169,44 @@ func ValidateSimpleModeGroupOperation(cfg *config.Config, operation AdminGroupOp
 
 // CreateUserInput represents input for creating a new user via admin operations.
 type CreateUserInput struct {
-	Email         string
-	Password      string
-	Username      string
-	Notes         string
-	Role          string // 空字符串表示使用默认角色(user);合法值 admin/user
-	Balance       *float64
-	Concurrency   int
-	RPMLimit      int
-	AllowedGroups []int64
+	Email                string
+	Password             string
+	Username             string
+	Notes                string
+	Role                 string // 空字符串表示使用默认角色(user);合法值 admin/user
+	Balance              *float64
+	Concurrency          int
+	RPMLimit             int
+	AllowedGroups        []int64
+	RestrictPublicGroups bool
 	// ActorAdminID 执行本次操作的管理员ID(来自JWT)，仅用于权限敏感操作的审计日志。
 	ActorAdminID int64
 }
 
 type UpdateUserInput struct {
-	Email          string
-	Password       string
-	Username       *string
-	Notes          *string
-	Role           string   // 空字符串表示"未提供"(不修改);合法值 admin/user
-	Balance        *float64 // 使用指针区分"未提供"和"设置为0"
-	Concurrency    *int     // 使用指针区分"未提供"和"设置为0"
-	RPMLimit       *int     // 使用指针区分"未提供"和"设置为0"
-	InvoiceEnabled *bool
-	// SubscriptionPurchaseDisabled 使用指针区分"未提供"和"设置为 false"
-	SubscriptionPurchaseDisabled *bool
-	// RechargeBonusDisabled 使用指针区分"未提供"和"设置为 false"
-	RechargeBonusDisabled *bool
-	Status                string
-	AllowedGroups         *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	Email         string
+	Password      string
+	Username      *string
+	Notes         *string
+	Role          string   // 空字符串表示"未提供"(不修改);合法值 admin/user
+	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
+	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
+	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
+	Status        string
+	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	// RestrictPublicGroups 指针区分"未提供"和"显式开关"。
+	RestrictPublicGroups *bool
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
 	// ActorAdminID 执行本次操作的管理员ID(来自JWT)，仅用于权限敏感操作的审计日志。
 	ActorAdminID int64
+	// 发票/订阅/充值加赠开关（fork）
+	InvoiceEnabled *bool
+	// SubscriptionPurchaseDisabled 使用指针区分"未提供"和"设置为 false"
+	SubscriptionPurchaseDisabled *bool
+	// RechargeBonusDisabled 使用指针区分"未提供"和"设置为 false"
+	RechargeBonusDisabled *bool
 }
 
 type AdminBindAuthIdentityInput struct {
@@ -264,6 +263,7 @@ type CreateGroupInput struct {
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
+	ImageCountBilling            bool
 	ImageRateIndependent         bool
 	ImageRateMultiplier          *float64
 	BatchImageDiscountMultiplier *float64
@@ -281,12 +281,18 @@ type CreateGroupInput struct {
 	VideoPrice480P     *float64
 	VideoPrice720P     *float64
 	VideoPrice1080P    *float64
+	// VideoModelPrices 可选按模型族×分辨率覆盖视频每秒单价。
+	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；nil/负数按默认价 0.01 处理
-	WebSearchPricePerCall    *float64
-	WebSearchRateIndependent bool
-	WebSearchRateMultiplier  *float64
-	ClaudeCodeOnly           bool   // 仅允许 Claude Code 客户端
-	FallbackGroupID          *int64 // 降级分组 ID
+	WebSearchPricePerCall *float64
+	// 搜索工具单价 per 1k
+	SearchPricePer1k *float64
+	// Grok Voice 显式定价（分组级）
+	AudioRealtimePricePerMin     *float64
+	AudioTTSPricePerMillionChars *float64
+	AudioSTTPricePerHour         *float64
+	ClaudeCodeOnly               bool   // 仅允许 Claude Code 客户端
+	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -304,7 +310,9 @@ type CreateGroupInput struct {
 	RequireOAuthOnly            bool
 	RequirePrivacySet           bool
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
-	ModelsListConfig            GroupModelsListConfig
+	ModelAllowlist              GroupModelAllowlist
+	// CodexModelsManifestConfig 固定账号 manifest 配置；创建路径禁止开启，仅编辑可配置。
+	CodexModelsManifestConfig GroupCodexModelsManifestConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制）
 	RPMLimit int
 	// MaxReasoningEffort Anthropic/OpenAI 请求的推理强度上限，空字符串表示不限制。
@@ -319,23 +327,29 @@ type CreateGroupInput struct {
 	ProfitSafetyBuffer   *float64
 	// 从指定分组复制账号（创建分组后在同一事务内绑定）
 	CopyAccountsFromGroupIDs []int64
+	WebSearchRateIndependent bool
+	WebSearchRateMultiplier  *float64
+	ModelsListConfig         GroupModelsListConfig
 }
 
 type UpdateGroupInput struct {
-	Name             string
-	Description      *string
-	I18n             GroupI18n
-	Platform         string
-	RateMultiplier   *float64 // 使用指针以支持设置为0
-	IsExclusive      *bool
-	Status           string
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                      string
+	Description               *string
+	I18n                      *GroupI18n // nil 表示不修改；非 nil 整体替换
+	Platform                  string
+	RateMultiplier            *float64 // 使用指针以支持设置为0
+	IsExclusive               *bool
+	Status                    string
+	SubscriptionType          string   // standard/subscription
+	DailyLimitUSD             *float64 // 日限额 (USD)
+	WeeklyLimitUSD            *float64 // 周限额 (USD)
+	MonthlyLimitUSD           *float64 // 月限额 (USD)
+	LongContextPricingEnabled *bool
+	ModelPricing              *[]ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         *bool
 	AllowBatchImageGeneration    *bool
+	ImageCountBilling            *bool
 	ImageRateIndependent         *bool
 	ImageRateMultiplier          *float64
 	BatchImageDiscountMultiplier *float64
@@ -353,14 +367,18 @@ type UpdateGroupInput struct {
 	VideoPrice480P     *float64
 	VideoPrice720P     *float64
 	VideoPrice1080P    *float64
+	// VideoModelPrices 可选按模型族×分辨率覆盖；nil 表示不修改，空 map 表示清除。
+	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示不修改，负数表示清除回默认价 0.01
-	WebSearchPricePerCall     *float64
-	WebSearchRateIndependent  *bool
-	WebSearchRateMultiplier   *float64
-	LongContextPricingEnabled *bool
-	ModelPricing              *[]ChannelModelPricing
-	ClaudeCodeOnly            *bool  // 仅允许 Claude Code 客户端
-	FallbackGroupID           *int64 // 降级分组 ID
+	WebSearchPricePerCall *float64
+	// 搜索工具单价；nil 不修改，负数清除
+	SearchPricePer1k *float64
+	// Grok Voice 显式定价；nil 表示不修改，负数表示清除
+	AudioRealtimePricePerMin     *float64
+	AudioTTSPricePerMillionChars *float64
+	AudioSTTPricePerHour         *float64
+	ClaudeCodeOnly               *bool  // 仅允许 Claude Code 客户端
+	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -378,7 +396,9 @@ type UpdateGroupInput struct {
 	RequireOAuthOnly            *bool
 	RequirePrivacySet           *bool
 	MessagesDispatchModelConfig *OpenAIMessagesDispatchModelConfig
-	ModelsListConfig            *GroupModelsListConfig
+	ModelAllowlist              *GroupModelAllowlist
+	// CodexModelsManifestConfig nil 表示不修改；非 openai 平台会被归一化为关闭。
+	CodexModelsManifestConfig *GroupCodexModelsManifestConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制），nil 表示未提供不改动。
 	RPMLimit *int
 	// MaxReasoningEffort 空字符串表示清除上限；nil 表示未提供不改动。
@@ -393,9 +413,13 @@ type UpdateGroupInput struct {
 	ProfitSafetyBuffer   *float64
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64
+	WebSearchRateIndependent *bool
+	WebSearchRateMultiplier  *float64
+	ModelsListConfig         *GroupModelsListConfig
 }
 
 type CreateAccountInput struct {
+	ProxyMode          string // 受限写入在验权后选择代理。
 	Name               string
 	Notes              *string
 	Platform           string
@@ -403,7 +427,6 @@ type CreateAccountInput struct {
 	Credentials        map[string]any
 	Extra              map[string]any
 	ProxyID            *int64
-	ProxyIPGroupID     *int64
 	Concurrency        int
 	Priority           int
 	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
@@ -417,6 +440,7 @@ type CreateAccountInput struct {
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
+	ProxyIPGroupID        *int64 `json:"proxy_ip_group_id,omitempty"`
 }
 
 // ShadowOptions is the input for CreateShadow.
@@ -429,13 +453,13 @@ type ShadowOptions struct {
 }
 
 type UpdateAccountInput struct {
+	ProxyMode             string // 受限写入在验权后选择代理。
 	Name                  string
 	Notes                 *string
 	Type                  string // Account type: oauth, setup-token, apikey
 	Credentials           map[string]any
 	Extra                 map[string]any
 	ProxyID               *int64
-	ProxyIPGroupID        *int64
 	Concurrency           *int     // 使用指针区分"未提供"和"设置为0"
 	Priority              *int     // 使用指针区分"未提供"和"设置为0"
 	RateMultiplier        *float64 // 账号计费倍率（>=0，允许 0）
@@ -446,7 +470,8 @@ type UpdateAccountInput struct {
 	AutoPauseOnExpired    *bool
 	ProbeEnabled          *bool
 	RateSyncEnabled       *bool
-	SkipMixedChannelCheck bool // 跳过混合渠道检查（用户已确认风险）
+	SkipMixedChannelCheck bool   // 跳过混合渠道检查（用户已确认风险）
+	ProxyIPGroupID        *int64 `json:"proxy_ip_group_id,omitempty"`
 }
 
 // BulkUpdateAccountsInput describes the payload for bulk updating accounts.
@@ -545,13 +570,15 @@ type UpdateProxyInput struct {
 	Protocol       string
 	Host           string
 	Port           int
-	Username       string
-	Password       string
+	Username       *string
+	Password       *string
 	Status         string
 	ExpiresAt      *time.Time
+	ClearExpiresAt bool
 	FallbackMode   string
 	BackupProxyID  *int64
-	ExpiryWarnDays int
+	ClearBackupID  bool
+	ExpiryWarnDays *int
 }
 
 type GenerateRedeemCodesInput struct {
@@ -689,11 +716,13 @@ type adminServiceImpl struct {
 	userRepo             UserRepository
 	groupRepo            GroupRepository
 	groupDuplicateRepo   GroupDuplicateRepository
+	emptyGroupDeleteRepo EmptyGroupDeleteRepository
 	accountRepo          AccountRepository
 	accountDuplicateRepo AccountDuplicateRepository
 	accountBillingRepo   AccountBillingSettingsRepository
 	proxyRepo            ProxyRepository
 	proxyIPGroupRepo     ProxyIPGroupRepository
+	accountErrorHistory  *AccountErrorHistoryService
 	apiKeyRepo           APIKeyRepository
 	redeemCodeRepo       RedeemCodeRepository
 	userGroupRateRepo    UserGroupRateRepository
@@ -708,14 +737,21 @@ type adminServiceImpl struct {
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
-	accountErrorHistory  *AccountErrorHistoryService
+	affiliateService     adminRechargeAffiliateAccruer
 	compositeRouteRepo   CompositeModelRouteRepository
 	compositeResolver    *CompositeRouteResolver
+	// 分组平台变更后用来失效渠道缓存；可为 nil（缓存会在 TTL 到期后自然重建）
+	channelCacheInvalidator ChannelCacheInvalidator
 }
 
-// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
-func (s *adminServiceImpl) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
-	s.accountErrorHistory = svc
+// ChannelCacheInvalidator 失效渠道缓存。
+// 窄接口，避免 admin 服务依赖整个 ChannelService——与 APIKeyAuthCacheInvalidator 同一思路。
+type ChannelCacheInvalidator interface {
+	InvalidateCache()
+}
+
+type adminRechargeAffiliateAccruer interface {
+	AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error)
 }
 
 type userGroupRateBatchReader interface {
@@ -744,14 +780,17 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 	runtimeBlocker AccountRuntimeBlocker,
+	affiliateService *AffiliateService,
 	compositeRouteRepo CompositeModelRouteRepository,
 	compositeResolver *CompositeRouteResolver,
+	channelCacheInvalidator ChannelCacheInvalidator,
 ) AdminService {
 	return &adminServiceImpl{
 		cfg:                  cfg,
 		userRepo:             userRepo,
 		groupRepo:            groupRepo,
 		groupDuplicateRepo:   groupRepo,
+		emptyGroupDeleteRepo: groupRepo,
 		accountRepo:          accountRepo,
 		accountDuplicateRepo: accountRepo,
 		accountBillingRepo:   accountRepo,
@@ -771,7 +810,14 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
+		affiliateService:     affiliateService,
 		compositeRouteRepo:   compositeRouteRepo,
 		compositeResolver:    compositeResolver,
+
+		channelCacheInvalidator: channelCacheInvalidator,
 	}
+}
+
+func (s *adminServiceImpl) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }

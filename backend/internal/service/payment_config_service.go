@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -17,36 +16,31 @@ import (
 )
 
 const (
-	SettingPaymentEnabled                    = "payment_enabled"
-	SettingMinRechargeAmount                 = "MIN_RECHARGE_AMOUNT"
-	SettingMaxRechargeAmount                 = "MAX_RECHARGE_AMOUNT"
-	SettingDailyRechargeLimit                = "DAILY_RECHARGE_LIMIT"
-	SettingOrderTimeoutMinutes               = "ORDER_TIMEOUT_MINUTES"
-	SettingMaxPendingOrders                  = "MAX_PENDING_ORDERS"
-	SettingEnabledPaymentTypes               = "ENABLED_PAYMENT_TYPES"
-	SettingLoadBalanceStrategy               = "LOAD_BALANCE_STRATEGY"
-	SettingBalancePayDisabled                = "BALANCE_PAYMENT_DISABLED"
 	SettingSubscriptionBalancePaymentEnabled = "SUBSCRIPTION_BALANCE_PAYMENT_ENABLED"
-	SettingBalanceRechargeMult               = "BALANCE_RECHARGE_MULTIPLIER"
-	SettingRechargeFeeRate                   = "RECHARGE_FEE_RATE"
-	SettingProductNamePrefix                 = "PRODUCT_NAME_PREFIX"
-	SettingProductNameSuffix                 = "PRODUCT_NAME_SUFFIX"
-	SettingHelpImageURL                      = "PAYMENT_HELP_IMAGE_URL"
-	SettingHelpText                          = "PAYMENT_HELP_TEXT"
-	SettingCancelRateLimitOn                 = "CANCEL_RATE_LIMIT_ENABLED"
-	SettingCancelRateLimitMax                = "CANCEL_RATE_LIMIT_MAX"
-	SettingCancelWindowSize                  = "CANCEL_RATE_LIMIT_WINDOW"
-	SettingCancelWindowUnit                  = "CANCEL_RATE_LIMIT_UNIT"
-	SettingCancelWindowMode                  = "CANCEL_RATE_LIMIT_WINDOW_MODE"
+	SettingPaymentEnabled      = "payment_enabled"
+	SettingMinRechargeAmount   = "MIN_RECHARGE_AMOUNT"
+	SettingMaxRechargeAmount   = "MAX_RECHARGE_AMOUNT"
+	SettingDailyRechargeLimit  = "DAILY_RECHARGE_LIMIT"
+	SettingOrderTimeoutMinutes = "ORDER_TIMEOUT_MINUTES"
+	SettingMaxPendingOrders    = "MAX_PENDING_ORDERS"
+	SettingEnabledPaymentTypes = "ENABLED_PAYMENT_TYPES"
+	SettingLoadBalanceStrategy = "LOAD_BALANCE_STRATEGY"
+	SettingBalancePayDisabled  = "BALANCE_PAYMENT_DISABLED"
+	SettingBalanceRechargeMult = "BALANCE_RECHARGE_MULTIPLIER"
 	// SettingSubscriptionUSDToCNYRate 是订阅 CNY 换算汇率（1 USD = X CNY）。
 	// 0/未配置 = 关闭换算（订阅按 price 数值直付），显式配置后 CNY 通道订阅按 price × rate 收款。
-	SettingSubscriptionUSDToCNYRate = "SUBSCRIPTION_USD_TO_CNY_RATE"
-	SettingAlipayForceQRCode        = "ALIPAY_FORCE_QRCODE"
-	// 充值满赠：总开关 + 档位列表（JSON 数组，到账余额 >= threshold 时赠 bonus）。
-	SettingRechargeBonusEnabled = "RECHARGE_BONUS_ENABLED"
-	SettingRechargeBonusTiers   = "RECHARGE_BONUS_TIERS"
-	// SettingAlipayMobilePrecreateDeepLink is an env override for returning an
-	// Alipay app deep link after a mobile precreate QR is issued.
+	SettingSubscriptionUSDToCNYRate      = "SUBSCRIPTION_USD_TO_CNY_RATE"
+	SettingRechargeFeeRate               = "RECHARGE_FEE_RATE"
+	SettingProductNamePrefix             = "PRODUCT_NAME_PREFIX"
+	SettingProductNameSuffix             = "PRODUCT_NAME_SUFFIX"
+	SettingHelpImageURL                  = "PAYMENT_HELP_IMAGE_URL"
+	SettingHelpText                      = "PAYMENT_HELP_TEXT"
+	SettingCancelRateLimitOn             = "CANCEL_RATE_LIMIT_ENABLED"
+	SettingCancelRateLimitMax            = "CANCEL_RATE_LIMIT_MAX"
+	SettingCancelWindowSize              = "CANCEL_RATE_LIMIT_WINDOW"
+	SettingCancelWindowUnit              = "CANCEL_RATE_LIMIT_UNIT"
+	SettingCancelWindowMode              = "CANCEL_RATE_LIMIT_WINDOW_MODE"
+	SettingAlipayForceQRCode             = "ALIPAY_FORCE_QRCODE"
 	SettingAlipayMobilePrecreateDeepLink = "ALIPAY_MOBILE_PRECREATE_DEEP_LINK"
 )
 
@@ -56,39 +50,32 @@ const (
 	defaultMaxPendingOrders = 3
 )
 
-// maxRechargeBonusTiers 充值满赠允许配置的最大档位数。
-const maxRechargeBonusTiers = 20
-
-// RechargeBonusTier 单档充值优惠。
-// 旧配置用 Threshold/Bonus 表示绝对赠送额；新配置用 MinAmount/BonusPercent。
-type RechargeBonusTier struct {
-	Threshold    float64 `json:"threshold,omitempty"`
-	Bonus        float64 `json:"bonus,omitempty"`
-	MinAmount    float64 `json:"min_amount,omitempty"`
-	BonusPercent float64 `json:"bonus_percent,omitempty"`
-}
-
 // PaymentConfig holds the payment system configuration.
 type PaymentConfig struct {
-	Enabled                           bool     `json:"enabled"`
-	MinAmount                         float64  `json:"min_amount"`
-	MaxAmount                         float64  `json:"max_amount"`
-	DailyLimit                        float64  `json:"daily_limit"`
-	OrderTimeoutMin                   int      `json:"order_timeout_minutes"`
-	MaxPendingOrders                  int      `json:"max_pending_orders"`
-	EnabledTypes                      []string `json:"enabled_payment_types"`
-	BalanceDisabled                   bool     `json:"balance_disabled"`
-	SubscriptionBalancePaymentEnabled bool     `json:"subscription_balance_payment_enabled"`
-	BalanceRechargeMultiplier         float64  `json:"balance_recharge_multiplier"`
+	Enabled                   bool     `json:"enabled"`
+	MinAmount                 float64  `json:"min_amount"`
+	MaxAmount                 float64  `json:"max_amount"`
+	DailyLimit                float64  `json:"daily_limit"`
+	OrderTimeoutMin           int      `json:"order_timeout_minutes"`
+	MaxPendingOrders          int      `json:"max_pending_orders"`
+	EnabledTypes              []string `json:"enabled_payment_types"`
+	BalanceDisabled           bool     `json:"balance_disabled"`
+	BalanceRechargeMultiplier float64  `json:"balance_recharge_multiplier"`
 	// SubscriptionUSDToCNYRate 为 0 时订阅换算关闭（兼容存量行为）。
 	SubscriptionUSDToCNYRate float64 `json:"subscription_usd_to_cny_rate"`
 	RechargeFeeRate          float64 `json:"recharge_fee_rate"`
-	LoadBalanceStrategy      string  `json:"load_balance_strategy"`
-	ProductNamePrefix        string  `json:"product_name_prefix"`
-	ProductNameSuffix        string  `json:"product_name_suffix"`
-	HelpImageURL             string  `json:"help_image_url"`
-	HelpText                 string  `json:"help_text"`
-	StripePublishableKey     string  `json:"stripe_publishable_key,omitempty"`
+	// RechargeBonusTiers 余额充值优惠阶梯（按 MinAmount 升序）；空表示无优惠。
+	RechargeBonusTiers []RechargeBonusTier `json:"recharge_bonus_tiers"`
+	// RechargeBonusMode 阶梯模式：bonus（赠金）/ discount（折扣），已归一化。
+	RechargeBonusMode string `json:"recharge_bonus_mode"`
+	// RechargeBonusNotice 充值页展示的 Markdown 活动文案；空表示不展示。
+	RechargeBonusNotice  string `json:"recharge_bonus_notice"`
+	LoadBalanceStrategy  string `json:"load_balance_strategy"`
+	ProductNamePrefix    string `json:"product_name_prefix"`
+	ProductNameSuffix    string `json:"product_name_suffix"`
+	HelpImageURL         string `json:"help_image_url"`
+	HelpText             string `json:"help_text"`
+	StripePublishableKey string `json:"stripe_publishable_key,omitempty"`
 
 	// Cancel rate limit settings
 	CancelRateLimitEnabled bool   `json:"cancel_rate_limit_enabled"`
@@ -99,34 +86,34 @@ type PaymentConfig struct {
 
 	// Force Alipay mobile users to use QR code instead of mobile redirect
 	AlipayForceQRCode bool `json:"alipay_force_qrcode"`
-
-	// 充值满赠：仅 order_type=balance 订单参与，履约时按订单创建时的快照发放
-	RechargeBonusEnabled bool                `json:"recharge_bonus_enabled"`
-	RechargeBonusMode    string              `json:"recharge_bonus_mode"`
-	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
-
-	AlipayMobilePrecreateDeepLink bool `json:"alipay_mobile_precreate_deep_link"`
+	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
+	AlipayMobilePrecreateDeepLink     bool `json:"alipay_mobile_precreate_deep_link"`
+	SubscriptionBalancePaymentEnabled bool `json:"subscription_balance_payment_enabled"`
+	RechargeBonusEnabled              bool `json:"recharge_bonus_enabled"`
 }
 
 // UpdatePaymentConfigRequest contains fields to update payment configuration.
 type UpdatePaymentConfigRequest struct {
-	Enabled                           *bool    `json:"enabled"`
-	MinAmount                         *float64 `json:"min_amount"`
-	MaxAmount                         *float64 `json:"max_amount"`
-	DailyLimit                        *float64 `json:"daily_limit"`
-	OrderTimeoutMin                   *int     `json:"order_timeout_minutes"`
-	MaxPendingOrders                  *int     `json:"max_pending_orders"`
-	EnabledTypes                      []string `json:"enabled_payment_types"`
-	BalanceDisabled                   *bool    `json:"balance_disabled"`
-	SubscriptionBalancePaymentEnabled *bool    `json:"subscription_balance_payment_enabled"`
-	BalanceRechargeMultiplier         *float64 `json:"balance_recharge_multiplier"`
-	SubscriptionUSDToCNYRate          *float64 `json:"subscription_usd_to_cny_rate"`
-	RechargeFeeRate                   *float64 `json:"recharge_fee_rate"`
-	LoadBalanceStrategy               *string  `json:"load_balance_strategy"`
-	ProductNamePrefix                 *string  `json:"product_name_prefix"`
-	ProductNameSuffix                 *string  `json:"product_name_suffix"`
-	HelpImageURL                      *string  `json:"help_image_url"`
-	HelpText                          *string  `json:"help_text"`
+	Enabled                   *bool    `json:"enabled"`
+	MinAmount                 *float64 `json:"min_amount"`
+	MaxAmount                 *float64 `json:"max_amount"`
+	DailyLimit                *float64 `json:"daily_limit"`
+	OrderTimeoutMin           *int     `json:"order_timeout_minutes"`
+	MaxPendingOrders          *int     `json:"max_pending_orders"`
+	EnabledTypes              []string `json:"enabled_payment_types"`
+	BalanceDisabled           *bool    `json:"balance_disabled"`
+	BalanceRechargeMultiplier *float64 `json:"balance_recharge_multiplier"`
+	SubscriptionUSDToCNYRate  *float64 `json:"subscription_usd_to_cny_rate"`
+	RechargeFeeRate           *float64 `json:"recharge_fee_rate"`
+	// RechargeBonusTiers nil 表示不更新；空切片表示清空阶梯。
+	RechargeBonusTiers  *[]RechargeBonusTier `json:"recharge_bonus_tiers"`
+	RechargeBonusMode   *string              `json:"recharge_bonus_mode"`
+	RechargeBonusNotice *string              `json:"recharge_bonus_notice"`
+	LoadBalanceStrategy *string              `json:"load_balance_strategy"`
+	ProductNamePrefix   *string              `json:"product_name_prefix"`
+	ProductNameSuffix   *string              `json:"product_name_suffix"`
+	HelpImageURL        *string              `json:"help_image_url"`
+	HelpText            *string              `json:"help_text"`
 
 	// Cancel rate limit settings
 	CancelRateLimitEnabled *bool   `json:"cancel_rate_limit_enabled"`
@@ -137,11 +124,8 @@ type UpdatePaymentConfigRequest struct {
 
 	// Force Alipay mobile users to use QR code instead of mobile redirect
 	AlipayForceQRCode *bool `json:"alipay_force_qrcode"`
-
-	// 充值满赠（tiers 非 nil 才写，与 EnabledTypes 同语义）
-	RechargeBonusEnabled *bool               `json:"recharge_bonus_enabled"`
-	RechargeBonusMode    *string             `json:"recharge_bonus_mode"`
-	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
+	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
+	AlipayMobilePrecreateDeepLink *bool `json:"alipay_mobile_precreate_deep_link"`
 
 	VisibleMethodAlipaySource  *string `json:"payment_visible_method_alipay_source"`
 	VisibleMethodWxpaySource   *string `json:"payment_visible_method_wxpay_source"`
@@ -153,14 +137,11 @@ type UpdatePaymentConfigRequest struct {
 type MethodLimits struct {
 	PaymentType string  `json:"payment_type"`
 	DisplayName string  `json:"display_name,omitempty"`
-	Currency    string  `json:"currency,omitempty"`
+	Currency    string  `json:"currency"`
 	FeeRate     float64 `json:"fee_rate"`
-	// BalanceRechargeMultiplier is the effective credit multiplier for this
-	// method after aggregating enabled provider instances (falls back to global).
-	BalanceRechargeMultiplier float64 `json:"balance_recharge_multiplier,omitempty"`
-	DailyLimit                float64 `json:"daily_limit"`
-	SingleMin                 float64 `json:"single_min"`
-	SingleMax                 float64 `json:"single_max"`
+	DailyLimit  float64 `json:"daily_limit"`
+	SingleMin   float64 `json:"single_min"`
+	SingleMax   float64 `json:"single_max"`
 }
 
 // MethodLimitsResponse is the full response for the user-facing /limits API.
@@ -204,16 +185,16 @@ type CreatePlanRequest struct {
 	Currency       string         `json:"currency"`
 	ValidityDays   int            `json:"validity_days"`
 	ValidityUnit   string         `json:"validity_unit"`
+	Features       string         `json:"features"`
+	ProductName    string         `json:"product_name"`
+	ForSale        bool           `json:"for_sale"`
+	SortOrder      int            `json:"sort_order"`
 	QuotaUSD       float64        `json:"quota_usd"`
 	DailyLimitUSD  *float64       `json:"daily_limit_usd"`
 	WeeklyLimitUSD *float64       `json:"weekly_limit_usd"`
 	ScopeType      string         `json:"scope_type"`
 	ScopeConfig    map[string]any `json:"scope_config"`
-	Features       string         `json:"features"`
 	PurchaseNotice string         `json:"purchase_notice"`
-	ProductName    string         `json:"product_name"`
-	ForSale        bool           `json:"for_sale"`
-	SortOrder      int            `json:"sort_order"`
 }
 
 type UpdatePlanRequest struct {
@@ -225,16 +206,16 @@ type UpdatePlanRequest struct {
 	Currency       *string        `json:"currency"`
 	ValidityDays   *int           `json:"validity_days"`
 	ValidityUnit   *string        `json:"validity_unit"`
+	Features       *string        `json:"features"`
+	ProductName    *string        `json:"product_name"`
+	ForSale        *bool          `json:"for_sale"`
+	SortOrder      *int           `json:"sort_order"`
 	QuotaUSD       *float64       `json:"quota_usd"`
 	DailyLimitUSD  *float64       `json:"daily_limit_usd"`
 	WeeklyLimitUSD *float64       `json:"weekly_limit_usd"`
 	ScopeType      *string        `json:"scope_type"`
 	ScopeConfig    map[string]any `json:"scope_config"`
-	Features       *string        `json:"features"`
 	PurchaseNotice *string        `json:"purchase_notice"`
-	ProductName    *string        `json:"product_name"`
-	ForSale        *bool          `json:"for_sale"`
-	SortOrder      *int           `json:"sort_order"`
 }
 
 // PaymentConfigService manages payment configuration and CRUD for
@@ -264,13 +245,13 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 	keys := []string{
 		SettingPaymentEnabled, SettingMinRechargeAmount, SettingMaxRechargeAmount,
 		SettingDailyRechargeLimit, SettingOrderTimeoutMinutes, SettingMaxPendingOrders,
-		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingSubscriptionBalancePaymentEnabled, SettingBalanceRechargeMult, SettingSubscriptionUSDToCNYRate, SettingRechargeFeeRate, SettingLoadBalanceStrategy,
+		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingBalanceRechargeMult, SettingSubscriptionUSDToCNYRate, SettingRechargeFeeRate, SettingLoadBalanceStrategy,
+		SettingRechargeBonusTiers, SettingRechargeBonusMode, SettingRechargeBonusNotice,
 		SettingProductNamePrefix, SettingProductNameSuffix,
 		SettingHelpImageURL, SettingHelpText,
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,
 		SettingCancelWindowSize, SettingCancelWindowUnit, SettingCancelWindowMode,
-		SettingAlipayForceQRCode,
-		SettingRechargeBonusEnabled, SettingRechargeBonusTiers,
+		SettingAlipayForceQRCode, SettingAlipayMobilePrecreateDeepLink,
 		SettingPaymentVisibleMethodAlipayEnabled, SettingPaymentVisibleMethodAlipaySource,
 		SettingPaymentVisibleMethodWxpayEnabled, SettingPaymentVisibleMethodWxpaySource,
 	}
@@ -286,22 +267,23 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 
 func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *PaymentConfig {
 	cfg := &PaymentConfig{
-		Enabled:                           vals[SettingPaymentEnabled] == "true",
-		MinAmount:                         pcParseFloat(vals[SettingMinRechargeAmount], 1),
-		MaxAmount:                         pcParseFloat(vals[SettingMaxRechargeAmount], 0),
-		DailyLimit:                        pcParseFloat(vals[SettingDailyRechargeLimit], 0),
-		OrderTimeoutMin:                   pcParseInt(vals[SettingOrderTimeoutMinutes], defaultOrderTimeoutMin),
-		MaxPendingOrders:                  pcParseInt(vals[SettingMaxPendingOrders], defaultMaxPendingOrders),
-		BalanceDisabled:                   vals[SettingBalancePayDisabled] == "true",
-		SubscriptionBalancePaymentEnabled: vals[SettingSubscriptionBalancePaymentEnabled] == "true",
-		BalanceRechargeMultiplier:         normalizeBalanceRechargeMultiplier(pcParseFloat(vals[SettingBalanceRechargeMult], defaultBalanceRechargeMultiplier)),
-		SubscriptionUSDToCNYRate:          normalizeSubscriptionUSDToCNYRate(pcParseFloat(vals[SettingSubscriptionUSDToCNYRate], 0)),
-		RechargeFeeRate:                   pcParseFloat(vals[SettingRechargeFeeRate], 0),
-		LoadBalanceStrategy:               vals[SettingLoadBalanceStrategy],
-		ProductNamePrefix:                 vals[SettingProductNamePrefix],
-		ProductNameSuffix:                 vals[SettingProductNameSuffix],
-		HelpImageURL:                      vals[SettingHelpImageURL],
-		HelpText:                          vals[SettingHelpText],
+		Enabled:                   vals[SettingPaymentEnabled] == "true",
+		MinAmount:                 pcParseFloat(vals[SettingMinRechargeAmount], 1),
+		MaxAmount:                 pcParseFloat(vals[SettingMaxRechargeAmount], 0),
+		DailyLimit:                pcParseFloat(vals[SettingDailyRechargeLimit], 0),
+		OrderTimeoutMin:           pcParseInt(vals[SettingOrderTimeoutMinutes], defaultOrderTimeoutMin),
+		MaxPendingOrders:          pcParseInt(vals[SettingMaxPendingOrders], defaultMaxPendingOrders),
+		BalanceDisabled:           vals[SettingBalancePayDisabled] == "true",
+		BalanceRechargeMultiplier: normalizeBalanceRechargeMultiplier(pcParseFloat(vals[SettingBalanceRechargeMult], defaultBalanceRechargeMultiplier)),
+		SubscriptionUSDToCNYRate:  normalizeSubscriptionUSDToCNYRate(pcParseFloat(vals[SettingSubscriptionUSDToCNYRate], 0)),
+		RechargeFeeRate:           pcParseFloat(vals[SettingRechargeFeeRate], 0),
+		RechargeBonusTiers:        parseRechargeBonusTiers(vals[SettingRechargeBonusTiers]),
+		RechargeBonusNotice:       vals[SettingRechargeBonusNotice],
+		LoadBalanceStrategy:       vals[SettingLoadBalanceStrategy],
+		ProductNamePrefix:         vals[SettingProductNamePrefix],
+		ProductNameSuffix:         vals[SettingProductNameSuffix],
+		HelpImageURL:              vals[SettingHelpImageURL],
+		HelpText:                  vals[SettingHelpText],
 
 		CancelRateLimitEnabled: vals[SettingCancelRateLimitOn] == "true",
 		CancelRateLimitMax:     pcParseInt(vals[SettingCancelRateLimitMax], 10),
@@ -309,10 +291,8 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		CancelRateLimitUnit:    vals[SettingCancelWindowUnit],
 		CancelRateLimitMode:    vals[SettingCancelWindowMode],
 
-		AlipayForceQRCode: vals[SettingAlipayForceQRCode] == "true",
-
-		RechargeBonusEnabled: vals[SettingRechargeBonusEnabled] == "true",
-		RechargeBonusTiers:   parseRechargeBonusTiers(vals[SettingRechargeBonusTiers]),
+		AlipayForceQRCode:             vals[SettingAlipayForceQRCode] == "true",
+		AlipayMobilePrecreateDeepLink: vals[SettingAlipayMobilePrecreateDeepLink] == "true",
 	}
 	cfg.RechargeBonusMode, _ = NormalizeRechargeBonusMode(vals[SettingRechargeBonusMode])
 	cfg.AlipayMobilePrecreateDeepLink = pcEnvBoolOverride(
@@ -393,58 +373,105 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 			return infraerrors.BadRequest("INVALID_RECHARGE_FEE_RATE", "recharge fee rate allows at most 2 decimal places")
 		}
 	}
-	if req.RechargeBonusTiers != nil {
-		if err := validateRechargeBonusTiers(req.RechargeBonusTiers); err != nil {
-			return err
+	rechargeBonusTiersValue, rechargeBonusModeValue, err := s.resolveRechargeBonusUpdate(ctx, req)
+	if err != nil {
+		return err
+	}
+	if req.RechargeBonusNotice != nil {
+		if err := validateRechargeBonusNotice(*req.RechargeBonusNotice); err != nil {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_NOTICE", err.Error())
 		}
 	}
-	// Patch-style update: only persist fields that were explicitly provided.
-	// Nil pointers must not overwrite existing settings with empty strings.
 	m := make(map[string]string)
-	setIfPresent := func(key, value string, present bool) {
-		if present {
-			m[key] = value
-		}
+	if req.Enabled != nil {
+		m[SettingPaymentEnabled] = formatBoolOrEmpty(req.Enabled)
 	}
-	setIfPresent(SettingPaymentEnabled, formatBoolOrEmpty(req.Enabled), req.Enabled != nil)
-	setIfPresent(SettingMinRechargeAmount, formatPositiveFloat(req.MinAmount), req.MinAmount != nil)
-	setIfPresent(SettingMaxRechargeAmount, formatPositiveFloat(req.MaxAmount), req.MaxAmount != nil)
-	setIfPresent(SettingDailyRechargeLimit, formatPositiveFloat(req.DailyLimit), req.DailyLimit != nil)
-	setIfPresent(SettingOrderTimeoutMinutes, formatPositiveInt(req.OrderTimeoutMin), req.OrderTimeoutMin != nil)
-	setIfPresent(SettingMaxPendingOrders, formatPositiveInt(req.MaxPendingOrders), req.MaxPendingOrders != nil)
-	setIfPresent(SettingBalancePayDisabled, formatBoolOrEmpty(req.BalanceDisabled), req.BalanceDisabled != nil)
-	setIfPresent(SettingSubscriptionBalancePaymentEnabled, formatBoolOrEmpty(req.SubscriptionBalancePaymentEnabled), req.SubscriptionBalancePaymentEnabled != nil)
-	setIfPresent(SettingBalanceRechargeMult, formatPositiveFloat(req.BalanceRechargeMultiplier), req.BalanceRechargeMultiplier != nil)
-	setIfPresent(SettingSubscriptionUSDToCNYRate, formatPositiveFloatExact(req.SubscriptionUSDToCNYRate), req.SubscriptionUSDToCNYRate != nil)
-	setIfPresent(SettingRechargeFeeRate, formatNonNegativeFloat(req.RechargeFeeRate), req.RechargeFeeRate != nil)
-	setIfPresent(SettingLoadBalanceStrategy, derefStr(req.LoadBalanceStrategy), req.LoadBalanceStrategy != nil)
-	setIfPresent(SettingProductNamePrefix, derefStr(req.ProductNamePrefix), req.ProductNamePrefix != nil)
-	setIfPresent(SettingProductNameSuffix, derefStr(req.ProductNameSuffix), req.ProductNameSuffix != nil)
-	setIfPresent(SettingHelpImageURL, derefStr(req.HelpImageURL), req.HelpImageURL != nil)
-	setIfPresent(SettingHelpText, derefStr(req.HelpText), req.HelpText != nil)
-	setIfPresent(SettingCancelRateLimitOn, formatBoolOrEmpty(req.CancelRateLimitEnabled), req.CancelRateLimitEnabled != nil)
-	setIfPresent(SettingCancelRateLimitMax, formatPositiveInt(req.CancelRateLimitMax), req.CancelRateLimitMax != nil)
-	setIfPresent(SettingCancelWindowSize, formatPositiveInt(req.CancelRateLimitWindow), req.CancelRateLimitWindow != nil)
-	setIfPresent(SettingCancelWindowUnit, derefStr(req.CancelRateLimitUnit), req.CancelRateLimitUnit != nil)
-	setIfPresent(SettingCancelWindowMode, derefStr(req.CancelRateLimitMode), req.CancelRateLimitMode != nil)
-	setIfPresent(SettingAlipayForceQRCode, formatBoolOrEmpty(req.AlipayForceQRCode), req.AlipayForceQRCode != nil)
-	setIfPresent(SettingPaymentVisibleMethodAlipaySource, derefStr(req.VisibleMethodAlipaySource), req.VisibleMethodAlipaySource != nil)
-	setIfPresent(SettingPaymentVisibleMethodWxpaySource, derefStr(req.VisibleMethodWxpaySource), req.VisibleMethodWxpaySource != nil)
-	setIfPresent(SettingPaymentVisibleMethodAlipayEnabled, formatBoolOrEmpty(req.VisibleMethodAlipayEnabled), req.VisibleMethodAlipayEnabled != nil)
-	setIfPresent(SettingPaymentVisibleMethodWxpayEnabled, formatBoolOrEmpty(req.VisibleMethodWxpayEnabled), req.VisibleMethodWxpayEnabled != nil)
+	if req.MinAmount != nil {
+		m[SettingMinRechargeAmount] = formatPositiveFloat(req.MinAmount)
+	}
+	if req.MaxAmount != nil {
+		m[SettingMaxRechargeAmount] = formatPositiveFloat(req.MaxAmount)
+	}
+	if req.DailyLimit != nil {
+		m[SettingDailyRechargeLimit] = formatPositiveFloat(req.DailyLimit)
+	}
+	if req.OrderTimeoutMin != nil {
+		m[SettingOrderTimeoutMinutes] = formatPositiveInt(req.OrderTimeoutMin)
+	}
+	if req.MaxPendingOrders != nil {
+		m[SettingMaxPendingOrders] = formatPositiveInt(req.MaxPendingOrders)
+	}
 	if req.EnabledTypes != nil {
 		m[SettingEnabledPaymentTypes] = strings.Join(req.EnabledTypes, ",")
 	}
-	if req.RechargeBonusTiers != nil {
-		tiersJSON, err := json.Marshal(req.RechargeBonusTiers)
-		if err != nil {
-			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus tiers serialization failed")
-		}
-		m[SettingRechargeBonusTiers] = string(tiersJSON)
+	if req.BalanceDisabled != nil {
+		m[SettingBalancePayDisabled] = formatBoolOrEmpty(req.BalanceDisabled)
 	}
-	setIfPresent(SettingRechargeBonusEnabled, formatBoolOrEmpty(req.RechargeBonusEnabled), req.RechargeBonusEnabled != nil)
-	if len(m) == 0 {
-		return nil
+	if req.BalanceRechargeMultiplier != nil {
+		m[SettingBalanceRechargeMult] = formatPositiveFloat(req.BalanceRechargeMultiplier)
+	}
+	if req.SubscriptionUSDToCNYRate != nil {
+		m[SettingSubscriptionUSDToCNYRate] = formatPositiveFloatExact(req.SubscriptionUSDToCNYRate)
+	}
+	if req.RechargeFeeRate != nil {
+		m[SettingRechargeFeeRate] = formatNonNegativeFloat(req.RechargeFeeRate)
+	}
+	if req.RechargeBonusTiers != nil {
+		m[SettingRechargeBonusTiers] = rechargeBonusTiersValue
+	}
+	if req.RechargeBonusMode != nil {
+		m[SettingRechargeBonusMode] = rechargeBonusModeValue
+	}
+	if req.RechargeBonusNotice != nil {
+		m[SettingRechargeBonusNotice] = strings.TrimSpace(*req.RechargeBonusNotice)
+	}
+	if req.LoadBalanceStrategy != nil {
+		m[SettingLoadBalanceStrategy] = derefStr(req.LoadBalanceStrategy)
+	}
+	if req.ProductNamePrefix != nil {
+		m[SettingProductNamePrefix] = derefStr(req.ProductNamePrefix)
+	}
+	if req.ProductNameSuffix != nil {
+		m[SettingProductNameSuffix] = derefStr(req.ProductNameSuffix)
+	}
+	if req.HelpImageURL != nil {
+		m[SettingHelpImageURL] = derefStr(req.HelpImageURL)
+	}
+	if req.HelpText != nil {
+		m[SettingHelpText] = derefStr(req.HelpText)
+	}
+	if req.CancelRateLimitEnabled != nil {
+		m[SettingCancelRateLimitOn] = formatBoolOrEmpty(req.CancelRateLimitEnabled)
+	}
+	if req.CancelRateLimitMax != nil {
+		m[SettingCancelRateLimitMax] = formatPositiveInt(req.CancelRateLimitMax)
+	}
+	if req.CancelRateLimitWindow != nil {
+		m[SettingCancelWindowSize] = formatPositiveInt(req.CancelRateLimitWindow)
+	}
+	if req.CancelRateLimitUnit != nil {
+		m[SettingCancelWindowUnit] = derefStr(req.CancelRateLimitUnit)
+	}
+	if req.CancelRateLimitMode != nil {
+		m[SettingCancelWindowMode] = derefStr(req.CancelRateLimitMode)
+	}
+	if req.AlipayForceQRCode != nil {
+		m[SettingAlipayForceQRCode] = formatBoolOrEmpty(req.AlipayForceQRCode)
+	}
+	if req.AlipayMobilePrecreateDeepLink != nil {
+		m[SettingAlipayMobilePrecreateDeepLink] = formatBoolOrEmpty(req.AlipayMobilePrecreateDeepLink)
+	}
+	if req.VisibleMethodAlipaySource != nil {
+		m[SettingPaymentVisibleMethodAlipaySource] = derefStr(req.VisibleMethodAlipaySource)
+	}
+	if req.VisibleMethodWxpaySource != nil {
+		m[SettingPaymentVisibleMethodWxpaySource] = derefStr(req.VisibleMethodWxpaySource)
+	}
+	if req.VisibleMethodAlipayEnabled != nil {
+		m[SettingPaymentVisibleMethodAlipayEnabled] = formatBoolOrEmpty(req.VisibleMethodAlipayEnabled)
+	}
+	if req.VisibleMethodWxpayEnabled != nil {
+		m[SettingPaymentVisibleMethodWxpayEnabled] = formatBoolOrEmpty(req.VisibleMethodWxpayEnabled)
 	}
 	return s.settingRepo.SetMultiple(ctx, m)
 }
@@ -469,108 +496,6 @@ func formatPositiveFloatExact(v *float64) string {
 		return "" // empty → parsePaymentConfig 视为未配置（换算关闭）
 	}
 	return strconv.FormatFloat(*v, 'f', -1, 64)
-}
-
-// parseRechargeBonusTiers 解析充值满赠档位 JSON；空串/解析失败返回空 slice（禁 panic）。
-func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
-	if raw == "" {
-		return []RechargeBonusTier{}
-	}
-	var tiers []RechargeBonusTier
-	if err := json.Unmarshal([]byte(raw), &tiers); err != nil {
-		return []RechargeBonusTier{}
-	}
-	for _, tier := range tiers {
-		if tier.MinAmount > 0 || tier.BonusPercent > 0 {
-			out, err := NormalizeRechargeBonusTiers(tiers)
-			if err != nil {
-				return []RechargeBonusTier{}
-			}
-			return out
-		}
-	}
-	return normalizeRechargeBonusTiers(tiers)
-}
-
-// normalizeRechargeBonusTiers 丢弃非法档（threshold/bonus <= 0 或 NaN/Inf），
-// 同 threshold 保留首个，按 Threshold 降序排序，始终返回非 nil slice。
-func normalizeRechargeBonusTiers(tiers []RechargeBonusTier) []RechargeBonusTier {
-	out := make([]RechargeBonusTier, 0, len(tiers))
-	seen := make(map[float64]struct{}, len(tiers))
-	for _, tier := range tiers {
-		if tier.Threshold <= 0 || tier.Bonus <= 0 ||
-			math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) ||
-			math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) {
-			continue
-		}
-		if _, ok := seen[tier.Threshold]; ok {
-			continue
-		}
-		seen[tier.Threshold] = struct{}{}
-		out = append(out, tier)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Threshold > out[j].Threshold })
-	return out
-}
-
-// snapshotRechargeBonusAmount 是下单时写入的赠送快照。禁止返赠或非余额充值时为 0。
-func snapshotRechargeBonusAmount(orderType string, creditedAmount float64, cfg *PaymentConfig, bonusDisabled bool) float64 {
-	if bonusDisabled || orderType != payment.OrderTypeBalance {
-		return 0
-	}
-	return computeRechargeBonusAmount(creditedAmount, cfg)
-}
-
-// VisibleRechargeBonus 决定充值页是否下发满赠档位。禁止返赠时关闭展示，充值页其余内容不变。
-func VisibleRechargeBonus(cfg *PaymentConfig, bonusDisabled bool) (bool, []RechargeBonusTier) {
-	if cfg == nil || bonusDisabled || !cfg.RechargeBonusEnabled {
-		return false, []RechargeBonusTier{}
-	}
-	if cfg.RechargeBonusTiers == nil {
-		return true, []RechargeBonusTier{}
-	}
-	return true, cfg.RechargeBonusTiers
-}
-
-// computeRechargeBonusAmount 返回到账金额命中的最高档赠送额（未命中返回 0）。
-// tiers 已按 Threshold 降序，取第一个 threshold <= creditedAmount 的档；
-// creditedAmount 与 threshold 均为 2 位小数内的金额，直接浮点 >= 比较即可。
-func computeRechargeBonusAmount(creditedAmount float64, cfg *PaymentConfig) float64 {
-	if cfg == nil || !cfg.RechargeBonusEnabled || len(cfg.RechargeBonusTiers) == 0 {
-		return 0
-	}
-	for _, tier := range cfg.RechargeBonusTiers {
-		if tier.Threshold <= creditedAmount {
-			return math.Round(tier.Bonus*100) / 100
-		}
-	}
-	return 0
-}
-
-// validateRechargeBonusTiers 校验管理员提交的充值满赠档位。
-func validateRechargeBonusTiers(tiers []RechargeBonusTier) error {
-	if len(tiers) > maxRechargeBonusTiers {
-		return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS",
-			fmt.Sprintf("recharge bonus allows at most %d tiers", maxRechargeBonusTiers))
-	}
-	seen := make(map[float64]struct{}, len(tiers))
-	for _, tier := range tiers {
-		if math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) || tier.Threshold <= 0 {
-			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus threshold must be a positive number")
-		}
-		if math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) || tier.Bonus <= 0 {
-			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus bonus must be a positive number")
-		}
-		// 金额只允许 2 位小数
-		if math.Round(tier.Threshold*100) != tier.Threshold*100 || math.Round(tier.Bonus*100) != tier.Bonus*100 {
-			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus tiers allow at most 2 decimal places")
-		}
-		if _, ok := seen[tier.Threshold]; ok {
-			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus thresholds must be unique")
-		}
-		seen[tier.Threshold] = struct{}{}
-	}
-	return nil
 }
 
 func formatNonNegativeFloat(v *float64) string {
@@ -647,21 +572,13 @@ func buildVisibleMethodSourceAvailability(instances []*dbent.PaymentProviderInst
 			if inst.SupportedTypes == "" || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeWxpay) || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeWxpayDirect) {
 				available[VisibleMethodSourceOfficialWechat] = true
 			}
-		case payment.TypeEasyPay, payment.TypeMapay:
+		case payment.TypeEasyPay:
 			for _, supportedType := range splitTypes(inst.SupportedTypes) {
 				switch NormalizeVisibleMethod(supportedType) {
 				case payment.TypeAlipay:
-					if inst.ProviderKey == payment.TypeMapay {
-						available[VisibleMethodSourceMapayAlipay] = true
-					} else {
-						available[VisibleMethodSourceEasyPayAlipay] = true
-					}
+					available[VisibleMethodSourceEasyPayAlipay] = true
 				case payment.TypeWxpay:
-					if inst.ProviderKey == payment.TypeMapay {
-						available[VisibleMethodSourceMapayWechat] = true
-					} else {
-						available[VisibleMethodSourceEasyPayWechat] = true
-					}
+					available[VisibleMethodSourceEasyPayWechat] = true
 				}
 			}
 		}
@@ -717,4 +634,59 @@ func visibleMethodShouldBeExposed(method string, vals map[string]string, availab
 	}
 	source := NormalizeVisibleMethodSource(method, vals[sourceKey])
 	return source != "" && available[source]
+}
+
+// snapshotRechargeBonusAmount 是下单时写入的赠送快照。禁止返赠或非余额充值时为 0。
+func snapshotRechargeBonusAmount(orderType string, creditedAmount float64, cfg *PaymentConfig, bonusDisabled bool) float64 {
+	if bonusDisabled || orderType != payment.OrderTypeBalance {
+		return 0
+	}
+	return computeRechargeBonusAmount(creditedAmount, cfg)
+}
+
+// computeRechargeBonusAmount 返回到账金额命中的最高档赠送额（未命中返回 0）。
+// tiers 已按 Threshold 降序，取第一个 threshold <= creditedAmount 的档；
+// creditedAmount 与 threshold 均为 2 位小数内的金额，直接浮点 >= 比较即可。
+func computeRechargeBonusAmount(creditedAmount float64, cfg *PaymentConfig) float64 {
+	if cfg == nil || !cfg.RechargeBonusEnabled || len(cfg.RechargeBonusTiers) == 0 {
+		return 0
+	}
+	for _, tier := range cfg.RechargeBonusTiers {
+		if tier.Threshold <= creditedAmount {
+			return math.Round(tier.Bonus*100) / 100
+		}
+	}
+	return 0
+}
+
+// normalizeRechargeBonusTiers 丢弃非法档（threshold/bonus <= 0 或 NaN/Inf），
+// 同 threshold 保留首个，按 Threshold 降序排序，始终返回非 nil slice。
+func normalizeRechargeBonusTiers(tiers []RechargeBonusTier) []RechargeBonusTier {
+	out := make([]RechargeBonusTier, 0, len(tiers))
+	seen := make(map[float64]struct{}, len(tiers))
+	for _, tier := range tiers {
+		if tier.Threshold <= 0 || tier.Bonus <= 0 ||
+			math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) ||
+			math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) {
+			continue
+		}
+		if _, ok := seen[tier.Threshold]; ok {
+			continue
+		}
+		seen[tier.Threshold] = struct{}{}
+		out = append(out, tier)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Threshold > out[j].Threshold })
+	return out
+}
+
+// VisibleRechargeBonus 决定充值页是否下发满赠档位。禁止返赠时关闭展示，充值页其余内容不变。
+func VisibleRechargeBonus(cfg *PaymentConfig, bonusDisabled bool) (bool, []RechargeBonusTier) {
+	if cfg == nil || bonusDisabled || !cfg.RechargeBonusEnabled {
+		return false, []RechargeBonusTier{}
+	}
+	if cfg.RechargeBonusTiers == nil {
+		return true, []RechargeBonusTier{}
+	}
+	return true, cfg.RechargeBonusTiers
 }

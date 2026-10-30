@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
@@ -194,8 +195,8 @@ func openAIStreamEventIsTerminalWithType(data, eventType string) bool {
 }
 
 func openAIStreamEventTypeIsTerminal(eventType string) bool {
-	switch eventType {
-	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+	switch strings.TrimSpace(eventType) {
+	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled", "error":
 		return true
 	default:
 		return false
@@ -424,10 +425,6 @@ var ErrNoAvailableAccounts = errors.New("no available accounts")
 // ErrClaudeCodeOnly 表示分组仅允许 Claude Code 客户端访问
 var ErrClaudeCodeOnly = errors.New("this group only allows Claude Code clients")
 
-// ErrReasoningContentNotFound is returned by GatewayCache.GetReasoningContent
-// when no cached reasoning content exists for the reasoning item ID.
-var ErrReasoningContentNotFound = errors.New("reasoning content not found")
-
 // allowedHeaders 白名单headers（参考CRS项目）
 var allowedHeaders = map[string]bool{
 	"accept":                                    true,
@@ -460,6 +457,7 @@ var ErrStickySessionNotFound = errors.New("sticky session not found")
 
 // ErrReasoningContentNotFound is returned by GatewayCache.GetReasoningContent
 // when no cached reasoning content exists for the reasoning item ID.
+var ErrReasoningContentNotFound = errors.New("reasoning content not found")
 
 // GatewayCache 定义网关服务的缓存操作接口。
 // 提供粘性会话（Sticky Session）的存储、查询、刷新和删除功能。
@@ -485,13 +483,25 @@ type GatewayCache interface {
 	// Delete sticky session binding, used to proactively clean up when account becomes unavailable
 	DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error
 
-	// SetReasoningContent caches reasoning plaintext by reasoning item id so a
-	// later Responses→Chat Completions history that only has encrypted_content
-	// can restore reasoning_content (DeepSeek thinking mode requires it).
+	// Grok async video billing snapshot (create → status success).
+	// SetGrokVideoPendingBilling stores create-time model/duration/resolution for status billing.
+	SetGrokVideoPendingBilling(ctx context.Context, key string, payload []byte, ttl time.Duration) error
+	// GetGrokVideoPendingBilling returns the create-time billing snapshot; miss → nil, nil.
+	GetGrokVideoPendingBilling(ctx context.Context, key string) ([]byte, error)
+	// ClaimGrokVideoBilled atomically marks a video request as billed (SetNX).
+	// Returns true when this caller won the claim; false when already billed or claim unavailable.
+	ClaimGrokVideoBilled(ctx context.Context, key string, ttl time.Duration) (bool, error)
+	// ReleaseGrokVideoBilled clears a claim so a failed RecordUsage can retry billing.
+	ReleaseGrokVideoBilled(ctx context.Context, key string) error
+
+	// Reasoning content cache (Responses→Chat Completions 桥接）。
+	// SetReasoningContent 按 reasoning item id 缓存 reasoning 全文，供后续请求
+	// 在客户端不回传明文 summary 时回注 reasoning_content（DeepSeek thinking
+	// mode 要求回传，否则 400）。
 	SetReasoningContent(ctx context.Context, itemID string, content string, ttl time.Duration) error
-	// GetReasoningContent returns cached reasoning plaintext. A miss returns
-	// ErrReasoningContentNotFound so callers can tell "not cached" from a
-	// real read failure.
+	// GetReasoningContent 返回缓存的 reasoning 全文；未命中返回
+	// ErrReasoningContentNotFound，使 service 层无需依赖具体缓存实现即可
+	// 区分"未缓存"与真实读取失败。
 	GetReasoningContent(ctx context.Context, itemID string) (string, error)
 }
 
@@ -596,13 +606,12 @@ type ClaudeUsage struct {
 	ImageOutputTokens        int `json:"image_output_tokens,omitempty"`
 }
 
-// AudioUsage 是 Grok 语音计费的用量单位。
+// ForwardResult 转发结果
 type AudioUsage struct {
 	Mode            string  // realtime | tts | stt
 	DurationOrUnits float64 // minutes / million-chars / hours
 }
 
-// ForwardResult 转发结果
 type ForwardResult struct {
 	RequestID string
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
@@ -626,20 +635,26 @@ type ForwardResult struct {
 	ReasoningEffort             *string
 	// RequestedReasoningEffort is the client-requested effort before mapping.
 	RequestedReasoningEffort *string
-	// ServiceTier records the billable request tier. OpenAI uses service_tier;
-	// Anthropic speed=fast is normalized to "fast".
+	// ServiceTier records the tier requested by the client. OpenAI uses
+	// service_tier; Anthropic speed=fast is normalized to "fast". Usage recording
+	// lowers it to UpstreamResponseServiceTier when the upstream reports a
+	// cheaper tier (see ResolveBillingServiceTier).
 	ServiceTier *string
 
 	// 图片生成计费字段（图片生成模型使用）
-	ImageCount         int    // 生成的图片数量
+	ImageCount int // 生成的图片数量
+	// ImageEndpoint 标记请求来自专用图片端点（/v1/images/*、图片模型端点）。
+	// 分组 image_count_billing 开关只对这类请求生效，混合的 Responses/Chat/WS
+	// 请求带图片工具时仍按 token 计费。
+	ImageEndpoint      bool
 	ImageSize          string // 最终计费尺寸 "1K", "2K", "4K"
 	ImageInputSize     string // 请求中的原始图片尺寸
 	ImageOutputSize    string // 上游响应中的图片尺寸
 	ImageOutputSizes   []string
 	ImageSizeSource    string
 	ImageSizeBreakdown map[string]int
-	// SearchCount is a per-request web search surcharge count.
-	SearchCount int
+	SearchCount        int
+	AudioUsage         *AudioUsage
 	// CacheStorageTokenHours 显式上下文缓存的存储量（缓存 token 数 × 存储小时数），按计费模型的
 	// 存储单价折算为费用后叠加在 token 费用之上。
 	CacheStorageTokenHours float64
@@ -685,12 +700,12 @@ type UpstreamFailoverError struct {
 	ResponseHeaders          http.Header   // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
 	ForceCacheBilling        bool          // Antigravity 粘性会话切换时设为 true
 	RetryableOnSameAccount   bool          // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
-	RequestScopedTransient   bool          // 请求级瞬时压力，不作为账号健康失败；OpenAI 容量降载只允许有界同账号重试
-	SameAccountRetryDelay    time.Duration // 错误级同账号重试间隔；零值用 handler 默认
-	SameAccountRetryDeadline time.Time     // 错误级同账号重试窗口；零值不限制
-	SameAccountRetryMax      int           // 错误级同账号重试上限；<=0 表示沿用账号 pool_mode 配置
+	SameAccountRetryDelay    time.Duration // 同账号重试的最小间隔；零值使用 handler 默认值
+	SameAccountRetryDeadline time.Time     // 同账号重试截止时间；零值表示仅受 retryLimit 限制
+	SameAccountRetryMax      int           // 可选的错误级同账号重试上限，低于 handler 默认预算时优先采用
+	RequestScopedTransient   bool          // 故障因素与账号无关（如上游按客户端身份/模型容量降载）：可同账号重试，但不得据此对账号做临时封禁
 	SafeToFailoverAfterWrite bool          // 仅写出 SSE 注释等非语义字节时，仍可在同一客户端流中切换账号
-	BoundUpstreamPassthrough bool          // 绑定缓存请求收到的上游 429/5xx：原样回写，不改本账号状态
+	BoundUpstreamPassthrough bool          // 绑定显式缓存的请求在上游网关账号上收到的 429 / 5xx：反映持有缓存的上游账号状态，原样回写不走错误映射
 	Stage                    GatewayFailureStage
 	Scope                    GatewayFailureScope
 	Reason                   GatewayFailureReason
@@ -708,15 +723,6 @@ func (e *UpstreamFailoverError) Error() string {
 
 func (e *UpstreamFailoverError) ShouldRetryNextAccount() bool {
 	return e != nil && e.NextAccountAction != NextAccountStop
-}
-
-// EffectiveSameAccountRetryLimit returns the error-level same-account retry
-// budget when set. Otherwise it keeps the account pool_mode default.
-func (e *UpstreamFailoverError) EffectiveSameAccountRetryLimit(poolLimit int) int {
-	if e != nil && e.SameAccountRetryMax > 0 {
-		return e.SameAccountRetryMax
-	}
-	return poolLimit
 }
 
 func (e *UpstreamFailoverError) IsCredentialFailure() bool {
@@ -766,55 +772,46 @@ func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accou
 
 // GatewayService handles API gateway operations
 type GatewayService struct {
-	accountRepo                 AccountRepository
-	groupRepo                   GroupRepository
-	usageLogRepo                UsageLogRepository
-	usageBillingRepo            UsageBillingRepository
-	userRepo                    UserRepository
-	userSubRepo                 UserSubscriptionRepository
-	userGroupRateRepo           UserGroupRateRepository
-	cache                       GatewayCache
-	digestStore                 *DigestSessionStore
-	cfg                         *config.Config
-	schedulerSnapshot           *SchedulerSnapshotService
-	billingService              *BillingService
-	rateLimitService            *RateLimitService
-	billingCacheService         *BillingCacheService
-	identityService             *IdentityService
-	httpUpstream                HTTPUpstream
-	deferredService             *DeferredService
-	concurrencyService          *ConcurrencyService
-	claudeTokenProvider         *ClaudeTokenProvider
-	sessionLimitCache           SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache                    RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
-	userGroupRateResolver       *userGroupRateResolver
-	userGroupRateCache          *gocache.Cache
-	userGroupRateSF             singleflight.Group
-	modelsListCache             *gocache.Cache
-	modelsListCacheTTL          time.Duration
-	settingService              *SettingService
-	responseHeaderFilter        *responseheaders.CompiledHeaderFilter
-	debugModelRouting           atomic.Bool
-	debugClaudeMimic            atomic.Bool
-	channelService              *ChannelService
-	resolver                    *ModelPricingResolver
-	debugGatewayBodyFile        atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
-	tlsFPProfileService         *TLSFingerprintProfileService
-	balanceNotifyService        *BalanceNotifyService
-	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	accountErrorHistory         *AccountErrorHistoryService
-	userPlatformQuotaRepo       UserPlatformQuotaRepository
-	compositeResolver           *CompositeRouteResolver
-}
+	webhookBalanceNotifyService *WebhookBalanceNotifyService
 
-// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
-func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
-	s.accountErrorHistory = svc
-}
-
-// SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
-func (s *GatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
-	s.webhookBalanceNotifyService = svc
+	accountRepo           AccountRepository
+	groupRepo             GroupRepository
+	usageLogRepo          UsageLogRepository
+	usageBillingRepo      UsageBillingRepository
+	userRepo              UserRepository
+	userSubRepo           UserSubscriptionRepository
+	userGroupRateRepo     UserGroupRateRepository
+	cache                 GatewayCache
+	digestStore           *DigestSessionStore
+	cfg                   *config.Config
+	schedulerSnapshot     *SchedulerSnapshotService
+	billingService        *BillingService
+	rateLimitService      *RateLimitService
+	billingCacheService   *BillingCacheService
+	identityService       *IdentityService
+	httpUpstream          HTTPUpstream
+	deferredService       *DeferredService
+	concurrencyService    *ConcurrencyService
+	claudeTokenProvider   *ClaudeTokenProvider
+	sessionLimitCache     SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache              RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	userGroupRateResolver *userGroupRateResolver
+	userGroupRateCache    *gocache.Cache
+	userGroupRateSF       singleflight.Group
+	modelsListCache       *gocache.Cache
+	modelsListCacheTTL    time.Duration
+	settingService        *SettingService
+	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
+	debugModelRouting     atomic.Bool
+	debugClaudeMimic      atomic.Bool
+	channelService        *ChannelService
+	resolver              *ModelPricingResolver
+	compositeResolver     *CompositeRouteResolver
+	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
+	tlsFPProfileService   *TLSFingerprintProfileService
+	balanceNotifyService  *BalanceNotifyService
+	userPlatformQuotaRepo UserPlatformQuotaRepository
 }
 
 // NewGatewayService creates a new GatewayService
@@ -884,6 +881,9 @@ func NewGatewayService(
 		compositeResolver:     compositeResolver,
 		balanceNotifyService:  balanceNotifyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+	}
+	if compositeResolver != nil {
+		compositeResolver.SetModelOwnershipResolver(svc.resolveCompositeModelOwnership)
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,
@@ -1340,7 +1340,7 @@ func (s *GatewayService) DoGrokNativeResponsesJSON(ctx context.Context, account 
 			Reason:     GatewayFailureReason("grok_search_token"),
 		}
 	}
-	targetURL, err := buildGrokResponsesURL(account, s.cfg)
+	targetURL, err := buildGrokResponsesURL(account, nil, s.settingService)
 	if err != nil {
 		return nil, err
 	}
@@ -1446,15 +1446,13 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	hasAnyMapping := false
 
 	for _, acc := range accounts {
-		// Passthrough routing accepts models independently of model_mapping. A stale
-		// mapping on any eligible passthrough account therefore cannot define the
-		// public whitelist; return nil so the handler uses its default model set.
+		// Passthrough routing accepts models independently of model_mapping, so a
+		// stale mapping on a passthrough account must not narrow the public list.
+		// Treat it like an unmapped account: skip its mapping here and let
+		// supplementUnmappedOpenAIModels contribute the default set. Mappings on
+		// the ordinary accounts in the same group still count.
 		if platform == PlatformOpenAI && acc.IsOpenAIPassthroughEnabled() {
-			if s.modelsListCache != nil {
-				s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
-				modelsListCacheStoreTotal.Add(1)
-			}
-			return nil
+			continue
 		}
 
 		mapping := acc.GetModelMapping()
@@ -1509,6 +1507,78 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	return cloneStringSlice(models)
 }
 
+func (s *GatewayService) resolveCompositeModelOwnership(ctx context.Context, groupID int64, model string) (CompositeModelOwnership, error) {
+	model = strings.TrimSpace(model)
+	if s == nil || s.accountRepo == nil || groupID <= 0 || model == "" {
+		return CompositeModelOwnership{}, nil
+	}
+
+	cacheKey := compositeModelOwnershipCacheKey(groupID, model)
+	if s.modelsListCache != nil {
+		if cached, found := s.modelsListCache.Get(cacheKey); found {
+			if ownership, ok := cached.(CompositeModelOwnership); ok {
+				return ownership, nil
+			}
+		}
+	}
+
+	// 归属取决于配置而非运行时健康：限流/临时不可调度不应让同一模型在
+	// 「唯一归属」与「歧义」之间来回翻转，否则配置错误只会间歇暴露。
+	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, &groupID, domain.ConcretePlatformIDs(), false)
+	if err != nil {
+		return CompositeModelOwnership{}, err
+	}
+
+	platforms := make(map[string]struct{})
+	ownership := CompositeModelOwnership{}
+	for _, account := range accounts {
+		if explicitModelMappingClaims(account, model) {
+			platforms[account.Platform] = struct{}{}
+			ownership.OpenAIGatewayOAuthClaimed = ownership.OpenAIGatewayOAuthClaimed ||
+				(account.IsOAuth() && domain.UsesOpenAIGateway(account.Platform))
+		}
+	}
+
+	if len(platforms) == 1 {
+		for platform := range platforms {
+			ownership.TargetPlatform = platform
+		}
+		ownership.Matched = true
+	} else if len(platforms) > 1 {
+		ownership.Ambiguous = true
+	}
+
+	if s.modelsListCache != nil {
+		s.modelsListCache.Set(cacheKey, ownership, s.modelsListCacheTTL)
+	}
+	return ownership, nil
+}
+
+func explicitModelMappingClaims(account Account, model string) bool {
+	if account.Credentials == nil || model == "" {
+		return false
+	}
+	mapped, ok := stringMappingFromRaw(account.Credentials["model_mapping"])[model]
+	return ok && strings.TrimSpace(mapped) != ""
+}
+
+// GetCompositeRouteModels returns public IDs from enabled exact composite routes.
+func (s *GatewayService) GetCompositeRouteModels(ctx context.Context, groupID *int64, endpoint string, includeSystemOne bool) ([]string, error) {
+	if s == nil || s.compositeResolver == nil || groupID == nil {
+		return nil, nil
+	}
+	return s.compositeResolver.ListExactPublicModels(ctx, *groupID, endpoint, includeSystemOne)
+}
+
+func (s *GatewayService) FilterCompositeCodexModels(ctx context.Context, groupID int64, models []string) ([]string, error) {
+	if s == nil || s.compositeResolver == nil {
+		return models, nil
+	}
+	return s.compositeResolver.FilterCodexModels(ctx, groupID, models)
+}
+
+// GetSchedulablePlatforms returns the concrete platforms that currently have
+// schedulable accounts in the target group.
 func (s *GatewayService) GetSchedulablePlatforms(ctx context.Context, groupID *int64) map[string]struct{} {
 	platforms := make(map[string]struct{})
 	if s == nil || s.accountRepo == nil {
@@ -1533,29 +1603,6 @@ func (s *GatewayService) GetSchedulablePlatforms(ctx context.Context, groupID *i
 		}
 	}
 	return platforms
-}
-
-func (s *GatewayService) invalidateCompositeModelOwnershipCache(groupID *int64) {
-	if s == nil || s.modelsListCache == nil {
-		return
-	}
-	for key := range s.modelsListCache.Items() {
-		if !strings.HasPrefix(key, compositeModelOwnershipCachePrefix) {
-			continue
-		}
-		if groupID == nil {
-			s.modelsListCache.Delete(key)
-			continue
-		}
-		parts := strings.SplitN(strings.TrimPrefix(key, compositeModelOwnershipCachePrefix), "|", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		cachedGroupID, err := strconv.ParseInt(parts[0], 10, 64)
-		if err == nil && cachedGroupID == *groupID {
-			s.modelsListCache.Delete(key)
-		}
-	}
 }
 
 func (s *GatewayService) InvalidateAvailableModelsCache(groupID *int64, platform string) {
@@ -1588,6 +1635,26 @@ func (s *GatewayService) InvalidateAvailableModelsCache(groupID *int64, platform
 			continue
 		}
 		s.modelsListCache.Delete(key)
+	}
+}
+
+func (s *GatewayService) invalidateCompositeModelOwnershipCache(groupID *int64) {
+	for key := range s.modelsListCache.Items() {
+		if !strings.HasPrefix(key, compositeModelOwnershipCachePrefix) {
+			continue
+		}
+		if groupID == nil {
+			s.modelsListCache.Delete(key)
+			continue
+		}
+		parts := strings.SplitN(strings.TrimPrefix(key, compositeModelOwnershipCachePrefix), "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		cachedGroupID, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil && cachedGroupID == *groupID {
+			s.modelsListCache.Delete(key)
+		}
 	}
 }
 
@@ -1681,4 +1748,19 @@ func (s *GatewayService) debugLogGatewaySnapshot(tag string, headers http.Header
 
 	// 写入文件（调试用，并发写入可能交错但不影响可读性）
 	_, _ = f.WriteString(buf.String())
+}
+
+func (e *UpstreamFailoverError) EffectiveSameAccountRetryLimit(poolLimit int) int {
+	if e != nil && e.SameAccountRetryMax > 0 {
+		return e.SameAccountRetryMax
+	}
+	return poolLimit
+}
+
+func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
+}
+
+func (s *GatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
+	s.webhookBalanceNotifyService = svc
 }

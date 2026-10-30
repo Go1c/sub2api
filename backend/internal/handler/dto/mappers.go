@@ -201,6 +201,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		MonthlyLimitUSD:                 g.MonthlyLimitUSD,
 		AllowImageGeneration:            g.AllowImageGeneration,
 		AllowBatchImageGeneration:       g.AllowBatchImageGeneration,
+		ImageCountBilling:               g.ImageCountBilling,
 		ImageRateIndependent:            g.ImageRateIndependent,
 		ImageRateMultiplier:             g.ImageRateMultiplier,
 		BatchImageDiscountMultiplier:    g.BatchImageDiscountMultiplier,
@@ -918,7 +919,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 	return UserSubscription{
 		ID:                        sub.ID,
 		UserID:                    sub.UserID,
-		GroupID:                   sub.GroupID,
+		GroupID:                   derefInt64(sub.GroupID),
 		PlanID:                    sub.PlanID,
 		PlanName:                  sub.PlanName,
 		PlanProductName:           sub.PlanProductName,
@@ -1040,4 +1041,11 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		UsedAt:      u.UsedAt,
 		User:        UserFromServiceShallow(u.User),
 	}
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

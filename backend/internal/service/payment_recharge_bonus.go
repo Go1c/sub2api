@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -24,6 +25,8 @@ import (
 // 订阅订单不参与。优惠在下单时按当时配置计算并落库，后续改配置不影响已建订单。
 const (
 	// SettingRechargeBonusTiers 存 JSON 数组（RechargeBonusTier 列表），空/缺失表示未启用优惠。
+	SettingRechargeBonusEnabled = "RECHARGE_BONUS_ENABLED"
+	SettingRechargeBonusTiers   = "RECHARGE_BONUS_TIERS"
 	// SettingRechargeBonusNotice 充值页金额卡顶部展示的 Markdown 活动文案，空表示不展示。
 	SettingRechargeBonusNotice = "RECHARGE_BONUS_NOTICE"
 	// SettingRechargeBonusMode 阶梯模式：bonus / discount；空/非法按 bonus 解析（兼容早期配置）。
@@ -36,10 +39,19 @@ const (
 )
 
 const (
+	maxRechargeBonusTiers       = 20
 	maxRechargeBonusPercent     = 1000
 	maxRechargeBonusNoticeRunes = 10000
 	rechargeBonusAmountEpsilon  = 1e-9
 )
+
+// RechargeBonusTier 一个优惠档位：支付金额 ≥ MinAmount 时按 BonusPercent% 赠送（bonus）或打折（discount）。
+type RechargeBonusTier struct {
+	Threshold    float64 `json:"threshold,omitempty"`
+	Bonus        float64 `json:"bonus,omitempty"`
+	MinAmount    float64 `json:"min_amount,omitempty"`
+	BonusPercent float64 `json:"bonus_percent,omitempty"`
+}
 
 // NormalizeRechargeBonusMode 归一化模式；空按 bonus。第二个返回值表示输入是否合法。
 func NormalizeRechargeBonusMode(raw string) (string, bool) {
@@ -122,6 +134,34 @@ func encodeRechargeBonusTiers(tiers []RechargeBonusTier) (string, error) {
 	return string(raw), nil
 }
 
+// parseRechargeBonusTiers 宽松解析（读路径）：非法条目丢弃而非报错，避免历史错配置阻断下单。
+// 同一 MinAmount 重复时保留先出现的档位。始终返回非 nil 切片，便于 JSON 输出为 []。
+func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
+	out := make([]RechargeBonusTier, 0)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return out
+	}
+	var items []RechargeBonusTier
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		slog.Warn("[Payment] parseRechargeBonusTiers: unmarshal failed", "error", err)
+		return out
+	}
+	seen := make(map[string]struct{}, len(items))
+	for _, tier := range items {
+		if !rechargeBonusValueValid(tier.MinAmount, math.MaxFloat64) || !rechargeBonusValueValid(tier.BonusPercent, maxRechargeBonusPercent) {
+			continue
+		}
+		key := decimal.NewFromFloat(tier.MinAmount).Round(2).String()
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, tier)
+	}
+	sortRechargeBonusTiers(out)
+	return out
+}
 
 func validateRechargeBonusNotice(notice string) error {
 	if utf8.RuneCountInString(notice) > maxRechargeBonusNoticeRunes {
@@ -146,7 +186,7 @@ func (s *PaymentConfigService) resolveRechargeBonusUpdate(ctx context.Context, r
 
 	var tiers []RechargeBonusTier
 	if req.RechargeBonusTiers != nil {
-		tiers, err = NormalizeRechargeBonusTiers(req.RechargeBonusTiers)
+		tiers, err = NormalizeRechargeBonusTiers(*req.RechargeBonusTiers)
 		if err != nil {
 			return "", "", infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", err.Error())
 		}

@@ -169,8 +169,7 @@ func TestAccountTestService_TestAccountConnection_OpenAICompactAPIKeyUsesNativeR
 	require.NoError(t, err)
 
 	require.Equal(t, "https://example.com/v1/responses", upstream.lastReq.URL.String())
-	require.Equal(t, codexCLIUserAgent, upstream.lastReq.Header.Get("User-Agent"))
-	require.Equal(t, "responses=experimental", upstream.lastReq.Header.Get("OpenAI-Beta"))
+	requireOpenAICodexProbeHeaders(t, upstream.lastReq.Header)
 	require.Contains(t, upstream.lastReq.Header.Get("x-codex-beta-features"), "remote_compaction_v2")
 	require.Equal(t, "gpt-5.4", gjson.GetBytes(upstream.lastBody, "model").String(),
 		"原生 v2 探测不应用 compact_model_mapping")
@@ -285,7 +284,10 @@ func TestAccountTestService_TestAccountConnection_OpenAICompactProbeIdentityMatc
 			"chatgpt_account_id": "chatgpt-acc",
 		},
 		// 收敛是显式 opt-in（#5610），这里显式开启以验证探测身份与真实流量同构。
-		Extra: map[string]any{"codex_fingerprint_mode": "session"},
+		Extra: map[string]any{
+			"codex_fingerprint_mode":     "session",
+			codexFingerprintSeedExtraKey: testCodexFingerprintSeed,
+		},
 	}
 	repo := &snapshotUpdateAccountRepo{
 		stubOpenAIAccountRepo: stubOpenAIAccountRepo{accounts: []Account{account}},
@@ -305,10 +307,12 @@ func TestAccountTestService_TestAccountConnection_OpenAICompactProbeIdentityMatc
 	require.NoError(t, svc.TestAccountConnection(c, account.ID, "gpt-5.4", "", AccountTestModeCompact))
 
 	// 显式 session 收敛模式：出站身份 = 账号级收敛值
-	converged := resolveConvergedSessionID(&account)
+	seed, ok := codexFingerprintSeed(account.Extra)
+	require.True(t, ok)
+	converged := resolveConvergedSessionID(seed)
 	require.Equal(t, converged, upstream.lastReq.Header.Get("session-id"))
 	require.Equal(t, converged, upstream.lastReq.Header.Get("session_id"))
-	require.Equal(t, resolveConvergedInstallationID(&account), upstream.lastReq.Header.Get("x-codex-installation-id"),
+	require.Equal(t, resolveConvergedInstallationID(&account, seed), upstream.lastReq.Header.Get("x-codex-installation-id"),
 		"真实 Codex 每个请求必带 installation-id，探测不得缺失")
 	require.NotContains(t, upstream.lastReq.Header.Get("session-id"), "probe_compact",
 		"探测标识不得是可被上游一眼识别的字面量")

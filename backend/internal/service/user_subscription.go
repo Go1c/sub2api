@@ -8,7 +8,6 @@ import (
 
 const subscriptionDayDuration = 24 * time.Hour
 
-
 // UserSubscription 表示用户订阅。
 //
 // 订阅额度池模型（详见 doc/plan/2026-05-28-subscription-credit-pool-plan.md）：

@@ -44,8 +44,8 @@ func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, 
 		Stream:             true, // upstream always streams
 		Include:            []string{"reasoning.encrypted_content"},
 		ServiceTier:        req.ServiceTier,
-		ParallelToolCalls:  req.ParallelToolCalls,
 		PromptCacheOptions: req.PromptCacheOptions,
+		ParallelToolCalls:  req.ParallelToolCalls,
 	}
 
 	// Reasoning models (gpt-5.x) do not accept sampling parameters.
@@ -267,7 +267,7 @@ func chatAssistantToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, ResponsesInputItem{Role: "assistant", Content: partsJSON})
+		items = append(items, ResponsesInputItem{Type: "message", Role: "assistant", Content: partsJSON})
 	}
 
 	// Emit one function_call item per tool_call.
@@ -450,17 +450,27 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 		case "text":
 			if p.Text != "" || len(p.PromptCacheBreakpoint) > 0 {
 				responseParts = append(responseParts, ResponsesContentPart{
+					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 					Type:                  "input_text",
 					Text:                  p.Text,
-					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 				})
 			}
 		case "image_url":
 			if p.ImageURL != nil && p.ImageURL.URL != "" && !isEmptyBase64DataURI(p.ImageURL.URL) {
 				responseParts = append(responseParts, ResponsesContentPart{
+					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 					Type:                  "input_image",
 					ImageURL:              p.ImageURL.URL,
+				})
+			}
+		case "file":
+			if p.File != nil && (p.File.FileData != "" || p.File.FileID != "") {
+				responseParts = append(responseParts, ResponsesContentPart{
 					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
+					Type:                  "input_file",
+					Filename:              p.File.Filename,
+					FileData:              p.File.FileData,
+					FileID:                p.File.FileID,
 				})
 			}
 		}
@@ -504,7 +514,8 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 	var out []ResponsesTool
 
 	for _, t := range tools {
-		if strings.EqualFold(strings.TrimSpace(t.Type), "x_search") {
+		toolType := strings.ToLower(strings.TrimSpace(t.Type))
+		if toolType == "x_search" {
 			out = append(out, ResponsesTool{
 				Type:                     "x_search",
 				AllowedXHandles:          t.AllowedXHandles,
@@ -514,6 +525,10 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 				EnableImageUnderstanding: t.EnableImageUnderstanding,
 				EnableVideoUnderstanding: t.EnableVideoUnderstanding,
 			})
+			continue
+		}
+		if toolType == "web_search" || toolType == "code_execution" {
+			out = append(out, ResponsesTool{Type: toolType})
 			continue
 		}
 		if t.Type != "function" || t.Function == nil {
@@ -604,34 +619,4 @@ func convertChatFunctionCallToToolChoice(raw json.RawMessage) (json.RawMessage, 
 		"type": "function",
 		"name": obj.Name,
 	})
-}
-
-// ChatUsageToResponsesUsage converts Chat Completions token usage to Responses
-// usage shape.
-func ChatUsageToResponsesUsage(usage *ChatUsage) *ResponsesUsage {
-	if usage == nil {
-		return nil
-	}
-	out := &ResponsesUsage{
-		InputTokens:  usage.PromptTokens,
-		OutputTokens: usage.CompletionTokens,
-		TotalTokens:  usage.TotalTokens,
-	}
-	if out.TotalTokens == 0 {
-		out.TotalTokens = out.InputTokens + out.OutputTokens
-	}
-	if usage.PromptTokensDetails != nil && (usage.PromptTokensDetails.CachedTokens > 0 ||
-		usage.PromptTokensDetails.CacheCreationTokens > 0 || usage.PromptTokensDetails.CacheWriteTokens > 0) {
-		out.InputTokensDetails = &ResponsesInputTokensDetails{
-			CachedTokens:        usage.PromptTokensDetails.CachedTokens,
-			CacheCreationTokens: usage.PromptTokensDetails.CacheCreationTokens,
-			CacheWriteTokens:    usage.PromptTokensDetails.CacheWriteTokens,
-		}
-		if usage.PromptTokensDetails.CacheWriteTokens > 0 {
-			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheWriteTokens
-		} else {
-			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheCreationTokens
-		}
-	}
-	return out
 }

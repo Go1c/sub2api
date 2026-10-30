@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/gin-gonic/gin"
 )
@@ -113,26 +114,10 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
-			safeErr := sanitizeUpstreamErrorMessage(err.Error())
-			setOpsUpstreamError(c, 0, safeErr, "")
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-				Platform:           account.Platform,
-				AccountID:          account.ID,
-				AccountName:        account.Name,
-				UpstreamStatusCode: 0,
-				UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
-				Passthrough:        true,
-				Kind:               "request_error",
-				Message:            safeErr,
+			return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{
+				UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
+				Passthrough: true,
 			})
-			c.JSON(http.StatusBadGateway, gin.H{
-				"type": "error",
-				"error": gin.H{
-					"type":    "upstream_error",
-					"message": "Upstream request failed",
-				},
-			})
-			return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 		}
 
 		// 透传分支禁止 400 请求体降级重试（该重试会改写请求体）
@@ -155,6 +140,8 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				respBody, _ := s.readUpstreamErrorBody(resp)
 				_ = resp.Body.Close()
 				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					ProxyID:            opsUpstreamProxyID(account),
+					ProxyName:          opsUpstreamProxyName(account),
 					Platform:           account.Platform,
 					AccountID:          account.ID,
 					AccountName:        account.Name,
@@ -197,8 +184,10 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			logger.LegacyPrintf("service.gateway", "[Anthropic Passthrough] Upstream error (retry exhausted, failover): Account=%d(%s) Status=%d RequestID=%s Body=%s",
 				account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
-			s.handleRetryExhaustedSideEffects(ctx, resp, account)
+			s.handleRetryExhaustedSideEffects(ctx, resp, account, input.RequestModel)
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				ProxyID:            opsUpstreamProxyID(account),
+				ProxyName:          opsUpstreamProxyName(account),
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -220,7 +209,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 			}
 		}
-		return s.handleRetryExhaustedError(ctx, resp, c, account)
+		return s.handleRetryExhaustedError(ctx, resp, c, account, input.RequestModel)
 	}
 
 	if resp.StatusCode >= 400 && s.shouldFailoverUpstreamError(resp.StatusCode) {
@@ -233,6 +222,8 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 
 		s.handleFailoverSideEffects(ctx, resp, account, input.RequestModel)
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
@@ -265,6 +256,11 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	if input.RequestStream {
 		streamResult, err := s.handleStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account, input.StartTime, input.RequestModel)
 		if err != nil {
+			// 流中断时保留已观测到的 usage 与错误一起返回，避免上游已计量的请求
+			// 完全漏记漏计费（issue #5148）。
+			if partial := partialStreamUsageResult(c, resp, streamResult, input.OriginalModel, input.RequestModel, input.StartTime, err); partial != nil {
+				return partial, err
+			}
 			return nil, err
 		}
 		usage = streamResult.usage
@@ -281,14 +277,18 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	}
 
 	return &ForwardResult{
-		RequestID:        resp.Header.Get("x-request-id"),
-		Usage:            *usage,
-		Model:            input.OriginalModel,
-		UpstreamModel:    input.RequestModel,
-		Stream:           input.RequestStream,
-		Duration:         time.Since(input.StartTime),
-		FirstTokenMs:     firstTokenMs,
-		ClientDisconnect: clientDisconnect,
+		RequestID:                     resp.Header.Get("x-request-id"),
+		UpstreamHeaders:               resp.Header,
+		Usage:                         *usage,
+		Model:                         input.OriginalModel,
+		UpstreamModel:                 input.RequestModel,
+		UpstreamResponseModel:         observedUpstreamResponseModel(c),
+		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+		Stream:                        input.RequestStream,
+		Duration:                      time.Since(input.StartTime),
+		FirstTokenMs:                  firstTokenMs,
+		ClientDisconnect:              clientDisconnect,
 	}, nil
 }
 
@@ -301,7 +301,7 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 ) (*http.Request, []byte, error) {
 	body = stripDeferredToolCacheControl(body)
 	targetURL := claudeAPIURL
-	baseURL := account.GetBaseURL()
+	baseURL := getAnthropicGatewayBaseURL(account)
 	if baseURL != "" {
 		validatedURL, err := s.validateUpstreamBaseURL(baseURL)
 		if err != nil {
@@ -324,6 +324,10 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	if sanitized, changed := sanitizeAnthropicBodyForBetaTokens(body, clientBeta); changed {
 		body = sanitized
 	}
+
+	// Ollama Cloud DeepSeek 出站 max_tokens clamp：判定与上方 targetURL 的
+	// base 取值同源，详见 helper 注释。
+	body = clampOllamaCloudAnthropicMessagesMaxTokens(account, baseURL, body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -348,7 +352,9 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	setAnthropicAPIKeyAuthHeader(req.Header, account, token)
+	// Ollama Cloud Anthropic 兼容端点按实际 base_url 强制 Bearer（同上方
+	// targetURL 的 base 取值），其余保持 extra/default 行为。
+	setAnthropicAPIKeyAuthHeader(req.Header, account, token, baseURL)
 
 	if getHeaderRaw(req.Header, "content-type") == "" {
 		setHeaderRaw(req.Header, "content-type", "application/json")
@@ -372,7 +378,10 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 	startTime time.Time,
 	model string,
 ) (*streamingResult, error) {
-	observer := ensureUpstreamResponseModelObserver(c)
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -534,7 +543,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
-				s.parseSSEUsagePassthrough(data, usage)
+				parseSSEUsagePassthrough(data, usage)
 			} else {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "event:") && anthropicStreamEventIsTerminal(strings.TrimSpace(strings.TrimPrefix(trimmed, "event:")), "") {
@@ -613,8 +622,345 @@ func extractAnthropicSSEDataLine(line string) (string, bool) {
 	return line[start:], true
 }
 
+// parseSSEUsagePassthrough 从 Anthropic SSE data 行提取 usage（包级函数：
+// Anthropic 平台 passthrough 与国产供应商原生 Anthropic 直通共用）。
 func parseSSEUsagePassthrough(data string, usage *ClaudeUsage) {
-	(&GatewayService{}).parseSSEUsagePassthrough(data, usage)
+	if usage == nil || data == "" || data == "[DONE]" {
+		return
+	}
+
+	parsed := gjson.Parse(data)
+	switch parsed.Get("type").String() {
+	case "message_start":
+		msgUsage := parsed.Get("message.usage")
+		if msgUsage.Exists() {
+			usage.InputTokens = int(msgUsage.Get("input_tokens").Int())
+			usage.CacheCreationInputTokens = int(msgUsage.Get("cache_creation_input_tokens").Int())
+			usage.CacheReadInputTokens = int(msgUsage.Get("cache_read_input_tokens").Int())
+
+			// 保持与通用解析一致：message_start 允许覆盖 5m/1h 明细（包括 0）。
+			cc5m := msgUsage.Get("cache_creation.ephemeral_5m_input_tokens")
+			cc1h := msgUsage.Get("cache_creation.ephemeral_1h_input_tokens")
+			if cc5m.Exists() || cc1h.Exists() {
+				usage.CacheCreation5mTokens = int(cc5m.Int())
+				usage.CacheCreation1hTokens = int(cc1h.Int())
+			}
+		}
+	case "message_delta":
+		deltaUsage := parsed.Get("usage")
+		if deltaUsage.Exists() {
+			if v := deltaUsage.Get("input_tokens").Int(); v > 0 {
+				usage.InputTokens = int(v)
+			}
+			if v := deltaUsage.Get("output_tokens").Int(); v > 0 {
+				usage.OutputTokens = int(v)
+			}
+			if v := deltaUsage.Get("cache_creation_input_tokens").Int(); v > 0 {
+				usage.CacheCreationInputTokens = int(v)
+			}
+			if v := deltaUsage.Get("cache_read_input_tokens").Int(); v > 0 {
+				usage.CacheReadInputTokens = int(v)
+			}
+
+			cc5m := deltaUsage.Get("cache_creation.ephemeral_5m_input_tokens")
+			cc1h := deltaUsage.Get("cache_creation.ephemeral_1h_input_tokens")
+			if cc5m.Exists() {
+				usage.CacheCreation5mTokens = int(cc5m.Int())
+			}
+			if cc1h.Exists() {
+				usage.CacheCreation1hTokens = int(cc1h.Int())
+			}
+		}
+	}
+
+	if usage.CacheReadInputTokens == 0 {
+		if cached := parsed.Get("message.usage.cached_tokens").Int(); cached > 0 {
+			usage.CacheReadInputTokens = int(cached)
+		}
+		if cached := parsed.Get("usage.cached_tokens").Int(); usage.CacheReadInputTokens == 0 && cached > 0 {
+			usage.CacheReadInputTokens = int(cached)
+		}
+	}
+	if usage.CacheCreationInputTokens == 0 {
+		cc5m := parsed.Get("message.usage.cache_creation.ephemeral_5m_input_tokens").Int()
+		cc1h := parsed.Get("message.usage.cache_creation.ephemeral_1h_input_tokens").Int()
+		if cc5m == 0 && cc1h == 0 {
+			cc5m = parsed.Get("usage.cache_creation.ephemeral_5m_input_tokens").Int()
+			cc1h = parsed.Get("usage.cache_creation.ephemeral_1h_input_tokens").Int()
+		}
+		total := cc5m + cc1h
+		if total > 0 {
+			usage.CacheCreationInputTokens = int(total)
+		}
+	}
+
+	// Kimi's Anthropic-compatible stream uses input_tokens with two meanings:
+	// message_start reports total prompt input, while message_delta reports only
+	// uncached input. prompt_tokens remains the total in both events. Normalize
+	// to ClaudeUsage's mutually-exclusive buckets so downstream billing does not
+	// subtract cache tokens from an already-uncached value.
+	usageNode := parsed.Get("usage")
+	if parsed.Get("type").String() == "message_start" {
+		usageNode = parsed.Get("message.usage")
+	}
+	normalizeAnthropicCompatiblePromptUsage(usageNode, usage)
+}
+
+// normalizeAnthropicCompatiblePromptUsage converts provider-native OpenAI-style
+// prompt/cache fields into Claude's mutually-exclusive usage buckets. Native
+// Anthropic responses do not expose these aliases and are left alone.
+func normalizeAnthropicCompatiblePromptUsage(usageNode gjson.Result, usage *ClaudeUsage) bool {
+	if usage == nil || !usageNode.Exists() {
+		return false
+	}
+	promptTokens := usageNode.Get("prompt_tokens")
+	promptCacheHitTokens := usageNode.Get("prompt_cache_hit_tokens")
+	promptCacheMissTokens := usageNode.Get("prompt_cache_miss_tokens")
+	if (!promptTokens.Exists() || promptTokens.Int() <= 0) &&
+		!promptCacheHitTokens.Exists() && !promptCacheMissTokens.Exists() {
+		return false
+	}
+
+	cacheReadTokens := usage.CacheReadInputTokens
+	if v := usageNode.Get("cache_read_input_tokens"); v.Exists() {
+		cacheReadTokens = int(v.Int())
+	}
+	if cacheReadTokens == 0 {
+		if v := usageNode.Get("cached_tokens"); v.Exists() {
+			cacheReadTokens = int(v.Int())
+		}
+	}
+	if cacheReadTokens == 0 {
+		if v := usageNode.Get("prompt_tokens_details.cached_tokens"); v.Exists() {
+			cacheReadTokens = int(v.Int())
+		}
+	}
+	if cacheReadTokens == 0 && promptCacheHitTokens.Exists() {
+		cacheReadTokens = max(int(promptCacheHitTokens.Int()), 0)
+	}
+
+	cacheCreationTokens := usage.CacheCreationInputTokens
+	if v := usageNode.Get("cache_creation_input_tokens"); v.Exists() {
+		cacheCreationTokens = int(v.Int())
+	}
+	if cacheCreationTokens == 0 {
+		cc5m := usageNode.Get("cache_creation.ephemeral_5m_input_tokens").Int()
+		cc1h := usageNode.Get("cache_creation.ephemeral_1h_input_tokens").Int()
+		if cc5m > 0 || cc1h > 0 {
+			cacheCreationTokens = int(cc5m + cc1h)
+		}
+	}
+
+	if promptCacheMissTokens.Exists() {
+		usage.InputTokens = max(int(promptCacheMissTokens.Int()), 0)
+	} else {
+		usage.InputTokens = max(int(promptTokens.Int())-cacheReadTokens-cacheCreationTokens, 0)
+	}
+	usage.CacheReadInputTokens = cacheReadTokens
+	usage.CacheCreationInputTokens = cacheCreationTokens
+	return true
+}
+
+func parseClaudeUsageFromResponseBody(body []byte) *ClaudeUsage {
+	usage := &ClaudeUsage{}
+	if len(body) == 0 {
+		return usage
+	}
+
+	parsed := gjson.ParseBytes(body)
+	usageNode := parsed.Get("usage")
+	if !usageNode.Exists() {
+		return usage
+	}
+
+	usage.InputTokens = int(usageNode.Get("input_tokens").Int())
+	usage.OutputTokens = int(usageNode.Get("output_tokens").Int())
+	usage.CacheCreationInputTokens = int(usageNode.Get("cache_creation_input_tokens").Int())
+	usage.CacheReadInputTokens = int(usageNode.Get("cache_read_input_tokens").Int())
+
+	cc5m := usageNode.Get("cache_creation.ephemeral_5m_input_tokens").Int()
+	cc1h := usageNode.Get("cache_creation.ephemeral_1h_input_tokens").Int()
+	if cc5m > 0 || cc1h > 0 {
+		usage.CacheCreation5mTokens = int(cc5m)
+		usage.CacheCreation1hTokens = int(cc1h)
+	}
+	if usage.CacheCreationInputTokens == 0 && (cc5m > 0 || cc1h > 0) {
+		usage.CacheCreationInputTokens = int(cc5m + cc1h)
+	}
+	if usage.CacheReadInputTokens == 0 {
+		if cached := usageNode.Get("cached_tokens").Int(); cached > 0 {
+			usage.CacheReadInputTokens = int(cached)
+		}
+	}
+	normalizeAnthropicCompatiblePromptUsage(usageNode, usage)
+	return usage
+}
+
+// invalidNonStreamingJSONFailoverError 把"上游 2xx 返回非 JSON body"归一为
+// failover 错误（包级函数：Anthropic 平台 passthrough 与国产供应商原生
+// Anthropic 直通共用）。
+func invalidNonStreamingJSONFailoverError(
+	ctx context.Context,
+	rateLimitService *RateLimitService,
+	resp *http.Response,
+	account *Account,
+	body []byte,
+	parseErr error,
+	requestedModel ...string,
+) error {
+	const statusCode = http.StatusBadGateway
+
+	accountID := int64(0)
+	accountName := ""
+	retryableOnSameAccount := false
+	if account != nil {
+		accountID = account.ID
+		accountName = account.Name
+		retryableOnSameAccount = account.IsPoolMode() && account.IsPoolModeRetryableStatus(statusCode)
+	}
+
+	logger.LegacyPrintf(
+		"service.gateway",
+		"Account %d(%s): upstream returned non-JSON 2xx response, attempting failover: status=%d request_id=%s error=%v",
+		accountID,
+		accountName,
+		resp.StatusCode,
+		resp.Header.Get("x-request-id"),
+		parseErr,
+	)
+
+	if rateLimitService != nil && account != nil {
+		if len(requestedModel) > 0 {
+			rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body, requestedModel[0])
+		} else {
+			rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body)
+		}
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:             statusCode,
+		ResponseBody:           body,
+		ResponseHeaders:        resp.Header,
+		RetryableOnSameAccount: retryableOnSameAccount,
+	}
+}
+
+func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
+	ctx context.Context,
+	resp *http.Response,
+	c *gin.Context,
+	account *Account,
+) (*ClaudeUsage, error) {
+	if s.rateLimitService != nil {
+		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
+	}
+
+	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
+	if err != nil {
+		return nil, err
+	}
+	observer := upstreamResponseModelObserverFromContext(c)
+	if observer == nil {
+		observer = beginUpstreamResponseModelObservation(c)
+	}
+	observer.ObserveAnthropic(body)
+
+	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		var raw json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err)
+		}
+	}
+
+	usage := parseClaudeUsageFromResponseBody(body)
+	if IsForceCacheBilling(ctx) && usage.InputTokens > 0 {
+		body, err = classifyAnthropicResponseInputAsCacheRead(body, usage)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	writeAnthropicPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	body = reverseToolNamesIfPresent(c, body)
+	c.Data(resp.StatusCode, contentType, body)
+	return usage, nil
+}
+
+func classifyAnthropicResponseInputAsCacheRead(body []byte, usage *ClaudeUsage) ([]byte, error) {
+	classified, err := sjson.SetBytes(body, "usage.input_tokens", 0)
+	if err != nil {
+		return nil, fmt.Errorf("classify forced cache billing input tokens: %w", err)
+	}
+	classified, err = sjson.SetBytes(classified, "usage.cache_read_input_tokens", usage.CacheReadInputTokens+usage.InputTokens)
+	if err != nil {
+		return nil, fmt.Errorf("classify forced cache billing cache read tokens: %w", err)
+	}
+	return classified, nil
+}
+
+func writeAnthropicPassthroughResponseHeaders(dst http.Header, src http.Header, filter *responseheaders.CompiledHeaderFilter) {
+	if dst == nil || src == nil {
+		return
+	}
+	if filter != nil {
+		responseheaders.WriteFilteredHeaders(dst, src, filter)
+		return
+	}
+	if v := strings.TrimSpace(src.Get("Content-Type")); v != "" {
+		dst.Set("Content-Type", v)
+	}
+	if v := strings.TrimSpace(src.Get("x-request-id")); v != "" {
+		dst.Set("x-request-id", v)
+	}
+}
+
+func (s *GatewayService) invalidNonStreamingJSONFailoverError(
+	ctx context.Context,
+	resp *http.Response,
+	account *Account,
+	body []byte,
+	parseErr error,
+	requestedModel ...string,
+) error {
+	const statusCode = http.StatusBadGateway
+
+	accountID := int64(0)
+	accountName := ""
+	retryableOnSameAccount := false
+	if account != nil {
+		accountID = account.ID
+		accountName = account.Name
+		retryableOnSameAccount = account.IsPoolMode() && account.IsPoolModeRetryableStatus(statusCode)
+	}
+
+	logger.LegacyPrintf(
+		"service.gateway",
+		"Account %d(%s): upstream returned non-JSON 2xx response, attempting failover: status=%d request_id=%s error=%v",
+		accountID,
+		accountName,
+		resp.StatusCode,
+		resp.Header.Get("x-request-id"),
+		parseErr,
+	)
+
+	if s.rateLimitService != nil && account != nil {
+		if len(requestedModel) > 0 {
+			s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body, requestedModel[0])
+		} else {
+			s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body)
+		}
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:             statusCode,
+		ResponseBody:           body,
+		ResponseHeaders:        resp.Header,
+		RetryableOnSameAccount: retryableOnSameAccount,
+	}
 }
 
 func (s *GatewayService) parseSSEUsagePassthrough(data string, usage *ClaudeUsage) {
@@ -685,137 +1031,5 @@ func (s *GatewayService) parseSSEUsagePassthrough(data string, usage *ClaudeUsag
 		if total > 0 {
 			usage.CacheCreationInputTokens = int(total)
 		}
-	}
-}
-
-func parseClaudeUsageFromResponseBody(body []byte) *ClaudeUsage {
-	usage := &ClaudeUsage{}
-	if len(body) == 0 {
-		return usage
-	}
-
-	parsed := gjson.ParseBytes(body)
-	usageNode := parsed.Get("usage")
-	if !usageNode.Exists() {
-		return usage
-	}
-
-	usage.InputTokens = int(usageNode.Get("input_tokens").Int())
-	usage.OutputTokens = int(usageNode.Get("output_tokens").Int())
-	usage.CacheCreationInputTokens = int(usageNode.Get("cache_creation_input_tokens").Int())
-	usage.CacheReadInputTokens = int(usageNode.Get("cache_read_input_tokens").Int())
-
-	cc5m := usageNode.Get("cache_creation.ephemeral_5m_input_tokens").Int()
-	cc1h := usageNode.Get("cache_creation.ephemeral_1h_input_tokens").Int()
-	if cc5m > 0 || cc1h > 0 {
-		usage.CacheCreation5mTokens = int(cc5m)
-		usage.CacheCreation1hTokens = int(cc1h)
-	}
-	if usage.CacheCreationInputTokens == 0 && (cc5m > 0 || cc1h > 0) {
-		usage.CacheCreationInputTokens = int(cc5m + cc1h)
-	}
-	if usage.CacheReadInputTokens == 0 {
-		if cached := usageNode.Get("cached_tokens").Int(); cached > 0 {
-			usage.CacheReadInputTokens = int(cached)
-		}
-	}
-	return usage
-}
-
-func (s *GatewayService) invalidNonStreamingJSONFailoverError(
-	ctx context.Context,
-	resp *http.Response,
-	account *Account,
-	body []byte,
-	parseErr error,
-	requestedModel ...string,
-) error {
-	const statusCode = http.StatusBadGateway
-
-	accountID := int64(0)
-	accountName := ""
-	retryableOnSameAccount := false
-	if account != nil {
-		accountID = account.ID
-		accountName = account.Name
-		retryableOnSameAccount = account.IsPoolMode() && account.IsPoolModeRetryableStatus(statusCode)
-	}
-
-	logger.LegacyPrintf(
-		"service.gateway",
-		"Account %d(%s): upstream returned non-JSON 2xx response, attempting failover: status=%d request_id=%s error=%v",
-		accountID,
-		accountName,
-		resp.StatusCode,
-		resp.Header.Get("x-request-id"),
-		parseErr,
-	)
-
-	if s.rateLimitService != nil && account != nil {
-		if len(requestedModel) > 0 {
-			s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body, requestedModel[0])
-		} else {
-			s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, resp.Header, body)
-		}
-	}
-
-	return &UpstreamFailoverError{
-		StatusCode:             statusCode,
-		ResponseBody:           body,
-		ResponseHeaders:        resp.Header,
-		RetryableOnSameAccount: retryableOnSameAccount,
-	}
-}
-
-func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
-	ctx context.Context,
-	resp *http.Response,
-	c *gin.Context,
-	account *Account,
-) (*ClaudeUsage, error) {
-	if s.rateLimitService != nil {
-		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
-	}
-
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
-	if err != nil {
-		return nil, err
-	}
-
-	observer := ensureUpstreamResponseModelObserver(c)
-	observer.ObserveAnthropic(body)
-
-	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		var raw json.RawMessage
-		if err := json.Unmarshal(body, &raw); err != nil {
-			return nil, s.invalidNonStreamingJSONFailoverError(ctx, resp, account, body, err)
-		}
-	}
-
-	usage := parseClaudeUsageFromResponseBody(body)
-
-	writeAnthropicPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
-	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	if contentType == "" {
-		contentType = "application/json"
-	}
-	body = reverseToolNamesIfPresent(c, body)
-	c.Data(resp.StatusCode, contentType, body)
-	return usage, nil
-}
-
-func writeAnthropicPassthroughResponseHeaders(dst http.Header, src http.Header, filter *responseheaders.CompiledHeaderFilter) {
-	if dst == nil || src == nil {
-		return
-	}
-	if filter != nil {
-		responseheaders.WriteFilteredHeaders(dst, src, filter)
-		return
-	}
-	if v := strings.TrimSpace(src.Get("Content-Type")); v != "" {
-		dst.Set("Content-Type", v)
-	}
-	if v := strings.TrimSpace(src.Get("x-request-id")); v != "" {
-		dst.Set("x-request-id", v)
 	}
 }

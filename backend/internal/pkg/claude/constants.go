@@ -1,8 +1,6 @@
 // Package claude provides constants and helpers for Claude API integration.
 package claude
 
-import "strings"
-
 // Claude Code 客户端相关常量
 
 // Beta header 常量
@@ -22,6 +20,9 @@ const (
 	BetaFastMode                 = "fast-mode-2026-02-01"
 	// Legacy structured output compatibility; forwarded only when explicitly requested.
 	BetaStructuredOutputs = "structured-outputs-2025-11-13"
+	// Tool-change compatibility tokens; never enabled without an explicit client request.
+	BetaMidConversationToolChanges = "mid-conversation-tool-changes-2026-07-01"
+	BetaInlineTools                = "inline-tools-2026-09-15"
 
 	// 新增（对齐官方 CLI 2.1.9x 以来的流量）
 	BetaPromptCachingScope          = "prompt-caching-scope-2026-01-05"
@@ -83,7 +84,10 @@ const DefaultCacheControlTTL = "5m"
 // CLICurrentVersion 是内置的 Claude Code CLI 伪装版本号基线（三段 semver）。
 // 用于 billing attribution block 中的 cc_version=X.Y.Z.{fp} 前缀以及 fingerprint 计算。
 // 必须与 DefaultHeaders["User-Agent"] 中的版本号严格一致；不一致会被 Anthropic 判第三方。
-const CLICurrentVersion = "2.1.161"
+//
+// ⚠️ 读取实际生效的版本号请用 CLIVersion()，它会叠加 SUB2API_CLAUDE_CLI_VERSION 覆盖。
+// 直接引用本常量只在"表达内置基线"时才正确（例如覆盖值的下限校验）。
+const CLICurrentVersion = "2.1.258"
 
 // FullClaudeCodeMimicryBetas 返回最"像"真实 Claude Code CLI 的完整 beta 列表，
 // 用于 OAuth 账号伪装成 Claude Code 时使用。
@@ -109,7 +113,9 @@ func FullClaudeCodeMimicryBetas() []string {
 }
 
 // DefaultHeaders 是 Claude Code 客户端默认请求头。
-// 每次调用现构造：User-Agent 走 DefaultUserAgent()，避免包 init 时固化版本号。
+// 每次调用现构造：User-Agent 走 DefaultUserAgent()（运行期可变版本号），
+// 不再在包 init 时固化。同一次请求内应只取一次 UA 字符串并在出站头与
+// billing 两条路径间复用，避免版本缓存翻转瞬间头/体不一致。
 func DefaultHeaders() map[string]string {
 	return map[string]string{
 		// Keep these in sync with recent Claude CLI traffic to reduce the chance
@@ -271,38 +277,4 @@ func DenormalizeModelID(id string) string {
 		return mapped
 	}
 	return id
-}
-
-// IsOpus55 reports Claude Opus 5.5 identities, including provider-qualified
-// names and local effort suffixes. It must be checked before the opus-5 family.
-func IsOpus55(model string) bool {
-	model = normalizeClaude55ModelID(model)
-	return model == "claude-opus-5-5" || strings.HasPrefix(model, "claude-opus-5-5-")
-}
-
-// IsSonnet55 reports Claude Sonnet 5.5 identities, including the dotted
-// OpenRouter spelling and provider-qualified names. claude-sonnet-5 stays out.
-func IsSonnet55(model string) bool {
-	model = normalizeClaude55ModelID(model)
-	return model == "claude-sonnet-5-5" || strings.HasPrefix(model, "claude-sonnet-5-5-")
-}
-
-func normalizeClaude55ModelID(model string) string {
-	model = strings.ToLower(strings.TrimSpace(model))
-	if i := strings.LastIndex(model, "/"); i >= 0 {
-		model = model[i+1:]
-	}
-	model = strings.TrimPrefix(model, "models/")
-	for _, prefix := range []string{"us.", "eu.", "apac.", "jp.", "au.", "us-gov.", "global."} {
-		model = strings.TrimPrefix(model, prefix)
-	}
-	model = strings.TrimPrefix(model, "anthropic.")
-	model = strings.TrimSuffix(model, "-thinking")
-	if model == "claude-opus-5.5" {
-		model = "claude-opus-5-5"
-	}
-	if model == "claude-sonnet-5.5" {
-		model = "claude-sonnet-5-5"
-	}
-	return model
 }
