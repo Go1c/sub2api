@@ -56,8 +56,7 @@ type CheckOptions struct {
 	IQPrompt     string
 	IQAnswer     string
 	IQFuzzyMatch bool
-	MaxTokens int
-
+	MaxTokens    int
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -216,7 +215,7 @@ var providerAdapters = map[string]providerAdapter{
 		buildHeaders: func(apiKey string) map[string]string {
 			return map[string]string{"x-goog-api-key": apiKey}
 		},
-		textPath: "candidates.0.content.parts.0.text",
+		extractText: extractGeminiMonitorText,
 	},
 }
 
@@ -321,6 +320,29 @@ func extractMonitorResponseText(adapter providerAdapter, respBytes []byte) strin
 		return adapter.extractText(respBytes)
 	}
 	return gjson.GetBytes(respBytes, adapter.textPath).String()
+}
+
+// extractGeminiMonitorText 取最终回答，跳过 thought 段。
+// gemini-4-argon 等思考模型把推理放在 parts[0]（thought:true），数字在后续 part。
+// 只读 parts.0.text 会把思考当成答案，状态探活被判 challenge mismatch。
+// 思考里常出现例题数字（3、5、8），回退到思考段还会把错误数字判成通过。
+func extractGeminiMonitorText(respBytes []byte) string {
+	parts := gjson.GetBytes(respBytes, "candidates.0.content.parts")
+	if !parts.IsArray() {
+		return ""
+	}
+	texts := make([]string, 0, 1)
+	parts.ForEach(func(_, part gjson.Result) bool {
+		if part.Get("thought").Bool() {
+			return true
+		}
+		text := strings.TrimSpace(part.Get("text").String())
+		if text != "" {
+			texts = append(texts, text)
+		}
+		return true
+	})
+	return strings.Join(texts, "\n")
 }
 
 func extractAnthropicMonitorText(respBytes []byte) string {
