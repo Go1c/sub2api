@@ -25,6 +25,9 @@ ARG NPM_CONFIG_REGISTRY
 # Optional heap cap for memory-constrained CI builders (e.g. Jenkins linux-sub2api).
 ARG NODE_OPTIONS=
 ENV NODE_OPTIONS=${NODE_OPTIONS}
+# 0 disables the redundant in-vite type check on CI builders (vue-tsc -b already ran).
+ARG CI_INLINE_TYPECHECK=1
+ENV CI_INLINE_TYPECHECK=${CI_INLINE_TYPECHECK}
 
 WORKDIR /app/frontend
 

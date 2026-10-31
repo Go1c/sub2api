@@ -91,7 +91,8 @@ pipeline {
             --build-arg GOSUMDB=sum.golang.org \
             --build-arg GOLANG_IMAGE=golang:1.27.3-alpine \
             --build-arg NODE_OPTIONS=--max-old-space-size=1536 \
-            --build-arg GOMEMLIMIT=2500MiB \
+            --build-arg CI_INLINE_TYPECHECK=0 \
+            --build-arg GOMEMLIMIT=2000MiB \
             --output "type=docker,dest=${WORKSPACE}/sub2api-image.tar" \
             -f Dockerfile .
           test -s "${WORKSPACE}/sub2api-image.tar"

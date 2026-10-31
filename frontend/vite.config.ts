@@ -87,7 +87,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       checker({
-        vueTsc: true
+        vueTsc: true,
+        // CI_INLINE_TYPECHECK=0 时不在 vite build 内再跑一份 vue-tsc：
+        // `pnpm build` 已先执行 `vue-tsc -b`，并发第二个 vue-tsc 会把
+        // 内存受限的 CI 构建节点（Jenkins linux-sub2api，3GiB slice）顶爆。
+        enableBuild: process.env.CI_INLINE_TYPECHECK !== '0'
       }),
       injectPublicSettings(backendUrl)
     ],
