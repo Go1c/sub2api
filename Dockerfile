@@ -22,6 +22,9 @@ ARG NPM_CONFIG_REGISTRY=
 # it on the native host arch instead of under QEMU emulation for the target.
 FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS frontend-builder
 ARG NPM_CONFIG_REGISTRY
+# Optional heap cap for memory-constrained CI builders (e.g. Jenkins linux-sub2api).
+ARG NODE_OPTIONS=
+ENV NODE_OPTIONS=${NODE_OPTIONS}
 
 WORKDIR /app/frontend
 
@@ -58,12 +61,16 @@ ARG COMMIT=docker
 ARG DATE
 ARG GOPROXY
 ARG GOSUMDB
+# Optional Go runtime memory ceiling for memory-constrained CI builders;
+# default "off" keeps upstream/other builders identical.
+ARG GOMEMLIMIT=off
 # Populated by buildx from the --platform target (e.g. linux/amd64).
 ARG TARGETOS
 ARG TARGETARCH
 
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
+ENV GOMEMLIMIT=${GOMEMLIMIT}
 # Go 1.26 里 encoding/json/jsontext 仍在 jsonv2 实验开关后。
 ENV GOEXPERIMENT=jsonv2
 
