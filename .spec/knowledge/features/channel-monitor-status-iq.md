@@ -80,6 +80,10 @@ metadata:
 - IQ 模式间隔下限维持 15s（与探活相同）。
 - 7 天可用率按服务器完整响应（operational + degraded）计算。
 
+## 回归
+
+2026-10-30 合入 upstream 0.2.19 时，用户列表和管理端 handler 的智商字段被覆盖掉。服务层仍在聚合，但公开/用户 JSON 不再带 `check_mode` 和 `iq_timeline`，状态页卡片只剩「近 60 次记录」一行。管理端 `check_mode` 的 `oneof` 也不再接受 `iq`，题目字段无法保存。这两处 handler 必须继续把 `check_mode`、`iq_timeline`、`iq_status`、题目/答案/模糊匹配交出去；上游再合时不要按三态配额模式覆盖。
+
 ## 相关
 
 - [channel-iq-detect.md](channel-iq-detect.md)（内部号 SVG 看板，本功能不走这条）
