@@ -121,7 +121,7 @@ pipeline {
             --build-arg GOPROXY=https://proxy.golang.org,direct \
             --build-arg GOSUMDB=sum.golang.org \
             --build-arg GOLANG_IMAGE=golang:1.27.3-alpine \
-            --build-arg NODE_OPTIONS=--max-old-space-size=1536 \
+            --build-arg NODE_OPTIONS=--max-old-space-size=2048 \
             --build-arg CI_INLINE_TYPECHECK=0 \
             --build-arg GOMEMLIMIT=2200MiB \
             --build-arg GOFLAGS=-p=1 \
