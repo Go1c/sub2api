@@ -62,6 +62,35 @@ pipeline {
           git -C "${WORKSPACE}/src" fetch -q --depth=1 origin "${SHA}"
           git -C "${WORKSPACE}/src" checkout -q --detach FETCH_HEAD
           test "$(git -C "${WORKSPACE}/src" rev-parse HEAD)" = "${SHA}"
+          # 目标提交的 Dockerfile 未必声明我们的内存调优 ARG（--build-arg 只对声明
+          # 过的 ARG 生效，未声明的会被 buildx 静默忽略）。这里对工作区 Dockerfile
+          # 做幂等注入；fork 的 dev 分支已原生声明这些 ARG，届时本补丁自动跳过。
+          cd "${WORKSPACE}/src"
+          if grep -q "^ARG GOMEMLIMIT" Dockerfile; then
+            echo "Dockerfile already declares CI memory ARGs; no patch"
+          else
+            awk '
+              /^ARG NPM_CONFIG_REGISTRY$/ && !fe {
+                print; print "ARG NODE_OPTIONS=";
+                print "ENV NODE_OPTIONS=${" "NODE_OPTIONS}";
+                print "ARG CI_INLINE_TYPECHECK=1";
+                print "ENV CI_INLINE_TYPECHECK=${" "CI_INLINE_TYPECHECK}";
+                fe = 1; next
+              }
+              /^ARG GOSUMDB$/ && !be {
+                print; print "ARG GOMEMLIMIT=off";
+                print "ENV GOMEMLIMIT=${" "GOMEMLIMIT}";
+                print "ARG GOFLAGS=";
+                print "ENV GOFLAGS=${" "GOFLAGS}";
+                be = 1; next
+              }
+              { print }
+            ' Dockerfile > Dockerfile.ci
+            grep -q "^ARG GOMEMLIMIT" Dockerfile.ci || { echo "Dockerfile anchors not found" >&2; exit 1; }
+            mv Dockerfile.ci Dockerfile
+            echo "Dockerfile patched with CI memory ARGs:"
+            grep -E "^ARG (GOMEMLIMIT|GOFLAGS|NODE_OPTIONS|CI_INLINE_TYPECHECK)|^ENV (GOMEMLIMIT|GOFLAGS|NODE_OPTIONS|CI_INLINE_TYPECHECK)" Dockerfile
+          fi
         '''
       }
     }
