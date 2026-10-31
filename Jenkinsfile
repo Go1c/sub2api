@@ -79,7 +79,9 @@ pipeline {
           fi
           cd "${WORKSPACE}/src"
           # GOLANG_IMAGE 需 >= backend/go.mod 的 go 指令（main-kin 线要求 >= 1.27.3）。
-          # NODE_OPTIONS / GOMEMLIMIT 用于把构建压进节点 3 GiB 的 slice 预算。
+          # NODE_OPTIONS / CI_INLINE_TYPECHECK 把前端压进预算（见 vite.config.ts）；
+          # GOFLAGS=-p=1 串行编译 worker：GOMEMLIMIT 按进程生效，并行 worker 会让
+          # 峰值 = N x GOMEMLIMIT（ent 包单 worker ~2.2G），串行后峰值 = 单包 + 基础设施。
           docker buildx build \
             --platform linux/amd64 \
             --provenance=false \
@@ -92,7 +94,8 @@ pipeline {
             --build-arg GOLANG_IMAGE=golang:1.27.3-alpine \
             --build-arg NODE_OPTIONS=--max-old-space-size=1536 \
             --build-arg CI_INLINE_TYPECHECK=0 \
-            --build-arg GOMEMLIMIT=2000MiB \
+            --build-arg GOMEMLIMIT=2200MiB \
+            --build-arg GOFLAGS=-p=1 \
             --output "type=docker,dest=${WORKSPACE}/sub2api-image.tar" \
             -f Dockerfile .
           test -s "${WORKSPACE}/sub2api-image.tar"
