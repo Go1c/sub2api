@@ -537,6 +537,102 @@ func TestExtractAnthropicMonitorText(t *testing.T) {
 	}
 }
 
+func TestExtractGeminiMonitorText(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "answer after thought",
+			body: `{"candidates":[{"content":{"parts":[{"thought":true,"text":"I'm thinking through how to approach this. 3 plus 5 equals 8."},{"text":"30"}]}}]}`,
+			want: "30",
+		},
+		{
+			name: "plain text part",
+			body: `{"candidates":[{"content":{"parts":[{"text":"16"}]}}]}`,
+			want: "16",
+		},
+		{
+			name: "thought only",
+			body: `{"candidates":[{"content":{"parts":[{"thought":true,"text":"3 plus 5 equals 8"}]}}]}`,
+			want: "",
+		},
+		{
+			name: "multiple answer parts",
+			body: `{"candidates":[{"content":{"parts":[{"thought":true,"text":"plan"},{"text":"answer"},{"text":"30"}]}}]}`,
+			want: "answer\n30",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractGeminiMonitorText([]byte(tt.body))
+			if got != tt.want {
+				t.Fatalf("extractGeminiMonitorText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateChallenge_GeminiAnswerAfterThought(t *testing.T) {
+	body := []byte(`{"candidates":[{"content":{"parts":[{"thought":true,"text":"The request is for a calculation. 3 plus 5 equals 8."},{"text":"30"}]}}]}`)
+	respText := extractGeminiMonitorText(body)
+	if !validateChallenge(respText, "30") {
+		t.Fatalf("validateChallenge(%q, %q) = false, want true", respText, "30")
+	}
+	// 例题里的 8 只出现在思考段，不能当成答案。
+	if validateChallenge(respText, "8") {
+		t.Fatalf("validateChallenge(%q, %q) = true, want false", respText, "8")
+	}
+}
+
+func TestRunCheckForModel_GeminiThoughtPartDoesNotFailStatus(t *testing.T) {
+	questionRe := regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?`)
+	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Contents []struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"contents"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || len(payload.Contents) == 0 || len(payload.Contents[0].Parts) == 0 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		matches := questionRe.FindAllStringSubmatch(payload.Contents[0].Parts[0].Text, -1)
+		if len(matches) == 0 {
+			http.Error(w, "no question", http.StatusBadRequest)
+			return
+		}
+		match := matches[len(matches)-1]
+		left, _ := strconv.Atoi(match[1])
+		right, _ := strconv.Atoi(match[3])
+		answer := left + right
+		if match[2] == "-" {
+			answer = left - right
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"candidates": []map[string]any{{
+				"content": map[string]any{
+					"parts": []map[string]any{
+						{"thought": true, "text": "I'm thinking through how to approach this. 3 plus 5 equals 8."},
+						{"text": strconv.Itoa(answer)},
+					},
+				},
+				"finishReason": "STOP",
+			}},
+		})
+	}))
+
+	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "sk-gemini", "gemini-4-argon", nil)
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("status=%s message=%q, want operational", res.Status, res.Message)
+	}
+}
+
 func TestValidateChallenge_AnthropicTextAfterThinking(t *testing.T) {
 	body := []byte(`{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"答案是 2"}]}`)
 	respText := extractAnthropicMonitorText(body)
