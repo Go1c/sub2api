@@ -55,11 +55,15 @@ type channelMonitorCreateRequest struct {
 	BodyOverrideMode string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
 	BodyOverride     map[string]any    `json:"body_override"`
 
-	// CheckMode: probe（默认）/ quota / quota_probe。quota 模式 endpoint/api_key
+	// CheckMode: probe（默认）/ quota / quota_probe / iq。quota 模式 endpoint/api_key
 	// 可空（条件必填校验在 service 层按模式分支）。
-	CheckMode string `json:"check_mode" binding:"omitempty,oneof=probe quota quota_probe"`
+	CheckMode string `json:"check_mode" binding:"omitempty,oneof=probe quota quota_probe iq"`
 	// AccountID: 配额模式关联的账号 ID。
 	AccountID *int64 `json:"account_id"`
+
+	IQQuestion   string `json:"iq_question"`
+	IQAnswer     string `json:"iq_answer"`
+	IQFuzzyMatch *bool  `json:"iq_fuzzy_match"`
 }
 
 type channelMonitorUpdateRequest struct {
@@ -81,8 +85,12 @@ type channelMonitorUpdateRequest struct {
 	BodyOverride     *map[string]any    `json:"body_override"`
 
 	// CheckMode/AccountID：nil = 不更新；AccountID 指向 0 = 清空关联。
-	CheckMode *string `json:"check_mode" binding:"omitempty,oneof=probe quota quota_probe"`
+	CheckMode *string `json:"check_mode" binding:"omitempty,oneof=probe quota quota_probe iq"`
 	AccountID *int64  `json:"account_id"`
+
+	IQQuestion   *string `json:"iq_question"`
+	IQAnswer     *string `json:"iq_answer"`
+	IQFuzzyMatch *bool   `json:"iq_fuzzy_match"`
 }
 
 type channelMonitorResponse struct {
@@ -115,14 +123,18 @@ type channelMonitorResponse struct {
 
 	// 配额模式：check_mode + 关联账号 + 主模型最近配额快照
 	// （LatestQuota 由 List handler 批量聚合后填充；管理端不受 channel_monitor_show_quota 影响）。
-	CheckMode   string                       `json:"check_mode"`
-	AccountID   *int64                       `json:"account_id"`
-	LatestQuota *domain.MonitorQuotaSnapshot `json:"latest_quota,omitempty"`
+	CheckMode    string                       `json:"check_mode"`
+	AccountID    *int64                       `json:"account_id"`
+	IQQuestion   string                       `json:"iq_question"`
+	IQAnswer     string                       `json:"iq_answer"`
+	IQFuzzyMatch bool                         `json:"iq_fuzzy_match"`
+	LatestQuota  *domain.MonitorQuotaSnapshot `json:"latest_quota,omitempty"`
 }
 
 type channelMonitorCheckResultResponse struct {
 	Model         string                       `json:"model"`
 	Status        string                       `json:"status"`
+	IqStatus      string                       `json:"iq_status,omitempty"`
 	LatencyMs     *int                         `json:"latency_ms"`
 	PingLatencyMs *int                         `json:"ping_latency_ms"`
 	Message       string                       `json:"message"`
@@ -134,6 +146,7 @@ type channelMonitorHistoryItemResponse struct {
 	ID            int64                        `json:"id"`
 	Model         string                       `json:"model"`
 	Status        string                       `json:"status"`
+	IqStatus      string                       `json:"iq_status,omitempty"`
 	LatencyMs     *int                         `json:"latency_ms"`
 	PingLatencyMs *int                         `json:"ping_latency_ms"`
 	Message       string                       `json:"message"`
@@ -184,6 +197,9 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		BodyOverride:        m.BodyOverride,
 		CheckMode:           m.CheckMode,
 		AccountID:           m.AccountID,
+		IQQuestion:          m.IQQuestion,
+		IQAnswer:            m.IQAnswer,
+		IQFuzzyMatch:        m.IQFuzzyMatch,
 		// PrimaryStatus / PrimaryLatencyMs / Availability7d / LatestQuota
 		// 由 List handler 在批量聚合后填充。
 	}
@@ -198,6 +214,7 @@ func checkResultToResponse(r *service.CheckResult) channelMonitorCheckResultResp
 	return channelMonitorCheckResultResponse{
 		Model:         r.Model,
 		Status:        r.Status,
+		IqStatus:      r.IqStatus,
 		LatencyMs:     r.LatencyMs,
 		PingLatencyMs: r.PingLatencyMs,
 		Message:       r.Message,
@@ -211,6 +228,7 @@ func historyEntryToResponse(e *service.ChannelMonitorHistoryEntry) channelMonito
 		ID:            e.ID,
 		Model:         e.Model,
 		Status:        e.Status,
+		IqStatus:      e.IqStatus,
 		LatencyMs:     e.LatencyMs,
 		PingLatencyMs: e.PingLatencyMs,
 		Message:       e.Message,
@@ -354,6 +372,9 @@ func (h *ChannelMonitorHandler) Create(c *gin.Context) {
 		BodyOverride:     req.BodyOverride,
 		CheckMode:        req.CheckMode,
 		AccountID:        req.AccountID,
+		IQQuestion:       req.IQQuestion,
+		IQAnswer:         req.IQAnswer,
+		IQFuzzyMatch:     req.IQFuzzyMatch,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -450,6 +471,9 @@ func (h *ChannelMonitorHandler) Update(c *gin.Context) {
 		BodyOverride:     req.BodyOverride,
 		CheckMode:        req.CheckMode,
 		AccountID:        req.AccountID,
+		IQQuestion:       req.IQQuestion,
+		IQAnswer:         req.IQAnswer,
+		IQFuzzyMatch:     req.IQFuzzyMatch,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
