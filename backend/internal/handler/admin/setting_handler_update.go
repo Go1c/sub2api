@@ -312,6 +312,8 @@ type UpdateSettingsRequest struct {
 	PaymentBalanceRechargeMultiplier *float64 `json:"payment_balance_recharge_multiplier"`
 	PaymentSubscriptionUSDToCNYRate  *float64 `json:"payment_subscription_usd_to_cny_rate"`
 	PaymentRechargeFeeRate           *float64 `json:"payment_recharge_fee_rate"`
+	// nil 表示不更新；满赠总开关
+	PaymentRechargeBonusEnabled *bool `json:"payment_recharge_bonus_enabled"`
 	// nil 表示不更新；空数组表示清空阶梯
 	PaymentRechargeBonusTiers  *[]dto.RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
 	PaymentRechargeBonusMode   *string                  `json:"payment_recharge_bonus_mode"`
@@ -2132,6 +2134,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			BalanceRechargeMultiplier:     req.PaymentBalanceRechargeMultiplier,
 			SubscriptionUSDToCNYRate:      req.PaymentSubscriptionUSDToCNYRate,
 			RechargeFeeRate:               req.PaymentRechargeFeeRate,
+			RechargeBonusEnabled:          req.PaymentRechargeBonusEnabled,
 			RechargeBonusTiers:            rechargeBonusTiersFromDTO(req.PaymentRechargeBonusTiers),
 			RechargeBonusMode:             req.PaymentRechargeBonusMode,
 			RechargeBonusNotice:           req.PaymentRechargeBonusNotice,
@@ -2414,6 +2417,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PaymentBalanceRechargeMultiplier:                       updatedPaymentCfg.BalanceRechargeMultiplier,
 		PaymentSubscriptionUSDToCNYRate:                        updatedPaymentCfg.SubscriptionUSDToCNYRate,
 		PaymentRechargeFeeRate:                                 updatedPaymentCfg.RechargeFeeRate,
+		PaymentRechargeBonusEnabled:                            updatedPaymentCfg.RechargeBonusEnabled,
 		PaymentRechargeBonusTiers:                              rechargeBonusTiersToDTO(updatedPaymentCfg.RechargeBonusTiers),
 		PaymentRechargeBonusMode:                               rechargeBonusModeToDTO(updatedPaymentCfg.RechargeBonusMode),
 		PaymentRechargeBonusNotice:                             updatedPaymentCfg.RechargeBonusNotice,
@@ -2493,6 +2497,7 @@ func hasPaymentFields(req UpdateSettingsRequest) bool {
 		req.PaymentEnabledTypes != nil || req.PaymentBalanceDisabled != nil ||
 		req.PaymentBalanceRechargeMultiplier != nil || req.PaymentSubscriptionUSDToCNYRate != nil ||
 		req.PaymentRechargeFeeRate != nil ||
+		req.PaymentRechargeBonusEnabled != nil ||
 		req.PaymentRechargeBonusTiers != nil || req.PaymentRechargeBonusMode != nil || req.PaymentRechargeBonusNotice != nil ||
 		req.PaymentLoadBalanceStrat != nil || req.PaymentProductNamePrefix != nil ||
 		req.PaymentProductNameSuffix != nil || req.PaymentHelpImageURL != nil ||

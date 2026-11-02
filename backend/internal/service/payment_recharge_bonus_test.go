@@ -8,6 +8,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -306,16 +307,20 @@ func TestParsePaymentConfigRechargeBonusMode(t *testing.T) {
 func TestUpdatePaymentConfigRechargeBonusMode(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("persists discount mode with valid tiers", func(t *testing.T) {
+	t.Run("rejects discount mode until wired into the order flow", func(t *testing.T) {
 		repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
 		svc := &PaymentConfigService{settingRepo: repo}
 		mode := "discount"
 		tiers := []RechargeBonusTier{{MinAmount: 100, BonusPercent: 20}}
+		err := svc.UpdatePaymentConfig(ctx, UpdatePaymentConfigRequest{RechargeBonusTiers: &tiers, RechargeBonusMode: &mode})
+		require.Error(t, err)
+		require.Equal(t, "INVALID_RECHARGE_BONUS_MODE", infraerrors.Reason(err))
+		require.Nil(t, repo.updates)
+
+		// bonus 模式可正常保存
+		mode = "bonus"
 		require.NoError(t, svc.UpdatePaymentConfig(ctx, UpdatePaymentConfigRequest{RechargeBonusTiers: &tiers, RechargeBonusMode: &mode}))
-		require.Equal(t, "discount", repo.updates[SettingRechargeBonusMode])
-		cfg, err := svc.GetPaymentConfig(ctx)
-		require.NoError(t, err)
-		require.Equal(t, RechargeBonusModeDiscount, cfg.RechargeBonusMode)
+		require.Equal(t, "bonus", repo.updates[SettingRechargeBonusMode])
 	})
 
 	t.Run("rejects unknown mode", func(t *testing.T) {

@@ -1,0 +1,194 @@
+// sub2api 生产镜像构建流水线（Jenkins / linux-sub2api 香港构建节点）。
+//
+// 只负责「打包 + 投递」：构建 ghcr.io/go1c/sub2api:sha-<SHA>（main-kin 额外打 :kin），
+// 经受限 SSH（kin 侧 forced command /opt/lumio/bin/jenkins-image-load.sh）直接
+// docker load 进 lumio-kin。不推 GHCR，不经 CN 机器。
+// 部署动作（预部署 dump、翻 SUB2API_IMAGE、up -d --pull never、健康检查、deploy-state
+// 记账）仍由运维按 LumioServerWorkFlow 的 runbook 执行。
+pipeline {
+  agent { label 'sub2api' }
+
+  options {
+    timeout(time: 120, unit: 'MINUTES')
+    disableConcurrentBuilds(abortPrevious: false)
+    buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '30'))
+    skipDefaultCheckout()
+  }
+
+  parameters {
+    string(name: 'COMMIT', defaultValue: 'publish',
+           description: 'Go1c/sub2api 的分支名、tag 或完整 40 位 SHA；一键发布用默认 publish（最新已合并提交）')
+    choice(name: 'STACK', choices: ['publish', 'main-kin'],
+           description: 'publish：现网 api.lumio.games；main-kin：sidecar，额外打 :kin tag')
+    booleanParam(name: 'DEPLOY', defaultValue: true,
+                 description: '构建投递后自动部署到对应 stack：预部署 dump → 切镜像 → 健康检查（失败自动回滚）→ 记账 + 飞书通知')
+  }
+
+  environment {
+    REPO       = 'https://github.com/Go1c/sub2api.git'
+    IMAGE_ROOT = 'ghcr.io/go1c/sub2api'
+    KIN_HOST   = '156.238.225.247'
+    KIN_PORT   = '11851'
+    KIN_KEY    = "${HOME}/.ssh/kin_image_load_ed25519"
+    KIN_DEPLOY = "${HOME}/.ssh/kin_deploy_ed25519"
+  }
+
+  stages {
+    stage('解析提交') {
+      steps {
+        sh label: 'resolve', script: '''#!/usr/bin/env bash
+          set -euo pipefail
+          ref="${COMMIT}"
+          if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+            SHA="$ref"
+          else
+            SHA=$(git ls-remote "${REPO}" | awk -v r="$ref" '
+              $2 == ("refs/heads/" r) && !h { h = $1 }
+              $2 == ("refs/tags/" r)  && !t { t = $1 }
+              END { print (h ? h : t) }')
+          fi
+          test -n "$SHA"
+          echo "$SHA" > "${WORKSPACE}/sha.txt"
+          echo "resolved ${ref} -> ${SHA}"
+        '''
+        script { env.SHA = readFile('sha.txt').trim() }
+      }
+    }
+
+    stage('取源码') {
+      steps {
+        sh label: 'fetch', script: '''#!/usr/bin/env bash
+          set -euo pipefail
+          rm -rf "${WORKSPACE}/src" && mkdir "${WORKSPACE}/src"
+          git init -q "${WORKSPACE}/src"
+          git -C "${WORKSPACE}/src" remote add origin "${REPO}"
+          git -C "${WORKSPACE}/src" fetch -q --depth=1 origin "${SHA}"
+          git -C "${WORKSPACE}/src" checkout -q --detach FETCH_HEAD
+          test "$(git -C "${WORKSPACE}/src" rev-parse HEAD)" = "${SHA}"
+          # 目标提交的 Dockerfile 未必声明我们的内存调优 ARG（--build-arg 只对声明
+          # 过的 ARG 生效，未声明的会被 buildx 静默忽略）。这里对工作区 Dockerfile
+          # 做幂等注入；fork 的 dev 分支已原生声明这些 ARG，届时本补丁自动跳过。
+          cd "${WORKSPACE}/src"
+          if grep -q "^ARG GOMEMLIMIT" Dockerfile; then
+            echo "Dockerfile already declares CI memory ARGs; no patch"
+          else
+            awk '
+              /^ARG NPM_CONFIG_REGISTRY$/ && !fe {
+                print; print "ARG NODE_OPTIONS=";
+                print "ENV NODE_OPTIONS=${" "NODE_OPTIONS}";
+                print "ARG CI_INLINE_TYPECHECK=1";
+                print "ENV CI_INLINE_TYPECHECK=${" "CI_INLINE_TYPECHECK}";
+                fe = 1; next
+              }
+              /^ARG GOSUMDB$/ && !be {
+                print; print "ARG GOMEMLIMIT=off";
+                print "ENV GOMEMLIMIT=${" "GOMEMLIMIT}";
+                print "ARG GOFLAGS=";
+                print "ENV GOFLAGS=${" "GOFLAGS}";
+                be = 1; next
+              }
+              { print }
+            ' Dockerfile > Dockerfile.ci
+            grep -q "^ARG GOMEMLIMIT" Dockerfile.ci || { echo "Dockerfile anchors not found" >&2; exit 1; }
+            mv Dockerfile.ci Dockerfile
+            echo "Dockerfile patched with CI memory ARGs:"
+            grep -E "^ARG (GOMEMLIMIT|GOFLAGS|NODE_OPTIONS|CI_INLINE_TYPECHECK)|^ENV (GOMEMLIMIT|GOFLAGS|NODE_OPTIONS|CI_INLINE_TYPECHECK)" Dockerfile
+          fi
+        '''
+      }
+    }
+
+    stage('构建镜像') {
+      steps {
+        sh label: 'buildx', script: '''#!/usr/bin/env bash
+          set -euo pipefail
+          docker buildx create --name sub2api --driver docker-container >/dev/null 2>&1 || docker buildx use sub2api
+          docker buildx use sub2api
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          tags=( -t "${IMAGE_ROOT}:sha-${SHA}" )
+          if [[ "${STACK}" == "main-kin" ]]; then
+            tags+=( -t "${IMAGE_ROOT}:kin" )
+          fi
+          cd "${WORKSPACE}/src"
+          # GOLANG_IMAGE 需 >= backend/go.mod 的 go 指令（main-kin 线要求 >= 1.27.3）。
+          # NODE_OPTIONS / CI_INLINE_TYPECHECK 把前端压进预算（见 vite.config.ts）；
+          # GOFLAGS=-p=1 串行编译 worker：GOMEMLIMIT 按进程生效，并行 worker 会让
+          # 峰值 = N x GOMEMLIMIT（ent 包单 worker ~2.2G），串行后峰值 = 单包 + 基础设施。
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            "${tags[@]}" \
+            --build-arg VERSION="${STACK}" \
+            --build-arg COMMIT="${SHA}" \
+            --build-arg DATE="${DATE}" \
+            --build-arg GOPROXY=https://proxy.golang.org,direct \
+            --build-arg GOSUMDB=sum.golang.org \
+            --build-arg GOLANG_IMAGE=golang:1.27.3-alpine \
+            --build-arg NODE_OPTIONS=--max-old-space-size=2048 \
+            --build-arg CI_INLINE_TYPECHECK=0 \
+            --build-arg GOMEMLIMIT=2200MiB \
+            --build-arg GOFLAGS=-p=1 \
+            --output "type=docker,dest=${WORKSPACE}/sub2api-image.tar" \
+            -f Dockerfile .
+          test -s "${WORKSPACE}/sub2api-image.tar"
+          du -h "${WORKSPACE}/sub2api-image.tar"
+        '''
+      }
+    }
+
+    stage('投递到 lumio-kin') {
+      steps {
+        sh label: 'ship', script: '''#!/usr/bin/env bash
+          set -euo pipefail
+          out=$(ssh -p "${KIN_PORT}" -i "${KIN_KEY}" \
+                 -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 \
+                 "root@${KIN_HOST}" load < "${WORKSPACE}/sub2api-image.tar")
+          printf '%s\n' "$out"
+          grep -q "Loaded image: ${IMAGE_ROOT}:sha-${SHA}" <<<"$out"
+        '''
+      }
+    }
+    stage('部署') {
+      when { expression { return params.DEPLOY } }
+      steps {
+        script { env.DEPLOY_RAN = '1' }
+        sh label: 'deploy', script: '''#!/usr/bin/env bash
+          set -euo pipefail
+          # kin 侧 forced-command 入口只接受 "<stack> <40-hex>"；deploy-sub2api-preloaded.sh
+          # 负责 dump → 切 env → up -d --pull never → 边缘网络重挂 → 健康检查 →
+          # 失败自动回滚 + deploy-state 记账 + 飞书 deploy-success/deploy-failure。
+          out=$(ssh -p "${KIN_PORT}" -i "${KIN_DEPLOY}" \
+                 -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 \
+                 "root@${KIN_HOST}" "${STACK} ${SHA}")
+          printf '%s\n' "$out"
+          grep -q "^deploy-ok ${STACK} " <<<"$out"
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'rm -rf "${WORKSPACE}/src" "${WORKSPACE}/sub2api-image.tar" "${WORKSPACE}/sha.txt" || true'
+    }
+    success {
+      script {
+        // 部署由 kin 侧脚本发 deploy-success；仅在“只构建不部署”时发 build-success。
+        if (env.DEPLOY_RAN != '1') {
+          lumioNotify(event: 'build-success', environment: params.STACK, version: env.SHA)
+        }
+      }
+    }
+    failure {
+      script {
+        if (env.DEPLOY_RAN == '1') {
+          lumioNotify(event: 'deploy-failure', environment: params.STACK, version: env.SHA,
+                      stage: '部署', detail: '查看 Jenkins 构建日志；健康检查失败时 kin 已自动回滚旧镜像')
+        } else {
+          lumioNotify(event: 'build-failure', environment: params.STACK, version: env.SHA,
+                      stage: '构建', detail: '查看 Jenkins 构建日志')
+        }
+      }
+    }
+  }
+}

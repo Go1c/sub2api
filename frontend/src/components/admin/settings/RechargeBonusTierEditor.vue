@@ -11,20 +11,26 @@
             {{ t('admin.settings.payment.rechargeBonus.hint') }}
           </p>
         </div>
-        <button
-          type="button"
-          class="btn btn-primary btn-sm shrink-0"
-          :disabled="tiers.length >= MAX_RECHARGE_BONUS_TIERS"
-          data-testid="recharge-bonus-tier-add"
-          @click="addTier"
-        >
-          <Icon name="plus" size="sm" class="mr-1" />
-          {{ t('admin.settings.payment.rechargeBonus.addTier') }}
-        </button>
+        <div class="flex shrink-0 items-center gap-3">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('admin.settings.payment.rechargeBonusEnabled') }}
+          </span>
+          <Toggle v-model="enabledValue" data-testid="recharge-bonus-enabled" />
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            :disabled="!enabledValue || tiers.length >= MAX_RECHARGE_BONUS_TIERS"
+            data-testid="recharge-bonus-tier-add"
+            @click="addTier"
+          >
+            <Icon name="plus" size="sm" class="mr-1" />
+            {{ t('admin.settings.payment.rechargeBonus.addTier') }}
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="space-y-4 p-4">
+    <div v-if="enabledValue" class="space-y-4 p-4">
       <!-- 模式：整条阶梯共用 -->
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -180,6 +186,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Icon from '@/components/icons/Icon.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import {
   MAX_RECHARGE_BONUS_PERCENT,
   MAX_RECHARGE_BONUS_TIERS,
@@ -201,20 +208,26 @@ const props = defineProps<{
   modelValue?: RechargeBonusTierDraft[] | null
   mode?: RechargeBonusMode | string | null
   notice?: string | null
+  enabled?: boolean | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: RechargeBonusTierDraft[]): void
   (e: 'update:mode', value: RechargeBonusMode): void
   (e: 'update:notice', value: string): void
+  (e: 'update:enabled', value: boolean): void
 }>()
 
 const tiers = computed(() => props.modelValue ?? [])
 const currentMode = computed<RechargeBonusMode>(() => normalizeRechargeBonusMode(props.mode))
+const enabledValue = computed({
+  get: () => props.enabled ?? false,
+  set: (value: boolean) => emit('update:enabled', value),
+})
 
+// 折扣模式尚未接入下单链路（后端会拒绝保存），后台只露出赠金模式。
 const modeOptions = computed<{ value: RechargeBonusMode; label: string }[]>(() => [
   { value: 'bonus', label: t('admin.settings.payment.rechargeBonus.modeBonus') },
-  { value: 'discount', label: t('admin.settings.payment.rechargeBonus.modeDiscount') },
 ])
 
 const intervals = computed(() => describeRechargeBonusIntervals(sanitizeRechargeBonusTiersForSubmit(tiers.value)))

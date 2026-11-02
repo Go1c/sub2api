@@ -492,7 +492,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	}
 	// 充值满赠快照：创建订单时按当前配置计算并落库，履约与展示均用此快照而非当前配置。
 	// 禁止返赠的用户快照为 0，充值本身不受影响。
-	bonusAmount := snapshotRechargeBonusAmount(req.OrderType, orderAmount, cfg, user != nil && user.RechargeBonusDisabled)
+	bonusAmount := snapshotRechargeBonusAmount(req.OrderType, req.Amount, orderAmount, cfg, user != nil && user.RechargeBonusDisabled)
 	b := tx.PaymentOrder.Create().
 		SetUserID(req.UserID).
 		SetUserEmail(user.Email).
