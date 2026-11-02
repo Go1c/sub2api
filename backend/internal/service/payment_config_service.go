@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -105,6 +104,8 @@ type UpdatePaymentConfigRequest struct {
 	BalanceRechargeMultiplier *float64 `json:"balance_recharge_multiplier"`
 	SubscriptionUSDToCNYRate  *float64 `json:"subscription_usd_to_cny_rate"`
 	RechargeFeeRate           *float64 `json:"recharge_fee_rate"`
+	// RechargeBonusEnabled nil 表示不更新；满赠总开关（关闭后支付不受影响，仅不再赠送）。
+	RechargeBonusEnabled *bool `json:"recharge_bonus_enabled"`
 	// RechargeBonusTiers nil 表示不更新；空切片表示清空阶梯。
 	RechargeBonusTiers  *[]RechargeBonusTier `json:"recharge_bonus_tiers"`
 	RechargeBonusMode   *string              `json:"recharge_bonus_mode"`
@@ -246,7 +247,7 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 		SettingPaymentEnabled, SettingMinRechargeAmount, SettingMaxRechargeAmount,
 		SettingDailyRechargeLimit, SettingOrderTimeoutMinutes, SettingMaxPendingOrders,
 		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingBalanceRechargeMult, SettingSubscriptionUSDToCNYRate, SettingRechargeFeeRate, SettingLoadBalanceStrategy,
-		SettingRechargeBonusTiers, SettingRechargeBonusMode, SettingRechargeBonusNotice,
+		SettingRechargeBonusEnabled, SettingRechargeBonusTiers, SettingRechargeBonusMode, SettingRechargeBonusNotice,
 		SettingProductNamePrefix, SettingProductNameSuffix,
 		SettingHelpImageURL, SettingHelpText,
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,
@@ -277,6 +278,7 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		BalanceRechargeMultiplier: normalizeBalanceRechargeMultiplier(pcParseFloat(vals[SettingBalanceRechargeMult], defaultBalanceRechargeMultiplier)),
 		SubscriptionUSDToCNYRate:  normalizeSubscriptionUSDToCNYRate(pcParseFloat(vals[SettingSubscriptionUSDToCNYRate], 0)),
 		RechargeFeeRate:           pcParseFloat(vals[SettingRechargeFeeRate], 0),
+		RechargeBonusEnabled:      vals[SettingRechargeBonusEnabled] == "true",
 		RechargeBonusTiers:        parseRechargeBonusTiers(vals[SettingRechargeBonusTiers]),
 		RechargeBonusNotice:       vals[SettingRechargeBonusNotice],
 		LoadBalanceStrategy:       vals[SettingLoadBalanceStrategy],
@@ -415,6 +417,9 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 	}
 	if req.RechargeFeeRate != nil {
 		m[SettingRechargeFeeRate] = formatNonNegativeFloat(req.RechargeFeeRate)
+	}
+	if req.RechargeBonusEnabled != nil {
+		m[SettingRechargeBonusEnabled] = formatBoolOrEmpty(req.RechargeBonusEnabled)
 	}
 	if req.RechargeBonusTiers != nil {
 		m[SettingRechargeBonusTiers] = rechargeBonusTiersValue
@@ -637,47 +642,29 @@ func visibleMethodShouldBeExposed(method string, vals map[string]string, availab
 }
 
 // snapshotRechargeBonusAmount 是下单时写入的赠送快照。禁止返赠或非余额充值时为 0。
-func snapshotRechargeBonusAmount(orderType string, creditedAmount float64, cfg *PaymentConfig, bonusDisabled bool) float64 {
+// paymentAmount 为用户支付金额（档位按它命中），baseCredited 为乘充值倍率后的到账基数（百分比作用于它）。
+func snapshotRechargeBonusAmount(orderType string, paymentAmount, baseCredited float64, cfg *PaymentConfig, bonusDisabled bool) float64 {
 	if bonusDisabled || orderType != payment.OrderTypeBalance {
 		return 0
 	}
-	return computeRechargeBonusAmount(creditedAmount, cfg)
+	return computeRechargeBonusAmount(paymentAmount, baseCredited, cfg)
 }
 
-// computeRechargeBonusAmount 返回到账金额命中的最高档赠送额（未命中返回 0）。
-// tiers 已按 Threshold 降序，取第一个 threshold <= creditedAmount 的档；
-// creditedAmount 与 threshold 均为 2 位小数内的金额，直接浮点 >= 比较即可。
-func computeRechargeBonusAmount(creditedAmount float64, cfg *PaymentConfig) float64 {
+// computeRechargeBonusAmount 返回余额充值的赠送额（未启用/未命中返回 0）。
+// 按支付金额命中最高档（min_amount），在到账基数上赠送 bonus_percent%。
+// 折扣模式尚未接入下单链路，按无赠送处理（更新接口拒绝配置折扣模式）。
+func computeRechargeBonusAmount(paymentAmount, baseCredited float64, cfg *PaymentConfig) float64 {
 	if cfg == nil || !cfg.RechargeBonusEnabled || len(cfg.RechargeBonusTiers) == 0 {
 		return 0
 	}
-	for _, tier := range cfg.RechargeBonusTiers {
-		if tier.Threshold <= creditedAmount {
-			return math.Round(tier.Bonus*100) / 100
-		}
+	if mode, _ := NormalizeRechargeBonusMode(cfg.RechargeBonusMode); mode != RechargeBonusModeBonus {
+		return 0
 	}
-	return 0
-}
-
-// normalizeRechargeBonusTiers 丢弃非法档（threshold/bonus <= 0 或 NaN/Inf），
-// 同 threshold 保留首个，按 Threshold 降序排序，始终返回非 nil slice。
-func normalizeRechargeBonusTiers(tiers []RechargeBonusTier) []RechargeBonusTier {
-	out := make([]RechargeBonusTier, 0, len(tiers))
-	seen := make(map[float64]struct{}, len(tiers))
-	for _, tier := range tiers {
-		if tier.Threshold <= 0 || tier.Bonus <= 0 ||
-			math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) ||
-			math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) {
-			continue
-		}
-		if _, ok := seen[tier.Threshold]; ok {
-			continue
-		}
-		seen[tier.Threshold] = struct{}{}
-		out = append(out, tier)
+	tier, ok := matchRechargeBonusTier(cfg.RechargeBonusTiers, paymentAmount)
+	if !ok || tier.BonusPercent <= 0 {
+		return 0
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Threshold > out[j].Threshold })
-	return out
+	return calculateRechargeBonus(baseCredited, tier.BonusPercent)
 }
 
 // VisibleRechargeBonus 决定充值页是否下发满赠档位。禁止返赠时关闭展示，充值页其余内容不变。

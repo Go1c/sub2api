@@ -126,6 +126,11 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		bonusDisabled = disabled
 	}
 	bonusEnabled, bonusTiers := service.VisibleRechargeBonus(cfg, bonusDisabled)
+	bonusMode, _ := service.NormalizeRechargeBonusMode(cfg.RechargeBonusMode)
+	bonusNotice := cfg.RechargeBonusNotice
+	if !bonusEnabled {
+		bonusNotice = ""
+	}
 
 	// Fetch plans with group info
 	plans, _ := h.configService.ListPlansForSale(ctx)
@@ -156,6 +161,8 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		AlipayForceQRCode:                 cfg.AlipayForceQRCode,
 		RechargeBonusEnabled:              bonusEnabled,
 		RechargeBonusTiers:                bonusTiers,
+		RechargeBonusMode:                 bonusMode,
+		RechargeBonusNotice:               bonusNotice,
 	})
 }
 
@@ -175,6 +182,8 @@ type checkoutInfoResponse struct {
 	AlipayForceQRCode                 bool                            `json:"alipay_force_qrcode"`
 	RechargeBonusEnabled              bool                            `json:"recharge_bonus_enabled"`
 	RechargeBonusTiers                []service.RechargeBonusTier     `json:"recharge_bonus_tiers"`
+	RechargeBonusMode                 string                          `json:"recharge_bonus_mode"`
+	RechargeBonusNotice               string                          `json:"recharge_bonus_notice"`
 }
 
 type checkoutPlan struct {

@@ -15,25 +15,25 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// computeRechargeBonusAmount — 单档满赠、取满足条件的最高档
+// computeRechargeBonusAmount — 按支付金额命中最高档，在到账基数上按百分比赠送
 // ---------------------------------------------------------------------------
 
 func TestSnapshotRechargeBonusAmountSkipsBannedUsers(t *testing.T) {
 	t.Parallel()
 	cfg := &PaymentConfig{
 		RechargeBonusEnabled: true,
-		RechargeBonusTiers:   []RechargeBonusTier{{Threshold: 100, Bonus: 10}},
+		RechargeBonusTiers:   []RechargeBonusTier{{MinAmount: 100, BonusPercent: 10}},
 	}
-	assert.InDelta(t, 10.0, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, cfg, false), 1e-9)
-	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, cfg, true))
-	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeSubscription, 100, cfg, false))
+	assert.InDelta(t, 10.0, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, 100, cfg, false), 1e-9)
+	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, 100, cfg, true))
+	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeSubscription, 100, 100, cfg, false))
 }
 
 func TestVisibleRechargeBonusHidesTagsWhenBanned(t *testing.T) {
 	t.Parallel()
 	cfg := &PaymentConfig{
 		RechargeBonusEnabled: true,
-		RechargeBonusTiers:   []RechargeBonusTier{{Threshold: 100, Bonus: 10}},
+		RechargeBonusTiers:   []RechargeBonusTier{{MinAmount: 100, BonusPercent: 10}},
 	}
 	enabled, tiers := VisibleRechargeBonus(cfg, false)
 	assert.True(t, enabled)
@@ -48,124 +48,83 @@ func TestComputeRechargeBonusAmount(t *testing.T) {
 	t.Parallel()
 
 	tiers := []RechargeBonusTier{
-		{Threshold: 1000, Bonus: 200},
-		{Threshold: 500, Bonus: 80},
-		{Threshold: 100, Bonus: 10},
+		{MinAmount: 100, BonusPercent: 10},
+		{MinAmount: 500, BonusPercent: 16},
+		{MinAmount: 1000, BonusPercent: 20},
 	}
 
 	tests := []struct {
-		name    string
-		amount  float64
-		cfg     *PaymentConfig
-		want    float64
-		wantHit bool
+		name          string
+		paymentAmount float64
+		baseCredited  float64
+		cfg           *PaymentConfig
+		want          float64
 	}{
-		{name: "nil config returns 0", amount: 1000, cfg: nil, want: 0},
-		{name: "disabled returns 0", amount: 1000, cfg: &PaymentConfig{RechargeBonusEnabled: false, RechargeBonusTiers: tiers}, want: 0},
-		{name: "empty tiers returns 0", amount: 1000, cfg: &PaymentConfig{RechargeBonusEnabled: true}, want: 0},
-		{name: "below lowest threshold returns 0", amount: 99.99, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 0},
-		{name: "exactly at lowest threshold hits", amount: 100, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 10},
-		{name: "between tiers takes lower", amount: 499.99, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 10},
-		{name: "middle tier", amount: 500, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 80},
-		{name: "multiple matches take highest", amount: 1500, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 200},
-		{name: "decimal amount rounds to 2 places", amount: 1000.005, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 200},
+		{name: "nil config returns 0", paymentAmount: 1000, baseCredited: 1000, cfg: nil, want: 0},
+		{name: "disabled returns 0", paymentAmount: 1000, baseCredited: 1000, cfg: &PaymentConfig{RechargeBonusEnabled: false, RechargeBonusTiers: tiers}, want: 0},
+		{name: "empty tiers returns 0", paymentAmount: 1000, baseCredited: 1000, cfg: &PaymentConfig{RechargeBonusEnabled: true}, want: 0},
+		{name: "below lowest tier returns 0", paymentAmount: 99.99, baseCredited: 99.99, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 0},
+		{name: "exactly at lowest tier hits", paymentAmount: 100, baseCredited: 100, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 10},
+		{name: "between tiers takes lower percent on full base", paymentAmount: 499.99, baseCredited: 499.99, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 50},
+		{name: "middle tier", paymentAmount: 500, baseCredited: 500, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 80},
+		{name: "multiple matches take highest tier percent", paymentAmount: 1500, baseCredited: 1500, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 300},
+		{name: "percent applies to credited base not payment amount", paymentAmount: 100, baseCredited: 150, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 15},
+		{name: "tier matched by payment amount not credited base", paymentAmount: 100, baseCredited: 50, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: tiers}, want: 5},
+		{name: "discount mode not wired into order flow returns 0", paymentAmount: 1000, baseCredited: 1000, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusMode: RechargeBonusModeDiscount, RechargeBonusTiers: tiers}, want: 0},
+		{name: "zero percent tier returns 0", paymentAmount: 100, baseCredited: 100, cfg: &PaymentConfig{RechargeBonusEnabled: true, RechargeBonusTiers: []RechargeBonusTier{{MinAmount: 100}}}, want: 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := computeRechargeBonusAmount(tt.amount, tt.cfg)
+			got := computeRechargeBonusAmount(tt.paymentAmount, tt.baseCredited, tt.cfg)
 			assert.InDelta(t, tt.want, got, 1e-9)
 		})
 	}
 }
 
-func TestComputeRechargeBonusAmountUnsortedTiersStillFindsHighestMatch(t *testing.T) {
+func TestComputeRechargeBonusAmountHighestMatchWins(t *testing.T) {
 	t.Parallel()
 
-	// parsePaymentConfig 输出的 tiers 保证降序；这里验证降序输入的检索语义：
-	// 找第一个 threshold <= creditedAmount 的档（即满足条件的最高档）。
+	// parseRechargeBonusTiers 输出保证按 MinAmount 升序；命中取不超过支付金额的最大档。
 	cfg := &PaymentConfig{
 		RechargeBonusEnabled: true,
 		RechargeBonusTiers: []RechargeBonusTier{
-			{Threshold: 1000, Bonus: 200},
-			{Threshold: 500, Bonus: 80},
-			{Threshold: 100, Bonus: 10},
+			{MinAmount: 100, BonusPercent: 10},
+			{MinAmount: 500, BonusPercent: 16},
+			{MinAmount: 1000, BonusPercent: 20},
 		},
 	}
 
-	assert.InDelta(t, 80.0, computeRechargeBonusAmount(600, cfg), 1e-9)
-	assert.InDelta(t, 200.0, computeRechargeBonusAmount(99999, cfg), 1e-9)
+	assert.InDelta(t, 96.0, computeRechargeBonusAmount(600, 600, cfg), 1e-9)
+	assert.InDelta(t, 19999.8, computeRechargeBonusAmount(99999, 99999, cfg), 1e-9)
 }
 
 // ---------------------------------------------------------------------------
-// normalizeRechargeBonusTiers — 非法项剔除、去重、降序
-// ---------------------------------------------------------------------------
-
-func TestNormalizeRechargeBonusTiers_MergedDuplicate(t *testing.T) {
-	t.Parallel()
-
-	t.Run("drops invalid entries", func(t *testing.T) {
-		t.Parallel()
-		got := normalizeRechargeBonusTiers([]RechargeBonusTier{
-			{Threshold: 100, Bonus: 10},
-			{Threshold: 0, Bonus: 5},                       // threshold <= 0
-			{Threshold: -1, Bonus: 5},                      // threshold < 0
-			{Threshold: 200, Bonus: 0},                     // bonus <= 0
-			{Threshold: 300, Bonus: -5},                    // bonus < 0
-			{Threshold: math.NaN(), Bonus: 5},              // NaN threshold
-			{Threshold: 400, Bonus: math.Inf(1)},           // Inf bonus
-			{Threshold: math.Inf(-1), Bonus: math.Inf(-1)}, // both invalid
-			{Threshold: 500, Bonus: 50},
-		})
-		require.Len(t, got, 2)
-		assert.InDelta(t, 500, got[0].Threshold, 1e-9)
-		assert.InDelta(t, 100, got[1].Threshold, 1e-9)
-	})
-
-	t.Run("keeps first tier for duplicate thresholds", func(t *testing.T) {
-		t.Parallel()
-		got := normalizeRechargeBonusTiers([]RechargeBonusTier{
-			{Threshold: 100, Bonus: 10},
-			{Threshold: 100, Bonus: 20},
-			{Threshold: 200, Bonus: 30},
-		})
-		require.Len(t, got, 2)
-		assert.InDelta(t, 200, got[0].Threshold, 1e-9)
-		assert.InDelta(t, 30, got[0].Bonus, 1e-9)
-		assert.InDelta(t, 100, got[1].Threshold, 1e-9)
-		assert.InDelta(t, 10, got[1].Bonus, 1e-9) // 首个保留
-	})
-
-	t.Run("sorts descending by threshold", func(t *testing.T) {
-		t.Parallel()
-		got := normalizeRechargeBonusTiers([]RechargeBonusTier{
-			{Threshold: 100, Bonus: 10},
-			{Threshold: 1000, Bonus: 200},
-			{Threshold: 500, Bonus: 80},
-		})
-		require.Len(t, got, 3)
-		assert.InDelta(t, 1000, got[0].Threshold, 1e-9)
-		assert.InDelta(t, 500, got[1].Threshold, 1e-9)
-		assert.InDelta(t, 100, got[2].Threshold, 1e-9)
-	})
-
-	t.Run("nil input returns empty slice", func(t *testing.T) {
-		t.Parallel()
-		got := normalizeRechargeBonusTiers(nil)
-		require.NotNil(t, got)
-		assert.Empty(t, got)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// parsePaymentConfig — tiers JSON 解析容错
+// parsePaymentConfig — enabled 开关与 tiers JSON 解析
 // ---------------------------------------------------------------------------
 
 func TestParsePaymentConfigRechargeBonusTiers(t *testing.T) {
 	t.Parallel()
 
 	svc := &PaymentConfigService{}
+
+	t.Run("enabled parsed from settings key", func(t *testing.T) {
+		t.Parallel()
+		cfg := svc.parsePaymentConfig(map[string]string{
+			SettingRechargeBonusEnabled: "true",
+		})
+		assert.True(t, cfg.RechargeBonusEnabled)
+
+		cfg = svc.parsePaymentConfig(map[string]string{
+			SettingRechargeBonusEnabled: "false",
+		})
+		assert.False(t, cfg.RechargeBonusEnabled)
+
+		// 缺省视为关闭（未配置过开关的部署）
+		cfg = svc.parsePaymentConfig(map[string]string{})
+		assert.False(t, cfg.RechargeBonusEnabled)
+	})
 
 	t.Run("empty string yields empty slice", func(t *testing.T) {
 		t.Parallel()
@@ -187,22 +146,87 @@ func TestParsePaymentConfigRechargeBonusTiers(t *testing.T) {
 		assert.Empty(t, cfg.RechargeBonusTiers)
 	})
 
-	t.Run("valid JSON parsed normalized descending", func(t *testing.T) {
+	t.Run("valid JSON parsed sorted ascending by min_amount", func(t *testing.T) {
 		t.Parallel()
 		cfg := svc.parsePaymentConfig(map[string]string{
 			SettingRechargeBonusEnabled: "true",
-			SettingRechargeBonusTiers:   `[{"threshold":100,"bonus":10},{"threshold":1000,"bonus":200},{"threshold":0,"bonus":5}]`,
+			SettingRechargeBonusTiers:   `[{"min_amount":100,"bonus_percent":10},{"min_amount":1000,"bonus_percent":20},{"min_amount":500,"bonus_percent":16}]`,
 		})
 		assert.True(t, cfg.RechargeBonusEnabled)
-		require.Len(t, cfg.RechargeBonusTiers, 2)
-		assert.InDelta(t, 1000, cfg.RechargeBonusTiers[0].Threshold, 1e-9)
-		assert.InDelta(t, 100, cfg.RechargeBonusTiers[1].Threshold, 1e-9)
+		require.Len(t, cfg.RechargeBonusTiers, 3)
+		assert.InDelta(t, 100, cfg.RechargeBonusTiers[0].MinAmount, 1e-9)
+		assert.InDelta(t, 500, cfg.RechargeBonusTiers[1].MinAmount, 1e-9)
+		assert.InDelta(t, 1000, cfg.RechargeBonusTiers[2].MinAmount, 1e-9)
+	})
+
+	t.Run("legacy threshold/bonus JSON parses to inert tiers", func(t *testing.T) {
+		t.Parallel()
+		// 旧固定金额格式的存量配置：解析不报错；旧行的 MinAmount/BonusPercent 均为 0，
+		// 去重后只剩一条 0/0 档，下单与展示都按无优惠处理（fail-safe），需要在后台按百分比重新配置。
+		cfg := svc.parsePaymentConfig(map[string]string{
+			SettingRechargeBonusTiers: `[{"threshold":1000,"bonus":200},{"threshold":100,"bonus":10}]`,
+		})
+		require.Len(t, cfg.RechargeBonusTiers, 1)
+		assert.InDelta(t, 0.0, cfg.RechargeBonusTiers[0].BonusPercent, 1e-9)
+		assert.Zero(t, computeRechargeBonusAmount(1000, 1000, cfg))
 	})
 }
 
 // ---------------------------------------------------------------------------
-// UpdatePaymentConfig — tiers 校验与序列化
+// UpdatePaymentConfig — enabled 开关、折扣模式拒绝、tiers 序列化
 // ---------------------------------------------------------------------------
+
+func TestUpdatePaymentConfigRechargeBonusEnabledPersists(t *testing.T) {
+	t.Parallel()
+
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
+	svc := &PaymentConfigService{settingRepo: repo}
+
+	value := true
+	require.NoError(t, svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		RechargeBonusEnabled: &value,
+	}))
+	assert.Equal(t, "true", repo.values[SettingRechargeBonusEnabled])
+
+	value = false
+	require.NoError(t, svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		RechargeBonusEnabled: &value,
+	}))
+	assert.Equal(t, "false", repo.values[SettingRechargeBonusEnabled])
+
+	// nil 不写
+	repo2 := &paymentConfigSettingRepoStub{values: map[string]string{SettingRechargeBonusEnabled: "true"}}
+	svc2 := &PaymentConfigService{settingRepo: repo2}
+	require.NoError(t, svc2.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{}))
+	assert.Equal(t, "true", repo2.values[SettingRechargeBonusEnabled])
+	if _, ok := repo2.updates[SettingRechargeBonusEnabled]; ok {
+		t.Fatal("nil enabled must not be written")
+	}
+}
+
+func TestUpdatePaymentConfigRejectsDiscountMode(t *testing.T) {
+	t.Parallel()
+
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
+	svc := &PaymentConfigService{settingRepo: repo}
+
+	discount := RechargeBonusModeDiscount
+	err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		RechargeBonusMode: &discount,
+	})
+	require.Error(t, err)
+	assert.Equal(t, "INVALID_RECHARGE_BONUS_MODE", infraerrors.Reason(err))
+
+	tiers := []RechargeBonusTier{{MinAmount: 100, BonusPercent: 10}}
+	err = svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		RechargeBonusTiers: &tiers,
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t,
+		`[{"min_amount":100,"bonus_percent":10}]`,
+		repo.values[SettingRechargeBonusTiers],
+	)
+}
 
 func TestUpdatePaymentConfigRechargeBonusTiersValidation(t *testing.T) {
 	t.Parallel()
@@ -211,19 +235,18 @@ func TestUpdatePaymentConfigRechargeBonusTiersValidation(t *testing.T) {
 		name  string
 		tiers []RechargeBonusTier
 	}{
-		{name: "zero threshold rejected", tiers: []RechargeBonusTier{{Threshold: 0, Bonus: 10}}},
-		{name: "negative threshold rejected", tiers: []RechargeBonusTier{{Threshold: -100, Bonus: 10}}},
-		{name: "zero bonus rejected", tiers: []RechargeBonusTier{{Threshold: 100, Bonus: 0}}},
-		{name: "negative bonus rejected", tiers: []RechargeBonusTier{{Threshold: 100, Bonus: -1}}},
-		{name: "threshold with 3 decimals rejected", tiers: []RechargeBonusTier{{Threshold: 100.123, Bonus: 10}}},
-		{name: "bonus with 3 decimals rejected", tiers: []RechargeBonusTier{{Threshold: 100, Bonus: 10.123}}},
-		{name: "NaN threshold rejected", tiers: []RechargeBonusTier{{Threshold: math.NaN(), Bonus: 10}}},
-		{name: "Inf bonus rejected", tiers: []RechargeBonusTier{{Threshold: 100, Bonus: math.Inf(1)}}},
-		{name: "duplicate threshold rejected", tiers: []RechargeBonusTier{{Threshold: 100, Bonus: 10}, {Threshold: 100, Bonus: 20}}},
+		{name: "negative min amount rejected", tiers: []RechargeBonusTier{{MinAmount: -100, BonusPercent: 10}}},
+		{name: "negative percent rejected", tiers: []RechargeBonusTier{{MinAmount: 100, BonusPercent: -1}}},
+		{name: "percent above 1000 rejected", tiers: []RechargeBonusTier{{MinAmount: 100, BonusPercent: 1001}}},
+		{name: "min amount with 3 decimals rejected", tiers: []RechargeBonusTier{{MinAmount: 100.123, BonusPercent: 10}}},
+		{name: "percent with 3 decimals rejected", tiers: []RechargeBonusTier{{MinAmount: 100, BonusPercent: 10.123}}},
+		{name: "NaN min amount rejected", tiers: []RechargeBonusTier{{MinAmount: math.NaN(), BonusPercent: 10}}},
+		{name: "Inf percent rejected", tiers: []RechargeBonusTier{{MinAmount: 100, BonusPercent: math.Inf(1)}}},
+		{name: "duplicate min amount rejected", tiers: []RechargeBonusTier{{MinAmount: 100, BonusPercent: 10}, {MinAmount: 100, BonusPercent: 20}}},
 		{name: "more than 20 tiers rejected", tiers: func() []RechargeBonusTier {
 			tiers := make([]RechargeBonusTier, 21)
 			for i := range tiers {
-				tiers[i] = RechargeBonusTier{Threshold: float64(i + 1), Bonus: 1}
+				tiers[i] = RechargeBonusTier{MinAmount: float64(i + 1), BonusPercent: 1}
 			}
 			return tiers
 		}()},
@@ -251,24 +274,31 @@ func TestUpdatePaymentConfigRechargeBonusTiersPersists(t *testing.T) {
 	svc := &PaymentConfigService{settingRepo: repo}
 
 	tiers := []RechargeBonusTier{
-		{Threshold: 100, Bonus: 10},
-		{Threshold: 1000, Bonus: 200},
+		{MinAmount: 100, BonusPercent: 10},
+		{MinAmount: 1000, BonusPercent: 20},
 	}
 	err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
 		RechargeBonusTiers: &tiers,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "true", repo.values[SettingRechargeBonusEnabled])
 	assert.JSONEq(t,
-		`[{"threshold":100,"bonus":10},{"threshold":1000,"bonus":200}]`,
+		`[{"min_amount":100,"bonus_percent":10},{"min_amount":1000,"bonus_percent":20}]`,
 		repo.values[SettingRechargeBonusTiers],
 	)
 
+	// 空数组清空阶梯（存空串，与未配置同形态）
+	empty := []RechargeBonusTier{}
+	err = svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		RechargeBonusTiers: &empty,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "", repo.values[SettingRechargeBonusTiers])
+
 	// nil slice 不写（与 EnabledTypes 同语义）
-	repo2 := &paymentConfigSettingRepoStub{values: map[string]string{SettingRechargeBonusTiers: `[{"threshold":100,"bonus":10}]`}}
+	repo2 := &paymentConfigSettingRepoStub{values: map[string]string{SettingRechargeBonusTiers: `[{"min_amount":100,"bonus_percent":10}]`}}
 	svc2 := &PaymentConfigService{settingRepo: repo2}
 	require.NoError(t, svc2.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{}))
-	assert.Equal(t, `[{"threshold":100,"bonus":10}]`, repo2.values[SettingRechargeBonusTiers])
+	assert.Equal(t, `[{"min_amount":100,"bonus_percent":10}]`, repo2.values[SettingRechargeBonusTiers])
 	if _, ok := repo2.updates[SettingRechargeBonusTiers]; ok {
 		t.Fatal("nil tiers must not be written")
 	}
@@ -348,9 +378,9 @@ func TestExecuteBalanceFulfillmentWithoutBonusSkipsBonusCode(t *testing.T) {
 
 	err := svc.ExecuteBalanceFulfillment(ctx, order.ID)
 	require.NoError(t, err)
-	require.Nil(t, redeemRepo.codesByCode[order.RechargeCode+"-B"])
-	require.Equal(t, 1, redeemRepo.createCalls)
-	require.InDelta(t, order.Amount, userRepo.getByIDUser.Balance, 1e-9)
+	assert.Nil(t, redeemRepo.codesByCode[order.RechargeCode+"-B"])
+	assert.Equal(t, 1, redeemRepo.createCalls)
+	assert.InDelta(t, order.Amount, userRepo.getByIDUser.Balance, 1e-9)
 }
 
 func TestExecuteBalanceFulfillmentBackfillsBonusWhenMainCodeAlreadyUsed(t *testing.T) {

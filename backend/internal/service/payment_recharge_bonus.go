@@ -205,6 +205,12 @@ func (s *PaymentConfigService) resolveRechargeBonusUpdate(ctx context.Context, r
 		mode, _ = NormalizeRechargeBonusMode(stored[SettingRechargeBonusMode])
 	}
 
+	// 折扣模式的实付打折尚未接入下单链路（履约是主码到账 + -B 赠送码模型），
+	// 先拒绝配置，避免出现"配置了折扣但下单不打折"的静默失效。
+	if mode == RechargeBonusModeDiscount {
+		return "", "", infraerrors.BadRequest("INVALID_RECHARGE_BONUS_MODE", "discount mode is not wired into the order flow yet; use bonus mode")
+	}
+
 	if err := ValidateRechargeBonusTiersForMode(mode, tiers); err != nil {
 		return "", "", infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", err.Error())
 	}
