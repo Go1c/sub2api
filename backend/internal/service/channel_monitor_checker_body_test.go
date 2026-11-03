@@ -641,3 +641,54 @@ func TestValidateChallenge_AnthropicTextAfterThinking(t *testing.T) {
 		t.Fatalf("validateChallenge(%q, %q) = false, want true", respText, "2")
 	}
 }
+
+// TestRunIQCheckForModel_AppliesThinkingBudget IQ 检查必须把 max_tokens 提到思考预算：
+// adapter 默认 50 会被思考模型（thinking 段优先产出）烧光，正文为空被误判为测试异常。
+// applyMaxTokensOverride 曾经写完从未接线，此测试锁住该行为不再回退。
+func TestRunIQCheckForModel_AppliesThinkingBudget(t *testing.T) {
+	h := &captureHandler{respondText: "21"}
+	endpoint := setupFakeAnthropic(t, h)
+
+	opts := &CheckOptions{}
+	applyIQCheckOptions(opts, &ChannelMonitor{CheckMode: MonitorCheckModeIQ, IQFuzzyMatch: true})
+
+	res := runIQCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-sonnet-5-5", opts)
+
+	if mt, ok := h.lastBody["max_tokens"].(float64); !ok || mt != float64(monitorIQMaxTokens) {
+		t.Errorf("IQ check should send max_tokens=%d, got %v", monitorIQMaxTokens, h.lastBody["max_tokens"])
+	}
+	if res.IqStatus != MonitorIQStatusOK {
+		t.Errorf("IQ check with answer text should pass, got status=%s message=%q", res.IqStatus, res.Message)
+	}
+}
+
+// TestRunIQCheckForModel_BudgetWinsOverMergeOverride merge 模式下用户自定义的
+// max_tokens 仍对 challenge 生效（challenge 不设置 MaxTokens），但 IQ 检查的思考预算优先。
+func TestRunIQCheckForModel_BudgetWinsOverMergeOverride(t *testing.T) {
+	h := &captureHandler{respondText: "至少 21 颗"}
+	endpoint := setupFakeAnthropic(t, h)
+
+	opts := &CheckOptions{
+		BodyOverrideMode: MonitorBodyOverrideModeMerge,
+		BodyOverride:     map[string]any{"max_tokens": float64(999)},
+	}
+	applyIQCheckOptions(opts, &ChannelMonitor{CheckMode: MonitorCheckModeIQ, IQFuzzyMatch: true})
+
+	_ = runIQCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-sonnet-5-5", opts)
+
+	if mt, ok := h.lastBody["max_tokens"].(float64); !ok || mt != float64(monitorIQMaxTokens) {
+		t.Errorf("IQ check budget should win over merge override, want %d got %v", monitorIQMaxTokens, h.lastBody["max_tokens"])
+	}
+
+	// 对照：challenge 路径（不设 MaxTokens）保留用户的 999
+	h2 := &captureHandler{respondText: "42"}
+	endpoint2 := setupFakeAnthropic(t, h2)
+	challengeOpts := &CheckOptions{
+		BodyOverrideMode: MonitorBodyOverrideModeMerge,
+		BodyOverride:     map[string]any{"max_tokens": float64(999)},
+	}
+	_ = runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint2, "sk-fake", "claude-sonnet-5-5", challengeOpts)
+	if mt, ok := h2.lastBody["max_tokens"].(float64); !ok || mt != 999 {
+		t.Errorf("challenge should keep user's merged max_tokens=999, got %v", h2.lastBody["max_tokens"])
+	}
+}
