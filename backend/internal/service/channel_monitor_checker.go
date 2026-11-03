@@ -437,6 +437,7 @@ func mergeHeaders(base map[string]string, opts *CheckOptions) map[string]string 
 func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt string, opts *CheckOptions) ([]byte, error) {
 	mode := bodyOverrideMode(opts)
 
+	var body []byte
 	if mode == MonitorBodyOverrideModeReplace {
 		if opts == nil || len(opts.BodyOverride) == 0 {
 			return nil, fmt.Errorf("replace mode: body_override is empty")
@@ -444,37 +445,41 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		if err := validateReplaceRequestBody(provider, apiMode, opts.BodyOverride); err != nil {
 			return nil, err
 		}
-		body, err := json.Marshal(opts.BodyOverride)
+		raw, err := json.Marshal(opts.BodyOverride)
 		if err != nil {
 			return nil, fmt.Errorf("marshal body_override (replace): %w", err)
 		}
-		return body, nil
-	}
-
-	defaultBody, err := adapter.buildBody(model, prompt)
-	if err != nil {
-		return nil, fmt.Errorf("marshal default body: %w", err)
-	}
-	if mode != MonitorBodyOverrideModeMerge || opts == nil || len(opts.BodyOverride) == 0 {
-		return defaultBody, nil
-	}
-
-	var defaultMap map[string]any
-	if err := json.Unmarshal(defaultBody, &defaultMap); err != nil {
-		return nil, fmt.Errorf("unmarshal default body for merge: %w", err)
-	}
-	deny := bodyMergeKeyDenyList[bodyMergeDenyKey(provider, apiMode)]
-	for k, v := range opts.BodyOverride {
-		if deny[k] {
-			continue
+		body = raw
+	} else {
+		defaultBody, err := adapter.buildBody(model, prompt)
+		if err != nil {
+			return nil, fmt.Errorf("marshal default body: %w", err)
 		}
-		defaultMap[k] = v
+		body = defaultBody
+		if mode == MonitorBodyOverrideModeMerge && opts != nil && len(opts.BodyOverride) > 0 {
+			var defaultMap map[string]any
+			if err := json.Unmarshal(defaultBody, &defaultMap); err != nil {
+				return nil, fmt.Errorf("unmarshal default body for merge: %w", err)
+			}
+			deny := bodyMergeKeyDenyList[bodyMergeDenyKey(provider, apiMode)]
+			for k, v := range opts.BodyOverride {
+				if deny[k] {
+					continue
+				}
+				defaultMap[k] = v
+			}
+			merged, err := json.Marshal(defaultMap)
+			if err != nil {
+				return nil, fmt.Errorf("marshal merged body: %w", err)
+			}
+			body = merged
+		}
 	}
-	merged, err := json.Marshal(defaultMap)
-	if err != nil {
-		return nil, fmt.Errorf("marshal merged body: %w", err)
-	}
-	return merged, nil
+
+	// opts.MaxTokens > 0（IQ 检查的思考预算）时统一覆写 token 上限，replace 模式也生效：
+	// 50 token 的 challenge 默认值会让思考模型把预算全烧在推理段，正文为空被误判测试异常。
+	// 未设置（challenge 等场景）时保持原值不动。
+	return applyMaxTokensOverride(body, provider, apiMode, opts)
 }
 
 // bodyMergeKeyDenyList 在 merge 模式下，禁止用户覆盖这些 provider-specific 的关键字段。
