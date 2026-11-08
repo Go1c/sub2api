@@ -203,12 +203,12 @@ var providerAdapters = map[string]providerAdapter{
 	MonitorProviderGemini: {
 		// Gemini 把 model 名写在 URL path 上：/v1beta/models/{model}:generateContent
 		buildPath: func(model string) string { return fmt.Sprintf(providerGeminiPathTemplate, model) },
-		buildBody: func(_, prompt string) ([]byte, error) {
+		buildBody: func(model, prompt string) ([]byte, error) {
 			return json.Marshal(map[string]any{
 				"contents": []map[string]any{
 					{"role": "user", "parts": []map[string]any{{"text": prompt}}},
 				},
-				"generationConfig": map[string]any{"maxOutputTokens": monitorChallengeMaxTokens},
+				"generationConfig": map[string]any{"maxOutputTokens": geminiChallengeMaxOutputTokens(model)},
 			})
 		},
 		// 使用 x-goog-api-key header 而不是 ?key= query，避免 *url.Error 把 key 回填到错误日志。
@@ -320,6 +320,15 @@ func extractMonitorResponseText(adapter providerAdapter, respBytes []byte) strin
 		return adapter.extractText(respBytes)
 	}
 	return gjson.GetBytes(respBytes, adapter.textPath).String()
+}
+
+// geminiChallengeMaxOutputTokens 给思考模型更高的输出上限。
+// 非思考模型仍用 50，避免把普通探活的账单和延迟抬高。
+func geminiChallengeMaxOutputTokens(model string) int {
+	if geminiThinkingParamForModel(model) == geminiThinkingParamNone {
+		return monitorChallengeMaxTokens
+	}
+	return monitorGeminiThinkingChallengeMaxTokens
 }
 
 // extractGeminiMonitorText 取最终回答，跳过 thought 段。

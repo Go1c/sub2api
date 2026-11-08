@@ -1,10 +1,11 @@
 // sub2api 生产镜像构建流水线（Jenkins / linux-sub2api 香港构建节点）。
 //
-// 只负责「打包 + 投递」：构建 ghcr.io/go1c/sub2api:sha-<SHA>（main-kin 额外打 :kin），
-// 经受限 SSH（kin 侧 forced command /opt/lumio/bin/jenkins-image-load.sh）直接
-// docker load 进 lumio-kin。不推 GHCR，不经 CN 机器。
-// 部署动作（预部署 dump、翻 SUB2API_IMAGE、up -d --pull never、健康检查、deploy-state
-// 记账）仍由运维按 LumioServerWorkFlow 的 runbook 执行。
+// 打包 + 投递 + 部署。构建 ghcr.io/go1c/sub2api:sha-<SHA>（main-kin 额外打 :kin），
+// 不推 GHCR，不经 CN 机器。
+// STACK=publish 经受限 SSH 灌进 154.37.154.36:45546，并由该机
+// /opt/lumio/bin/deploy-sub2api-preloaded.sh 部署（cutover compose，768m）。
+// STACK=main-kin 仍灌进 lumio-kin。kin 上的 publish 入口会拒绝，避免把已停的
+// publish 栈拉起来。
 pipeline {
   agent { label 'sub2api' }
 
@@ -19,7 +20,7 @@ pipeline {
     string(name: 'COMMIT', defaultValue: 'publish',
            description: 'Go1c/sub2api 的分支名、tag 或完整 40 位 SHA；一键发布用默认 publish（最新已合并提交）')
     choice(name: 'STACK', choices: ['publish', 'main-kin'],
-           description: 'publish：现网 api.lumio.games；main-kin：sidecar，额外打 :kin tag')
+           description: 'publish：154.37.154.36 上的 api.lumio.games；main-kin：kin sidecar，额外打 :kin tag')
     booleanParam(name: 'DEPLOY', defaultValue: true,
                  description: '构建投递后自动部署到对应 stack：预部署 dump → 切镜像 → 健康检查（失败自动回滚）→ 记账 + 飞书通知')
   }
@@ -27,10 +28,12 @@ pipeline {
   environment {
     REPO       = 'https://github.com/Go1c/sub2api.git'
     IMAGE_ROOT = 'ghcr.io/go1c/sub2api'
-    KIN_HOST   = '156.238.225.247'
-    KIN_PORT   = '11851'
-    KIN_KEY    = "${HOME}/.ssh/kin_image_load_ed25519"
-    KIN_DEPLOY = "${HOME}/.ssh/kin_deploy_ed25519"
+    KIN_HOST      = '156.238.225.247'
+    KIN_PORT      = '11851'
+    PUBLISH_HOST  = '154.37.154.36'
+    PUBLISH_PORT  = '45546'
+    KIN_KEY       = "${HOME}/.ssh/kin_image_load_ed25519"
+    KIN_DEPLOY    = "${HOME}/.ssh/kin_deploy_ed25519"
   }
 
   stages {
@@ -136,13 +139,18 @@ pipeline {
       }
     }
 
-    stage('投递到 lumio-kin') {
+    stage('投递镜像') {
       steps {
         sh label: 'ship', script: '''#!/usr/bin/env bash
           set -euo pipefail
-          out=$(ssh -p "${KIN_PORT}" -i "${KIN_KEY}" \
-                 -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 \
-                 "root@${KIN_HOST}" load < "${WORKSPACE}/sub2api-image.tar")
+          if [[ "${STACK}" == "publish" ]]; then
+            host="${PUBLISH_HOST}"; port="${PUBLISH_PORT}"
+          else
+            host="${KIN_HOST}"; port="${KIN_PORT}"
+          fi
+          out=$(ssh -p "${port}" -i "${KIN_KEY}" \
+                 -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 \
+                 "root@${host}" load < "${WORKSPACE}/sub2api-image.tar")
           printf '%s\n' "$out"
           grep -q "Loaded image: ${IMAGE_ROOT}:sha-${SHA}" <<<"$out"
         '''
@@ -154,12 +162,16 @@ pipeline {
         script { env.DEPLOY_RAN = '1' }
         sh label: 'deploy', script: '''#!/usr/bin/env bash
           set -euo pipefail
-          # kin 侧 forced-command 入口只接受 "<stack> <40-hex>"；deploy-sub2api-preloaded.sh
-          # 负责 dump → 切 env → up -d --pull never → 边缘网络重挂 → 健康检查 →
-          # 失败自动回滚 + deploy-state 记账 + 飞书 deploy-success/deploy-failure。
-          out=$(ssh -p "${KIN_PORT}" -i "${KIN_DEPLOY}" \
+          # 目标机 forced-command 只接受 "<stack> <40-hex>"。
+          # publish 走 154.37.154.36 的 cutover compose；main-kin 仍走 kin。
+          if [[ "${STACK}" == "publish" ]]; then
+            host="${PUBLISH_HOST}"; port="${PUBLISH_PORT}"
+          else
+            host="${KIN_HOST}"; port="${KIN_PORT}"
+          fi
+          out=$(ssh -p "${port}" -i "${KIN_DEPLOY}" \
                  -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 \
-                 "root@${KIN_HOST}" "${STACK} ${SHA}")
+                 "root@${host}" "${STACK} ${SHA}")
           printf '%s\n' "$out"
           grep -q "^deploy-ok ${STACK} " <<<"$out"
         '''
@@ -183,7 +195,7 @@ pipeline {
       script {
         if (env.DEPLOY_RAN == '1') {
           lumioNotify(event: 'deploy-failure', environment: params.STACK, version: env.SHA,
-                      stage: '部署', detail: '查看 Jenkins 构建日志；健康检查失败时 kin 已自动回滚旧镜像')
+                      stage: '部署', detail: '查看 Jenkins 构建日志；健康检查失败时目标机已自动回滚旧镜像')
         } else {
           lumioNotify(event: 'build-failure', environment: params.STACK, version: env.SHA,
                       stage: '构建', detail: '查看 Jenkins 构建日志')
