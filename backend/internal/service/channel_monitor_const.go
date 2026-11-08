@@ -127,6 +127,10 @@ const (
 	monitorAnthropicAPIVersion = "2023-06-01"
 	// monitorChallengeMaxTokens 单次 challenge 请求的 max_tokens（足够回答个位数算术）。
 	monitorChallengeMaxTokens = 50
+	// monitorGeminiThinkingChallengeMaxTokens 是 Gemini 思考模型算术探活的输出预算。
+	// 50 会把 gemini-4-argon 的思考段打满（实测 thoughts ≈ 200，finishReason=MAX_TOKENS），
+	// 网关只回一段占位 notice，探活被判 challenge mismatch。2048 盖住思考后仍留下正文。
+	monitorGeminiThinkingChallengeMaxTokens = 2048
 	// monitorIQMaxTokens 智商糖果题的输出预算：思考模型（gpt-6-astra 的 reasoning、
 	// claude-sonnet-5-5 的 thinking）在 50 token 的 challenge 预算内只会产出思考段，
 	// 正文为空被误判为测试异常；实测 claude-sonnet-5-5 答糖果题（思考+正文）峰值

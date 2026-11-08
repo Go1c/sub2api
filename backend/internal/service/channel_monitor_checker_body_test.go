@@ -587,6 +587,44 @@ func TestValidateChallenge_GeminiAnswerAfterThought(t *testing.T) {
 	}
 }
 
+func TestRunCheckForModel_GeminiThinkingModelGetsOutputBudget(t *testing.T) {
+	cases := []struct {
+		model string
+		want  int
+	}{
+		{model: "gemini-4-argon", want: 2048},
+		{model: "gemini-2.5-pro", want: 2048},
+		{model: "gemini-2.0-flash", want: monitorChallengeMaxTokens},
+	}
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			var got int
+			endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					http.Error(w, "bad request", http.StatusBadRequest)
+					return
+				}
+				cfg, _ := payload["generationConfig"].(map[string]any)
+				if v, ok := cfg["maxOutputTokens"].(float64); ok {
+					got = int(v)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"candidates": []map[string]any{{
+						"content": map[string]any{"parts": []map[string]any{{"text": "1"}}},
+					}},
+				})
+			}))
+
+			_ = runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "sk-gemini", tc.model, nil)
+			if got != tc.want {
+				t.Fatalf("maxOutputTokens=%d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunCheckForModel_GeminiThoughtPartDoesNotFailStatus(t *testing.T) {
 	questionRe := regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?`)
 	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
