@@ -2236,3 +2236,45 @@ func TestGPT61SolExplicitZeroCacheWriteAcrossTiers(t *testing.T) {
 		require.Zero(t, cost.CacheCreationCost)
 	}
 }
+
+func TestGemini4CarbonFallbackAndCatalogPricing(t *testing.T) {
+	// 硬编码兜底价卡：carbon 与 argon 同卡（$2/$10/$0.10 per MTok），
+	// cyber-permissive 变体 $4/$20/$0.20；-high 等档位别名经子串匹配同卡。
+	fallbackSvc := newTestBillingService()
+	for model, input := range map[string]float64{
+		"gemini-4-carbon":                   2e-6,
+		"gemini-4-carbon-high":              2e-6,
+		"Gemini-4-Carbon-Low":               2e-6,
+		"gemini-4-carbon-cyber-permissive":  4e-6,
+		"gemini-4-carbon-cyber-high-latest": 4e-6,
+	} {
+		pricing, err := fallbackSvc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.InDelta(t, input, pricing.InputPricePerToken, 1e-12, model)
+		if input == 2e-6 {
+			require.InDelta(t, 10e-6, pricing.OutputPricePerToken, 1e-12, model)
+			require.InDelta(t, 0.1e-6, pricing.CacheReadPricePerToken, 1e-12, model)
+		} else {
+			require.InDelta(t, 20e-6, pricing.OutputPricePerToken, 1e-12, model)
+			require.InDelta(t, 0.2e-6, pricing.CacheReadPricePerToken, 1e-12, model)
+		}
+	}
+
+	// 内置目录价：远端价格库缺该系列时 PricingService 仍能按 bundled 条目计价。
+	data, err := os.ReadFile("../../resources/model-pricing/model_prices_and_context_window.json")
+	require.NoError(t, err)
+	catalog := &PricingService{}
+	catalog.pricingData, err = catalog.parsePricingData(data)
+	require.NoError(t, err)
+	catalogSvc := NewBillingService(&config.Config{}, catalog)
+	pricing, err := catalogSvc.GetModelPricing("gemini-4-carbon")
+	require.NoError(t, err)
+	require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 10e-6, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.1e-6, pricing.CacheReadPricePerToken, 1e-12)
+
+	// 计费回归：截图里 88 入 / 237 出的请求必须计出非零费用，而不是 $0.000000。
+	cost, err := catalogSvc.CalculateCost("gemini-4-carbon", UsageTokens{InputTokens: 88, OutputTokens: 237}, 1)
+	require.NoError(t, err)
+	require.InDelta(t, 88*2e-6+237*10e-6, cost.TotalCost, 1e-10)
+}
