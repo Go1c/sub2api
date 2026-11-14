@@ -529,6 +529,27 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown: false,
 	}
 
+	// Gemini 4 Carbon (2026-11-09 发布，促销价与 Argon 同卡：$2 input / $10
+	// output / $0.10 cached input per MTok，官方价 2026-12-01 起翻倍到 $4/$20/
+	// $0.20；LiteLLM 仅以 gemini/gemini-4-carbon 等带前缀键收录，价格同步库的
+	// 裸前缀过滤收不进该系列)。Antigravity 的 -high/-low/-medium 档位别名由
+	// getFallbackPricing 的子串匹配覆盖，查无远端价格时不再按 $0 记账。
+	s.fallbackPrices["gemini-4-carbon"] = &ModelPricing{
+		InputPricePerToken:     2e-6,
+		OutputPricePerToken:    10e-6,
+		CacheReadPricePerToken: 0.1e-6,
+		SupportsCacheBreakdown: false,
+	}
+
+	// Gemini 4 Carbon Cyber Permissive (Vertex AI 定价，与 Argon Cyber 同卡：
+	// $4 input / $20 output / $0.20 cached input per MTok)，不享 Carbon 促销价。
+	s.fallbackPrices["gemini-4-carbon-cyber-permissive"] = &ModelPricing{
+		InputPricePerToken:     4e-6,
+		OutputPricePerToken:    20e-6,
+		CacheReadPricePerToken: 0.2e-6,
+		SupportsCacheBreakdown: false,
+	}
+
 	// OpenAI GPT-5.4（业务指定价格）
 	s.fallbackPrices["gpt-5.4"] = &ModelPricing{
 		InputPricePerToken:             2.5e-6,  // $2.5 per MTok
@@ -1121,6 +1142,14 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	}
 	if strings.Contains(modelLower, "gemini-4-argon") {
 		return s.fallbackPrices["gemini-4-argon"]
+	}
+	// Carbon 的 Cyber 变体与 Argon 同理：不享促销价，必须先于 "gemini-4-carbon" 判。
+	// 裸 contains 同时覆盖 gemini-4-carbon-high/-low 等档位别名。
+	if strings.Contains(modelLower, "gemini-4-carbon-cyber") {
+		return s.fallbackPrices["gemini-4-carbon-cyber-permissive"]
+	}
+	if strings.Contains(modelLower, "gemini-4-carbon") {
+		return s.fallbackPrices["gemini-4-carbon"]
 	}
 
 	// DeepSeek 系列：官方模型 V4 Pro/Flash（含 vision-exp）按各自价卡；
