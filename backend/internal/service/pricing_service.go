@@ -91,6 +91,40 @@ var (
 		Mode:                                "chat",
 		SupportsPromptCaching:               true,
 	}
+	openAIGPT62AstraFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   1e-05,
+		InputCostPerTokenPriority:           2e-05,
+		OutputCostPerToken:                  5e-05,
+		OutputCostPerTokenPriority:          1e-04,
+		CacheCreationInputTokenCost:         1.25e-05,
+		CacheCreationInputTokenCostPriority: 2.5e-05,
+		CacheReadInputTokenCost:             1e-06,
+		CacheReadInputTokenCostPriority:     2e-06,
+		LongContextInputTokenThreshold:      272_000,
+		LongContextInputCostMultiplier:      2,
+		LongContextOutputCostMultiplier:     1.5,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
+	openAIGPT62SolFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   2e-6,
+		InputCostPerTokenPriority:           4e-6,
+		OutputCostPerToken:                  10e-6,
+		OutputCostPerTokenPriority:          20e-6,
+		CacheCreationInputTokenCost:         2.5e-6,
+		CacheCreationInputTokenCostPriority: 5e-6,
+		CacheReadInputTokenCost:             0.1e-6,
+		CacheReadInputTokenCostPriority:     0.2e-6,
+		LongContextInputTokenThreshold:      272_000,
+		LongContextInputCostMultiplier:      2,
+		LongContextOutputCostMultiplier:     1.5,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
 	openAIGPT61SolFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:                   2e-6,
 		InputCostPerTokenPriority:           4e-6,
@@ -1657,6 +1691,18 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 			return pricing
 		}
 		return openAIGPT61SolFallbackPricing
+	}
+	if isOpenAIGPT62AstraModel(model) {
+		if pricing, ok := s.pricingData["gpt-6.2-astra"]; ok {
+			return pricing
+		}
+		return openAIGPT62AstraFallbackPricing
+	}
+	if isOpenAIGPT62SolModel(model) {
+		if pricing, ok := s.pricingData["gpt-6.2-sol"]; ok {
+			return pricing
+		}
+		return openAIGPT62SolFallbackPricing
 	}
 	if openai.IsGPT6SolOrLunaModelSpelling(model) {
 		if pricing, ok := s.pricingData[normalizeKnownOpenAICodexModel(model)]; ok {

@@ -2049,6 +2049,10 @@ func TestNewModelPricingCatalogFallbackAndContext(t *testing.T) {
 			input, output, write, read float64
 		}{
 			{"gpt-6.1-sol", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
+			{"gpt-6.2-astra", 10e-6, 50e-6, 12.5e-6, 1e-6},
+			{"openai/gpt-6.2-astra-max", 10e-6, 50e-6, 12.5e-6, 1e-6},
+			{"gpt-6.2-sol", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
+			{"gpt-6.2-sol-high", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
 			{"gpt-6.1-terra", 1e-6, 5e-6, 1.25e-6, 0.05e-6},
 			{"openai/gpt-6.1-terra-max", 1e-6, 5e-6, 1.25e-6, 0.05e-6},
 			{"gpt-6-sol", 2e-6, 10e-6, 2.5e-6, 0.2e-6},
@@ -2193,7 +2197,7 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 	catalog.pricingData, err = catalog.parsePricingData(data)
 	require.NoError(t, err)
 	for _, svc := range []*BillingService{newTestBillingService(), NewBillingService(&config.Config{}, &PricingService{}), NewBillingService(&config.Config{}, catalog)} {
-		for _, model := range []string{"gpt-6-astra", "gpt-6", "openai/gpt-6-astra"} {
+		for _, model := range []string{"gpt-6-astra", "gpt-6", "openai/gpt-6-astra", "gpt-6.2-astra", "openai/gpt-6.2-astra-high"} {
 			for _, n := range []int{271999, 272000, 272001} {
 				tokens := UsageTokens{InputTokens: n - 3000, CacheReadTokens: 2000, CacheCreationTokens: 1000, OutputTokens: 500}
 				cost, err := svc.CalculateCostWithServiceTier(model, tokens, 1, "ultrafast")
