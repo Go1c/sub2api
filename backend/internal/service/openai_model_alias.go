@@ -227,6 +227,12 @@ func normalizeKnownOpenAICodexModel(model string) string {
 	if openai.IsGPT61SolModelSpelling(normalized) {
 		return "gpt-6.1-sol"
 	}
+	if isOpenAIGPT62AstraModel(normalized) {
+		return "gpt-6.2-astra"
+	}
+	if isOpenAIGPT62SolModel(normalized) {
+		return "gpt-6.2-sol"
+	}
 	if openai.IsGPT6SolOrLunaModelSpelling(normalized) {
 		if strings.HasPrefix(normalized, "gpt-6-sol") {
 			return "gpt-6-sol"
@@ -277,6 +283,36 @@ func normalizeKnownOpenAICodexModel(model string) string {
 		return "gpt-5.4"
 	default:
 		return ""
+	}
+}
+
+// isOpenAIGPT62AstraModel recognizes gpt-6.2-astra and the same effort/date
+// suffixes as GPT-6 Astra. It does not collapse the ID onto gpt-6-astra.
+func isOpenAIGPT62AstraModel(model string) bool {
+	normalized := canonicalizeOpenAIModelAliasSpelling(model)
+	if normalized == "gpt-6.2-astra" {
+		return true
+	}
+	suffix, ok := strings.CutPrefix(normalized, "gpt-6.2-astra-")
+	return ok && (suffix == "max" || isKnownCodexModelSuffix(suffix))
+}
+
+// isOpenAIGPT62SolModel recognizes gpt-6.2-sol and the GPT-6.1 Sol effort/compact
+// suffixes. Near-miss names such as gpt-6.2-solitude stay unrecognized.
+func isOpenAIGPT62SolModel(model string) bool {
+	normalized := canonicalizeOpenAIModelAliasSpelling(model)
+	if normalized == "gpt-6.2-sol" {
+		return true
+	}
+	suffix, ok := strings.CutPrefix(normalized, "gpt-6.2-sol-")
+	if !ok {
+		return false
+	}
+	switch suffix {
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max", "openai-compact":
+		return true
+	default:
+		return false
 	}
 }
 
