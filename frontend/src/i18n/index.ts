@@ -49,6 +49,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin,
       upstreamGaps,
       adminAccessKeys,
+      mcp,
+      usageGaps,
     ] = await Promise.all([
       import('./locales/en/admin/accounts'),
       import('./locales/en/admin/ops'),
@@ -64,6 +66,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('@/features/checkin/locales/en'),
       import('./locales/en/upstreamGaps'),
       import('./locales/en/adminAccessKeys'),
+      import('./locales/en/mcp'),
+      import('./locales/en/usageGaps'),
     ])
     return [
       { admin: accounts.default },
@@ -80,6 +84,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin.default,
       upstreamGaps.default,
       { adminAccessKeys: adminAccessKeys.default },
+      { mcp: mcp.default },
+      usageGaps.default,
     ]
   }
 
@@ -102,6 +108,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin,
       upstreamGaps,
       adminAccessKeys,
+      mcp,
+      usageGaps,
     ] = await Promise.all([
       import('./locales/zh/admin/accounts'),
       import('./locales/zh/admin/ops'),
@@ -118,6 +126,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('@/features/checkin/locales/zh'),
       import('./locales/zh/upstreamGaps'),
       import('./locales/zh/adminAccessKeys'),
+      import('./locales/zh/mcp'),
+      import('./locales/zh/usageGaps'),
     ])
     return [
       { admin: accounts.default },
@@ -135,6 +145,8 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin.default,
       upstreamGaps.default,
       { adminAccessKeys: adminAccessKeys.default },
+      { mcp: mcp.default },
+      usageGaps.default,
     ]
   }
 

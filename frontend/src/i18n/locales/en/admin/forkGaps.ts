@@ -41,6 +41,11 @@ export default {
   channels: {
       emptyModelsInPricing: 'Pricing entry has no models',
       form: {
+            cacheReadPriceShort: 'Cache R',
+            cacheWrite12hHint: 'Leave empty to use the generic cache-write price. Applies only to reported OpenAI 12h writes.',
+            cacheWrite12hPrice: 'Cache Write (12h)',
+            cacheWrite12hPriceShort: 'Cache W 12h',
+            cacheWrite1hPriceShort: 'Cache W 1h',
             imageInputPrice: 'Image input price'
           },
       noGroupsSelected: 'No groups selected'
