@@ -11,15 +11,19 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
 func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthClient, cfg *config.Config, redisClient *redis.Client) *GrokOAuthService {
-	_ = cfg
-	_ = redisClient
-	return NewGrokOAuthService(proxyRepo, oauthClient)
+	svc := NewGrokOAuthService(proxyRepo, oauthClient, cfg)
+	// wire.go is depguard-exempt for redis; construct the Redis session store here.
+	if redisClient != nil {
+		svc = svc.WithSessionStore(xai.NewRedisSessionStore(redisClient))
+	}
+	return svc
 }
 
 // BuildInfo contains build information
@@ -101,6 +105,7 @@ func ProvideAuthService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	affiliateService *AffiliateService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	mcpOAuthService *MCPOAuthService,
 ) *AuthService {
 	svc := NewAuthService(
 		entClient,
@@ -119,6 +124,9 @@ func ProvideAuthService(
 	)
 	svc.SetTencentCaptchaService(tencentCaptchaService)
 	svc.SetAliyunCaptchaService(aliyunCaptchaService)
+	if mcpOAuthService != nil {
+		svc.SetMCPGrantRevoker(mcpOAuthService)
+	}
 	return svc
 }
 
@@ -298,6 +306,29 @@ func ProvideOpenAIQuotaService(
 	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory, nil)
 	service.agentIdentityWS = openAIGatewayService
 	service.SetIPGroupResolver(openAIGatewayService.IPGroupResolver())
+	return service
+}
+
+// ProvideOpenAIQuotaAutoResetService 启动账号级自动用卡队列与补偿扫描。
+func ProvideOpenAIQuotaAutoResetService(
+	accountRepo AccountRepository,
+	quotaService *OpenAIQuotaService,
+	rateLimitService *RateLimitService,
+	idempotency *IdempotencyCoordinator,
+	audit *AuditLogService,
+	settingService *SettingService,
+	leaderLock LeaderLockCache,
+) *OpenAIQuotaAutoResetService {
+	service := NewOpenAIQuotaAutoResetService(
+		accountRepo,
+		quotaService,
+		rateLimitService,
+		idempotency,
+		audit,
+		settingService,
+		leaderLock,
+	)
+	service.Start()
 	return service
 }
 
@@ -928,6 +959,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAuthService,
 	NewPasskeyService,
 	NewUserService,
+	NewMCPOAuthService,
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideAuthCacheInvalidationWorker,
@@ -957,7 +989,6 @@ var ProviderSet = wire.NewSet(
 	ProvideInvoiceUserReader,
 	NewInvoiceService,
 	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
-	NewCompositeRouteResolver,
 	NewAdminService,
 	NewGatewayService,
 	ProvideOpenAIGatewayService,
@@ -968,10 +999,11 @@ var ProviderSet = wire.NewSet(
 	ProvideBatchImageCleanupService,
 	ProvideBatchImageWorkerRuntime,
 	ProvideImageTaskService,
+	ProvideImageStorageSettingService,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
 	ProvideOpenAIOAuthService,
-	NewGrokOAuthService,
+	ProvideGrokOAuthService,
 	wire.Bind(new(GrokOAuthTokenService), new(*GrokOAuthService)),
 	NewGeminiOAuthService,
 	ProvideGeminiCachedContentService,
@@ -986,6 +1018,7 @@ var ProviderSet = wire.NewSet(
 	ProvideGrokTokenProvider,
 	ProvideOpenAITokenProvider,
 	ProvideOpenAIQuotaService,
+	ProvideOpenAIQuotaAutoResetService,
 	ProvideGrokQuotaService,
 	ProvideCNProviderQuotaService,
 	ProvideCNProviderBalanceService,
@@ -993,6 +1026,7 @@ var ProviderSet = wire.NewSet(
 	ProvideClaudeTokenProvider,
 	NewAntigravityGatewayService,
 	ProvideRateLimitService,
+	ProvideOllamaCloudUsageService,
 	ProvideAccountUsageService,
 	ProvideAccountTestService,
 	ProvideAccountErrorHistoryService,
@@ -1020,6 +1054,8 @@ var ProviderSet = wire.NewSet(
 	NewNotificationEmailService,
 	ProvideEmailQueueService,
 	NewTurnstileService,
+	NewTencentCaptchaService,
+	NewAliyunCaptchaService,
 	ProvideSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	ProvideConcurrencyService,
@@ -1055,6 +1091,8 @@ var ProviderSet = wire.NewSet(
 	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
 	NewChannelService,
+	wire.Bind(new(ChannelCacheInvalidator), new(*ChannelService)),
+	NewModelPlazaService,
 	ProvideModelMarketService,
 	NewModelPricingResolver,
 	NewContentModerationService,
@@ -1080,6 +1118,8 @@ var ProviderSet = wire.NewSet(
 	ProvideSubscriptionNotifyService,
 	ProvideSubscriptionNotifyWorker,
 	ProvideUserPlatformQuotaUsageFlusher,
+	NewUsageBillingLaneCombiner,
+	ProvideUsageBillingRepository,
 )
 
 func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
@@ -1121,6 +1161,11 @@ func ProvideAccountErrorHistoryWiring(
 	tokenRefreshService.SetAccountErrorHistoryService(svc)
 	adminService.SetAccountErrorHistoryService(svc)
 	return AccountErrorHistoryWiring{}
+}
+
+// ProvideUsageBillingRepository 以按用户合并结算的通道作为各服务使用的计费仓储。
+func ProvideUsageBillingRepository(lanes *UsageBillingLaneCombiner) UsageBillingRepository {
+	return lanes
 }
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。

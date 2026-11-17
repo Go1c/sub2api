@@ -24,8 +24,7 @@ func TestAttachOpsRequestBodyToEntry_SanitizeAndTrim(t *testing.T) {
 	entry := &service.OpsInsertErrorLogInput{}
 	attachOpsRequestBodyToEntry(c, entry)
 
-	require.NotNil(t, entry.RequestBodyBytes)
-	require.Equal(t, len(raw), *entry.RequestBodyBytes)
+	require.Equal(t, len(raw), entry.RequestBodyBytes)
 	require.NotNil(t, entry.RequestBodyJSON)
 	require.NotContains(t, *entry.RequestBodyJSON, "secret-token")
 	require.Contains(t, *entry.RequestBodyJSON, "[REDACTED]")
@@ -47,8 +46,7 @@ func TestAttachOpsRequestBodyToEntry_InvalidJSONKeepsSize(t *testing.T) {
 	attachOpsRequestBodyToEntry(c, entry)
 
 	require.Nil(t, entry.RequestBodyJSON)
-	require.NotNil(t, entry.RequestBodyBytes)
-	require.Equal(t, len(raw), *entry.RequestBodyBytes)
+	require.Equal(t, len(raw), entry.RequestBodyBytes)
 	require.False(t, entry.RequestBodyTruncated)
 	require.Equal(t, int64(1), OpsErrorLogSanitizedTotal())
 }
@@ -67,18 +65,18 @@ func TestAttachOpsRequestBodyToEntry_EarlyReturnBranches(t *testing.T) {
 
 	attachOpsRequestBodyToEntry(c, entry)
 	require.Nil(t, entry.RequestBodyJSON)
-	require.Nil(t, entry.RequestBodyBytes)
+	require.Zero(t, entry.RequestBodyBytes)
 	require.False(t, entry.RequestBodyTruncated)
 
 	c.Set(opsRequestBodyKey, "not-bytes")
 	attachOpsRequestBodyToEntry(c, entry)
 	require.Nil(t, entry.RequestBodyJSON)
-	require.Nil(t, entry.RequestBodyBytes)
+	require.Zero(t, entry.RequestBodyBytes)
 
 	c.Set(opsRequestBodyKey, []byte{})
 	attachOpsRequestBodyToEntry(c, entry)
 	require.Nil(t, entry.RequestBodyJSON)
-	require.Nil(t, entry.RequestBodyBytes)
+	require.Zero(t, entry.RequestBodyBytes)
 
 	require.Equal(t, int64(0), OpsErrorLogSanitizedTotal())
 }

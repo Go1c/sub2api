@@ -1939,7 +1939,10 @@ func TestForwardAsAnthropic_MissingTerminalAfterClientDisconnectSkipsOpsAndFailo
 	c, _ := gin.CreateTestContext(rec)
 	c.Writer = &openAICompatFailingWriter{ResponseWriter: c.Writer, failAfter: 0}
 	body := []byte(`{"model":"gpt-5.4","max_tokens":16,"messages":[{"role":"user","content":"hello"}],"stream":true}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+	// A real disconnect also cancels the request context.
+	reqCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body)).WithContext(reqCtx)
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	upstreamBody := strings.Join([]string{
@@ -2075,4 +2078,35 @@ func TestForwardAsAnthropic_UpstreamRequestIgnoresClientCancel(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, upstream.lastReq)
 	require.NoError(t, upstream.lastReq.Context().Err())
+}
+
+func rawGPT56ResponsesAPIKeyAccount(requestedModel, mappedModel string) *Account {
+	return &Account{
+		ID:          501,
+		Name:        "gpt56-apikey",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":       "sk-test",
+			"base_url":      "https://api.example.com/v1",
+			"model_mapping": map[string]any{requestedModel: mappedModel},
+		},
+		Extra: map[string]any{"use_responses_api": true},
+	}
+}
+
+func rawGPT56ResponsesOAuthAccount(requestedModel, mappedModel string) *Account {
+	return &Account{
+		ID:          502,
+		Name:        "gpt56-oauth",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token":       "oauth-token",
+			"chatgpt_account_id": "chatgpt-acc",
+			"model_mapping":      map[string]any{requestedModel: mappedModel},
+		},
+	}
 }

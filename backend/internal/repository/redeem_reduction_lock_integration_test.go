@@ -52,7 +52,7 @@ func newReductionLockFixture(t *testing.T, name string) (*service.RedeemService,
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	sub, err := client.UserSubscription.Create().SetUserID(user.ID).SetGroupID(group.ID).SetStartsAt(now.Add(-time.Hour)).SetExpiresAt(now.AddDate(0, 0, 10)).SetStatus(service.SubscriptionStatusActive).SetNotes("initial").Save(ctx)
 	require.NoError(t, err)
-	repo := &lockedReductionReadRepo{UserSubscriptionRepository: NewUserSubscriptionRepository(client)}
+	repo := &lockedReductionReadRepo{UserSubscriptionRepository: NewUserSubscriptionRepository(client, integrationDB)}
 	codes := NewRedeemCodeRepository(client)
 	values := []string{name + "-first", name + "-second"}
 	for _, value := range values {

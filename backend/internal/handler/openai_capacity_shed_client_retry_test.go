@@ -25,7 +25,6 @@ func TestOpenAICapacityShedExhaustionReturnsClientRetryableServerError(t *testin
 		RetryableOnSameAccount: false,
 		RequestScopedTransient: true,
 		NextAccountAction:      service.NextAccountStop,
-		Reason:                 service.OpenAICapacityShedReason,
 		ClientStatusCode:       http.StatusServiceUnavailable,
 		ClientMessage:          "Our servers are currently overloaded. Please try again later.",
 	}, false)
@@ -36,7 +35,7 @@ func TestOpenAICapacityShedExhaustionReturnsClientRetryableServerError(t *testin
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "server_error", errObj["type"])
-	require.Equal(t, service.OpenAICapacityShedRetryableClientCode, errObj["code"])
+	require.Equal(t, "server_error", errObj["code"])
 	require.Equal(t, "Our servers are currently overloaded. Please try again later.", errObj["message"])
 }
 
@@ -51,7 +50,6 @@ func TestOpenAICapacityShedAnthropicExhaustionReturnsOverloadedError(t *testing.
 		RetryableOnSameAccount: false,
 		RequestScopedTransient: true,
 		NextAccountAction:      service.NextAccountStop,
-		Reason:                 service.OpenAICapacityShedReason,
 		ClientStatusCode:       http.StatusServiceUnavailable,
 		ClientMessage:          "Our servers are currently overloaded. Please try again later.",
 	}, false)

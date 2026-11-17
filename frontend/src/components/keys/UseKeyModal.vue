@@ -275,8 +275,12 @@ import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { buildCodexModelCatalogUrl, fetchCodexModelsManifest } from '@/api/codex'
 import type { GroupPlatform } from '@/types'
+import { buildCodexApiKeyAuthConfig } from '@/utils/codexAuthConfig'
 import {
-  parseCodexCatalogModels
+  findCodexCatalogModel,
+  formatCodexReasoningEffortTomlLine,
+  parseCodexCatalogModels,
+  selectCodexConfigReasoningEffort
 } from '@/utils/codexCatalogConfig'
 
 type CodexModelManifestState = 'idle' | 'loading' | 'ready' | 'error'
@@ -292,7 +296,6 @@ const codexModelManifestModelCount = ref(0)
 
 const codexModelCatalogMode = ref<'remote' | 'file'>('remote')
 const codexModelCatalogPath = CODEX_MODEL_CATALOG_CONFIG_PATH
-const codexModelCatalogUrl = computed(() => buildCodexModelCatalogUrl(props.baseUrl || window.location.origin))
 
 const codexModelManifestResponseBytes = ref(0)
 
@@ -305,12 +308,6 @@ const codexLocalCatalogToml = computed(() => codexModelCatalogMode.value === 'fi
 let codexModelManifestController: AbortController | null = null
 
 let codexModelManifestRequestID = 0
-
-const showCodexModelCatalog = computed(() =>
-  props.show &&
-  (activeClientTab.value === 'codex' ||
-    (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
-)
 
 
 interface Props {
@@ -349,7 +346,14 @@ const copiedIndex = ref<number | null>(null)
 const activeTab = ref<string>('unix')
 const activeClientTab = ref<string>('claude')
 type CodexAuthMode = 'legacy' | 'api-key'
-const codexAuthMode = ref<CodexAuthMode>('legacy')
+const codexAuthMode = ref<CodexAuthMode>('api-key')
+
+const codexModelCatalogUrl = computed(() => buildCodexModelCatalogUrl(props.baseUrl || window.location.origin))
+const showCodexModelCatalog = computed(() =>
+  props.show &&
+  (activeClientTab.value === 'codex' ||
+    (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
+)
 
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
@@ -373,12 +377,20 @@ const defaultClientTab = computed(() => {
 watch(() => [props.platform, props.claudeCodeOnly], () => {
   activeTab.value = 'unix'
   activeClientTab.value = defaultClientTab.value
-  codexAuthMode.value = 'legacy'
+  codexAuthMode.value = 'api-key'
 }, { immediate: true })
 
 watch(() => props.show, (show) => {
   if (show) {
-    codexAuthMode.value = 'legacy'
+    codexAuthMode.value = 'api-key'
+  } else {
+    resetCodexModelManifest()
+  }
+})
+
+watch(codexManifestContext, (context, previousContext) => {
+  if (context !== previousContext) {
+    resetCodexModelManifest()
   }
 })
 
@@ -608,6 +620,16 @@ const platformNote = computed(() => {
 
 const showPlatformNote = computed(() => activeClientTab.value !== 'opencode')
 
+function resetCodexModelManifest() {
+  codexModelManifestController?.abort()
+  codexModelManifestController = null
+  codexModelManifestRequestID += 1
+  codexModelManifestState.value = 'idle'
+  codexModelManifestContent.value = ''
+  codexModelManifestModelCount.value = 0
+  codexModelManifestResponseBytes.value = 0
+}
+
 async function loadCodexModelManifest() {
   if (!showCodexModelCatalog.value || !props.apiKey) return
 
@@ -653,6 +675,12 @@ const codexCatalogModelSlugs = computed(() =>
 function selectCodexCatalogModel(preferredModel: string): string {
   if (codexCatalogModelSlugs.value.includes(preferredModel)) return preferredModel
   return codexCatalogModelSlugs.value[0] || preferredModel
+}
+
+function codexReasoningEffortTomlLine(modelSlug: string): string {
+  return formatCodexReasoningEffortTomlLine(
+    selectCodexConfigReasoningEffort(findCodexCatalogModel(codexModelManifestContent.value, modelSlug))
+  )
 }
 
 const escapeHtml = (value: string) => value
@@ -897,13 +925,16 @@ function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
 
+  const model = selectCodexCatalogModel('gpt-6.1-sol')
+  const reasoningEffortLine = codexReasoningEffortTomlLine(model)
+
   // config.toml content
   const configContent = `model_provider = "OpenAI"
-model = "gpt-5.5"
-review_model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
-disable_response_storage = true
-network_access = "enabled"
+model = "${model}"
+review_model = "${model}"
+web_search = "live"
+${reasoningEffortLine}disable_response_storage = true
+${codexLocalCatalogToml.value}network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 
 [model_providers.OpenAI]
@@ -913,16 +944,14 @@ wire_api = "responses"
 ${generateCodexProviderAuthConfig(apiKey)}
 
 [features]
-${codexModelCatalogMode.value === 'remote' ? 'api_key_model_discovery = true\n' : ''}goals = true`
+${codexModelCatalogMode.value === 'remote' ? 'api_key_model_discovery = true\n' : ''}${codexAuthMode.value === 'api-key' ? 'image_generation = true\n' : ''}goals = true`
 
   return buildOpenAICodexFileConfigs(configDir, configContent, apiKey)
 }
 
 function generateCodexProviderAuthConfig(apiKey: string): string {
   if (codexAuthMode.value === 'api-key') {
-    return `requires_openai_auth = false
-experimental_bearer_token = "${escapeTomlBasicString(apiKey)}"
-http_headers = { "x-openai-actor-authorization" = "local-image-extension" }`
+    return buildCodexApiKeyAuthConfig(apiKey)
   }
 
   return 'requires_openai_auth = true'
@@ -1177,7 +1206,7 @@ function generateRoutedCodexFiles(
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
   const preferredModels: Partial<Record<GroupPlatform, string>> = {
-    openai: 'gpt-5.5',
+    openai: 'gpt-6.1-sol',
     anthropic: 'claude-sonnet-4-6',
     gemini: 'gemini-2.5-pro',
     antigravity: 'claude-sonnet-4-6',
@@ -1187,7 +1216,7 @@ function generateRoutedCodexFiles(
     deepseek: 'deepseek-v4-pro',
     minimax: 'MiniMax-M3',
     opencode_go: 'glm-5.3',
-    composite: 'gpt-5.5'
+    composite: 'gpt-6.1-sol'
   }
   const preferredModel = preferredModels[platform] || ''
   const model = selectCodexCatalogModel(preferredModel)
@@ -1301,14 +1330,16 @@ function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] 
 function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
+  const model = selectCodexCatalogModel('gpt-6.1-sol')
+  const reasoningEffortLine = codexReasoningEffortTomlLine(model)
 
   // config.toml content with WebSocket v2
   const configContent = `model_provider = "OpenAI"
-model = "gpt-5.5"
-review_model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
-disable_response_storage = true
-network_access = "enabled"
+model = "${model}"
+review_model = "${model}"
+web_search = "live"
+${reasoningEffortLine}disable_response_storage = true
+${codexLocalCatalogToml.value}network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 
 [model_providers.OpenAI]
@@ -1319,7 +1350,7 @@ supports_websockets = true
 ${generateCodexProviderAuthConfig(apiKey)}
 
 [features]
-responses_websockets_v2 = true
+${codexModelCatalogMode.value === 'remote' ? 'api_key_model_discovery = true\n' : ''}${codexAuthMode.value === 'api-key' ? 'image_generation = true\n' : ''}responses_websockets_v2 = true
 goals = true`
 
   return buildOpenAICodexFileConfigs(configDir, configContent, apiKey)
@@ -1903,7 +1934,34 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     provider[platform].models = geminiModels
   } else if (platform === 'anthropic') {
     provider[platform].npm = '@ai-sdk/anthropic'
+    // Mythos requires an eligible Anthropic account; configuration does not grant access.
     provider[platform].models = {
+      'claude-fable-5-2': {
+        name: 'Claude Fable 5.2',
+        limit: { context: 1000000, output: 128000 },
+        modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+        options: { thinking: { type: 'adaptive' }, effort: 'high' },
+        variants: {
+          low: { effort: 'low' },
+          medium: { effort: 'medium' },
+          high: { effort: 'high' },
+          xhigh: { effort: 'xhigh' },
+          max: { effort: 'max' }
+        }
+      },
+      'claude-mythos-5-2': {
+        name: 'Claude Mythos 5.2',
+        limit: { context: 1000000, output: 128000 },
+        modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+        options: { thinking: { type: 'adaptive' }, effort: 'high' },
+        variants: {
+          low: { effort: 'low' },
+          medium: { effort: 'medium' },
+          high: { effort: 'high' },
+          xhigh: { effort: 'xhigh' },
+          max: { effort: 'max' }
+        }
+      },
       'claude-opus-5-5': {
         name: 'Claude Opus 5.5',
         limit: { context: 1000000, output: 128000 },

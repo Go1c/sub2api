@@ -60,6 +60,8 @@ const usageLogsEffectiveRequestedModelIndex = "idx_usage_logs_effective_requeste
 const usageLogsEffectiveUpstreamModelIndex = "idx_usage_logs_effective_upstream_model_created"
 const usageLogsUpstreamRequestIDIndexMigration = "233_add_usage_log_upstream_request_id_index_notx.sql"
 const usageLogsUpstreamRequestIDIndex = "idx_usage_logs_upstream_request_id"
+const usageLogsAPIKeyCostIndexMigration = "249_add_usage_logs_api_key_cost_index_notx.sql"
+const usageLogsAPIKeyCostIndex = "idx_usage_logs_api_key_created_cost"
 
 // Fork remapped upstream 153_* to 172a_* (fork 153 is add_api_key_fallback_key_id).
 const schedulerOutboxPendingDedupKeyMigration = "172a_scheduler_outbox_pending_dedup_key_index_notx.sql"
@@ -322,6 +324,19 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 		return dropInvalidIndexIfPresent(ctx, db, schedulerOutboxPendingDedupKeyIndex)
 	case latestAPIKeyIPIndexMigration:
 		return dropInvalidIndexIfPresent(ctx, db, latestAPIKeyIPIndex)
+	case usageLogsUpstreamModelMismatchIndexMigration:
+		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamModelMismatchIndex)
+	case usageLogsEffectiveModelIndexesMigration:
+		for _, indexName := range []string{usageLogsEffectiveRequestedModelIndex, usageLogsEffectiveUpstreamModelIndex} {
+			if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+				return err
+			}
+		}
+		return nil
+	case usageLogsUpstreamRequestIDIndexMigration:
+		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamRequestIDIndex)
+	case usageLogsAPIKeyCostIndexMigration:
+		return dropInvalidIndexIfPresent(ctx, db, usageLogsAPIKeyCostIndex)
 	default:
 		return nil
 	}

@@ -90,7 +90,7 @@ func newKeyBillingRouteTestRouter(runMode string) (*gin.Engine, *keyBillingRoute
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	gatewayHandler := handler.NewGatewayHandler(
-		gatewayService, nil, nil, nil, nil, nil, nil, apiKeyService,
+		gatewayService, nil, nil, nil, nil, nil, nil, nil, apiKeyService,
 		nil, nil, nil, nil, cfg, nil,
 	)
 	gatewayHandler.SetOpenAIGatewayService(openAIGatewayService)

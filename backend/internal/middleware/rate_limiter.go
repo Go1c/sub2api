@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ type RateLimitOptions struct {
 	// KeyFunc overrides the default ClientIP identity. When set, redis key becomes
 	// prefix + key + ":" + KeyFunc(c). Empty string falls back to ClientIP.
 	KeyFunc func(c *gin.Context) string
+	// IPv6PrefixBits 按网段（如 64）合并 IPv6 客户端计数，避免轮换同一分配内的地址绕过限流；0 表示按单个地址计数。
+	IPv6PrefixBits int
 }
 
 var rateLimitScript = redis.NewScript(`
@@ -124,6 +127,22 @@ func clientIPForRateLimit(c *gin.Context) string {
 	return c.ClientIP()
 }
 
+// rateLimitClientKey 把 IPv6 地址归并到指定前缀的网段；IPv4 与无法解析的值保持原样。
+func rateLimitClientKey(ip string, ipv6PrefixBits int) string {
+	if ipv6PrefixBits <= 0 || ipv6PrefixBits >= 128 {
+		return ip
+	}
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is6() || addr.Is4In6() {
+		return ip
+	}
+	prefix, err := addr.WithZone("").Prefix(ipv6PrefixBits)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
+}
+
 // Limit 返回速率限制中间件
 // key: 限制类型标识
 // limit: 时间窗口内最大请求数
@@ -145,6 +164,8 @@ func (r *RateLimiter) LimitWithOptions(key string, limit int, window time.Durati
 			if custom := strings.TrimSpace(opts.KeyFunc(c)); custom != "" {
 				identity = custom
 			}
+		} else {
+			identity = rateLimitClientKey(identity, opts.IPv6PrefixBits)
 		}
 		result, err := r.Allow(c.Request.Context(), key+":"+identity, limit, window)
 		if err != nil {

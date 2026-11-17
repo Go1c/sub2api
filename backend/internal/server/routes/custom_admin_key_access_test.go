@@ -76,7 +76,7 @@ func (*scopedRouteAccounts) GetAccount(_ context.Context, id int64) (*service.Ac
 	}
 	return a, nil
 }
-func (s *scopedRouteAccounts) ScopedAdminList(context.Context, pagination.PaginationParams, string, string, string, string) ([]service.Account, int64, error) {
+func (s *scopedRouteAccounts) ScopedAdminList(context.Context, pagination.PaginationParams, string, string, string, string, int64) ([]service.Account, int64, error) {
 	s.t.Fatal("本测试中列表必须在权限准入阶段被拒绝")
 	return nil, 0, nil
 }
@@ -100,7 +100,7 @@ func TestScopedAdminRegisteredRoutesEnforceDefaultDenyAndAccountScope(t *testing
 			require.NoError(t, err)
 			users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
 			auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
-			accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 			r := gin.New()
 			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accountHandler, Setting: adminhandler.NewSettingHandler(settings, nil, nil, nil, nil, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
 			RegisterPaymentRoutes(r.Group("/api/v1"), &handler.PaymentHandler{}, &handler.PaymentWebhookHandler{}, &adminhandler.PaymentHandler{}, middleware.JWTAuthMiddleware(func(c *gin.Context) { c.Next() }), auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), nil, nil, nil)
@@ -158,7 +158,7 @@ func TestScopedAdminRegisteredModelDefaultsRequireExplicitPermission(t *testing.
 		require.NoError(t, err)
 		users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
 		auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
-		accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 		r := gin.New()
 		RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accountHandler, Setting: adminhandler.NewSettingHandler(settings, nil, nil, nil, nil, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
 		for _, path := range []string{"/api/v1/admin/accounts/antigravity/default-model-mapping"} {
@@ -197,7 +197,7 @@ func TestScopedAdminRegisteredLegacyModelInterfaces(t *testing.T) {
 			users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
 			auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
 			accounts := &scopedRouteModelAccounts{scopedRouteAccounts: scopedRouteAccounts{t: t}, t: t}
-			accountHandler := adminhandler.NewAccountHandler(accounts, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			accountHandler := adminhandler.NewAccountHandler(accounts, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 			r := gin.New()
 			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accountHandler}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
 			for _, tc := range []struct {
@@ -262,7 +262,7 @@ func TestScopedAdminCodexImportRouteReachesValidation(t *testing.T) {
 	require.NoError(t, err)
 	users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
 	auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
-	accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	accountHandler := adminhandler.NewAccountHandler(&scopedRouteAccounts{t: t}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	r := gin.New()
 	RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accountHandler}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
 	req := httptest.NewRequest("POST", "/api/v1/admin/accounts/import/codex-session", strings.NewReader(`{"content":"","group_ids":[2]}`))
@@ -303,7 +303,7 @@ func TestScopedAdminCodexImportAuthenticatedRoute(t *testing.T) {
 			users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
 			auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
 			api := &scopedRouteCodexAccounts{}
-			h := adminhandler.NewAccountHandler(api, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			h := adminhandler.NewAccountHandler(api, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 			r := gin.New()
 			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: h}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
 			req := httptest.NewRequest("POST", "/api/v1/admin/accounts/import/codex-session", strings.NewReader(`{"content":"{\"access_token\":\"test-private-access\",\"refresh_token\":\"test-private-refresh\"}","group_ids":[2]}`))

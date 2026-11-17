@@ -33,7 +33,7 @@ func TestRedeemReductionPreservesPartialDay(t *testing.T) {
 	expiry := now.Add(36 * time.Hour)
 	sub, err := client.UserSubscription.Create().SetUserID(user.ID).SetGroupID(group.ID).SetStartsAt(now.Add(-time.Hour)).SetExpiresAt(expiry).SetStatus(service.SubscriptionStatusActive).Save(ctx)
 	require.NoError(t, err)
-	repo := NewUserSubscriptionRepository(client)
+	repo := NewUserSubscriptionRepository(client, integrationDB)
 	codes := NewRedeemCodeRepository(client)
 	code := &service.RedeemCode{Code: "REDUCE-ONE-DAY", Type: service.RedeemTypeSubscription, Status: service.StatusUnused, ValidityDays: -1, GroupID: &group.ID}
 	require.NoError(t, codes.Create(ctx, code))

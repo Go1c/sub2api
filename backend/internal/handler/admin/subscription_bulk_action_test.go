@@ -91,7 +91,7 @@ func TestSubscriptionBulkAction_ReplaysPartialResultWithoutRepeatingExtension(t 
 	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(newMemoryIdempotencyRepoStub(), cfg))
 	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
 	expiresAt := time.Now().AddDate(0, 0, 30)
-	repo := &bulkActionHandlerSubscriptionRepo{sub: &service.UserSubscription{ID: 1, UserID: 1, GroupID: 10, ExpiresAt: expiresAt}}
+	repo := &bulkActionHandlerSubscriptionRepo{sub: &service.UserSubscription{ID: 1, UserID: 1, GroupID: int64Ptr(10), ExpiresAt: expiresAt}}
 	svc := service.NewSubscriptionService(nil, repo, nil, nil, nil)
 	t.Cleanup(svc.Stop)
 	h := NewSubscriptionHandler(svc)
@@ -135,7 +135,7 @@ func TestSubscriptionBulkAction_ClientCancellationStillPersistsReplay(t *testing
 	defer cancel()
 	expiresAt := time.Now().AddDate(0, 0, 30)
 	repo := &cancellationAwareBulkActionRepo{
-		bulkActionHandlerSubscriptionRepo: &bulkActionHandlerSubscriptionRepo{sub: &service.UserSubscription{ID: 1, UserID: 1, GroupID: 10, ExpiresAt: expiresAt}},
+		bulkActionHandlerSubscriptionRepo: &bulkActionHandlerSubscriptionRepo{sub: &service.UserSubscription{ID: 1, UserID: 1, GroupID: int64Ptr(10), ExpiresAt: expiresAt}},
 		cancelRequest:                     cancel,
 	}
 	svc := service.NewSubscriptionService(nil, repo, nil, nil, nil)

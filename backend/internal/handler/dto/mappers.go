@@ -162,6 +162,12 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 	}
 	out := &AdminGroup{
 		Group:                       groupFromServiceBase(g),
+		ForceOpenAIFast:             g.ForceOpenAIFast,
+		ForceOpenAIUltrafast:        g.ForceOpenAIUltrafast,
+		FreeOpenAIFast:              g.FreeOpenAIFast,
+		ProfitControlEnabled:        g.ProfitControlEnabled,
+		ProfitMinMargin:             g.ProfitMinMargin,
+		ProfitSafetyBuffer:          g.ProfitSafetyBuffer,
 		ModelPricing:                g.ModelPricing,
 		ModelRouting:                g.ModelRouting,
 		ModelRoutingEnabled:         g.ModelRoutingEnabled,
@@ -732,6 +738,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		CacheReadTokens:           l.CacheReadTokens,
 		CacheCreation5mTokens:     l.CacheCreation5mTokens,
 		CacheCreation1hTokens:     l.CacheCreation1hTokens,
+		CacheCreation30mTokens:    l.CacheCreation30mTokens,
+		CacheCreation12hTokens:    l.CacheCreation12hTokens,
 		InputCost:                 l.InputCost,
 		OutputCost:                l.OutputCost,
 		CacheCreationCost:         l.CacheCreationCost,

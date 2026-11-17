@@ -50,6 +50,9 @@ func (s *authBridgeRefreshTokenCacheStub) StoreRefreshToken(context.Context, str
 func (s *authBridgeRefreshTokenCacheStub) GetRefreshToken(context.Context, string) (*service.RefreshTokenData, error) {
 	return nil, service.ErrRefreshTokenNotFound
 }
+func (s *authBridgeRefreshTokenCacheStub) ConsumeRefreshToken(context.Context, string) (*service.RefreshTokenData, error) {
+	return nil, service.ErrRefreshTokenNotFound
+}
 func (s *authBridgeRefreshTokenCacheStub) DeleteRefreshToken(context.Context, string) error {
 	return nil
 }
@@ -210,6 +213,7 @@ func newAuthBridgeRouteEnv(t *testing.T) authBridgeTestEnv {
 		servermiddleware.NewJWTAuthMiddleware(authSvc, userSvc, nil, nil, uatSvc),
 		servermiddleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }),
 		rdb,
+		nil,
 		nil,
 	)
 

@@ -915,7 +915,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	}
 	b, _ := json.Marshal(claudeReq)
 
-	out, err := convertClaudeMessagesToGeminiGenerateContent(b)
+	out, err := convertClaudeMessagesToGeminiGenerateContent(b, "gemini-2.5-flash")
 	if err != nil {
 		t.Fatalf("convert failed: %v", err)
 	}
@@ -952,7 +952,7 @@ func TestEnableMixedGeminiToolInvocations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			claudeBody := []byte(`{"messages":[{"role":"user","content":"hello"}],"tools":` + tt.tools + `}`)
-			body, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+			body, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody, "gemini-2.5-flash")
 			require.NoError(t, err)
 			body, err = enableMixedGeminiToolInvocations(body)
 			require.NoError(t, err)

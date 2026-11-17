@@ -25,7 +25,7 @@ func TestUserSubscriptionGetByIDForUpdateLocksRow(t *testing.T) {
 	driver := entsql.OpenDB(dialect.Postgres, db)
 	client := dbent.NewClient(dbent.Driver(driver))
 	t.Cleanup(func() { _ = client.Close() })
-	repo := NewUserSubscriptionRepository(client)
+	repo := NewUserSubscriptionRepository(client, db)
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
 
 	mock.ExpectQuery("locked subscription").WillReturnRows(

@@ -24,14 +24,16 @@ func newGinContextForEndpoint(t *testing.T, endpoint string) (*gin.Context, *htt
 	return c, recorder
 }
 
-func parseResponsesFailedSSE(t *testing.T, body string) map[string]any {
+func parseResponsesFailedSSE(t *testing.T, body string) (map[string]any, map[string]any) {
 	t.Helper()
 	require.True(t, strings.HasPrefix(body, "event: response.failed\n"))
 	lines := strings.SplitN(strings.TrimSuffix(body, "\n\n"), "\n", 2)
 	require.Len(t, lines, 2)
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(strings.TrimPrefix(lines[1], "data: ")), &parsed))
-	return parsed
+	response, _ := parsed["response"].(map[string]any)
+	errorObject, _ := response["error"].(map[string]any)
+	return parsed, errorObject
 }
 
 func TestOpenAIHandleStreamingAwareError_ResponsesStreamingEmitsResponseFailed(t *testing.T) {
@@ -41,7 +43,7 @@ func TestOpenAIHandleStreamingAwareError_ResponsesStreamingEmitsResponseFailed(t
 
 	(&OpenAIGatewayHandler{}).handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "retry later", true)
 
-	parsed := parseResponsesFailedSSE(t, recorder.Body.String())
+	parsed, _ := parseResponsesFailedSSE(t, recorder.Body.String())
 	require.Equal(t, "response.failed", parsed["type"])
 	response := parsed["response"].(map[string]any)
 	require.Equal(t, "resp_fd277bc5ff7e45d18aa9f54e1df318f1", response["id"])
@@ -77,7 +79,7 @@ func TestInboundIsResponses_CoversKnownRoutes(t *testing.T) {
 }
 
 func TestMapResponsesErrorCode(t *testing.T) {
-	require.Equal(t, "permission_denied", mapResponsesErrorCode("permission_error"))
-	require.Equal(t, "server_error", mapResponsesErrorCode("api_error"))
-	require.Equal(t, "custom", mapResponsesErrorCode("custom"))
+	require.Equal(t, "permission_denied", mapResponsesErrorCode("permission_error", ""))
+	require.Equal(t, "server_error", mapResponsesErrorCode("api_error", ""))
+	require.Equal(t, "custom", mapResponsesErrorCode("custom", ""))
 }

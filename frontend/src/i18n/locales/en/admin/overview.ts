@@ -1075,6 +1075,23 @@ export default {
           detector: 'Detector'
         }
       },
+      openaiLive: {
+        title: 'OpenAI Live',
+        allow: 'Allow Live access',
+        hint: 'When enabled, API keys in this OpenAI group can create and control Live voice sessions. Disabled by default. The Sub2API server must run on Apple Silicon macOS with the official ChatGPT app installed; client platforms are unrestricted.',
+        unsupportedTitle: 'Current server does not support Live',
+        unsupportedMessage: 'This Sub2API server cannot generate the required Live attestation. Live will not work even if enabled. Continue anyway?',
+        enableAnyway: 'Enable anyway'
+      },
+      openaiFast: {
+        title: 'OpenAI Fast mode',
+        force: 'Force Fast (priority)',
+        hint: 'Forces service_tier=priority on OpenAI requests in this group. The global Fast/Flex policy can still filter or block it. New requests update immediately after saving; existing WebSocket sessions must reconnect.',
+        forceUltrafast: 'Force Ultra Fast (ultrafast)',
+        ultrafastHint: 'Forces service_tier=ultrafast only on models that support Ultra Fast (GPT-6 Astra, GPT-6.1 Sol), taking precedence over "Force Fast". Other models get priority when "Force Fast" is also on, otherwise they follow the client. Ultra Fast is billed at 6x the Standard price, is not covered by "Free Fast", and requires upstream accounts with Ultra Fast access.',
+        free: 'Free Fast',
+        freeHint: 'Fast requests in this group still use the priority tier, but customers are charged the equivalent Standard price.'
+      },
       copyAccounts: {
         title: 'Copy Accounts from Groups',
         tooltip: 'Select one or more groups of the same platform. After creation, all accounts from these groups will be automatically bound to the new group (deduplicated).',

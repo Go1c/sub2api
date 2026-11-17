@@ -881,6 +881,10 @@ func (s *codexImportMemoryAdminService) GetAccount(ctx context.Context, id int64
 	return s.stubAdminService.GetAccount(ctx, id)
 }
 
+func (s *codexImportMemoryAdminService) ValidateAccountGroupBindings(context.Context, []int64) error {
+	return nil
+}
+
 func buildCodexAccessOnlyImportValue(t *testing.T, accountID, userID string) map[string]any {
 	t.Helper()
 	return map[string]any{

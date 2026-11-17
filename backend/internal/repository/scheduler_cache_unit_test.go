@@ -411,6 +411,144 @@ func TestBuildSchedulerMetadataAccount_KeepsQuotaAutoPauseFields(t *testing.T) {
 	require.Equal(t, false, got.Extra["auto_pause_7d_disabled"])
 }
 
+// 候选过滤读的是 Redis 元数据投影；自动用卡的开关、阈值和卡状态缺失时，
+// 卡可用的 OpenAI 号会在暂停阈值处被一刀切停调，放行到用卡阈值的逻辑永远不生效。
+func TestSchedulerMetadataPayload_KeepsOpenAIAutoResetCreditFields(t *testing.T) {
+	checkedAt := time.Now().UTC().Format(time.RFC3339)
+	account := service.Account{
+		ID:          40,
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeOAuth,
+		Status:      service.StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"codex_7d_used_percent":                          90.0,
+			service.OpenAIAutoResetCreditEnabledExtraKey:     true,
+			service.OpenAIAutoResetCredit5hThresholdExtraKey: 0.95,
+			service.OpenAIAutoResetCredit7dThresholdExtraKey: 0.98,
+			service.OpenAIAutoResetCreditStateExtraKey: map[string]any{
+				"status":          service.OpenAIAutoResetStatusAvailable,
+				"available_count": 3,
+				"checked_at":      checkedAt,
+				"trigger_window":  "7d",
+			},
+		},
+	}
+
+	_, metaPayload, err := marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	var cached service.Account
+	require.NoError(t, json.Unmarshal(metaPayload, &cached))
+
+	config := service.ResolveOpenAIAutoResetCreditConfig(&cached)
+	require.True(t, config.Enabled)
+	require.Equal(t, 0.95, config.Threshold5h)
+	require.Equal(t, 0.98, config.Threshold7d)
+
+	state, ok := cached.Extra[service.OpenAIAutoResetCreditStateExtraKey].(map[string]any)
+	require.True(t, ok, "卡状态必须进入调度投影")
+	require.Equal(t, service.OpenAIAutoResetStatusAvailable, state["status"])
+	require.EqualValues(t, 3, state["available_count"])
+	require.Equal(t, checkedAt, state["checked_at"])
+}
+
+func TestBuildSchedulerMetadataAccount_KeepsQuotaStateForCachedAccounts(t *testing.T) {
+	now := time.Now().UTC()
+	activeStart := now.Add(-time.Hour).Format(time.RFC3339)
+	expiredDailyStart := now.Add(-25 * time.Hour).Format(time.RFC3339)
+	expiredWeeklyStart := now.Add(-8 * 24 * time.Hour).Format(time.RFC3339)
+	weeklyResetDay := float64(now.AddDate(0, 0, 1).Weekday())
+
+	cases := []struct {
+		name          string
+		platform      string
+		typ           string
+		extra         map[string]any
+		quotaExceeded bool
+	}{
+		{
+			name: "anthropic api key total quota exhausted", platform: service.PlatformAnthropic, typ: service.AccountTypeAPIKey,
+			extra: map[string]any{"quota_limit": 10.0, "quota_used": 10.0}, quotaExceeded: true,
+		},
+		{
+			name: "gemini api key rolling daily quota exhausted", platform: service.PlatformGemini, typ: service.AccountTypeAPIKey,
+			extra: map[string]any{
+				"quota_daily_limit": 20.0, "quota_daily_used": 20.0,
+				"quota_daily_start": activeStart, "quota_daily_reset_mode": "rolling",
+			}, quotaExceeded: true,
+		},
+		{
+			name: "gemini api key expired rolling daily window", platform: service.PlatformGemini, typ: service.AccountTypeAPIKey,
+			extra: map[string]any{
+				"quota_daily_limit": 20.0, "quota_daily_used": 20.0,
+				"quota_daily_start": expiredDailyStart, "quota_daily_reset_mode": "rolling",
+			},
+		},
+		{
+			name: "bedrock fixed weekly quota exhausted", platform: service.PlatformAnthropic, typ: service.AccountTypeBedrock,
+			extra: map[string]any{
+				"quota_weekly_limit": 30.0, "quota_weekly_used": 30.0, "quota_weekly_start": activeStart,
+				"quota_weekly_reset_mode": "fixed", "quota_weekly_reset_day": weeklyResetDay,
+				"quota_weekly_reset_hour": 0.0, "quota_reset_timezone": "UTC",
+			}, quotaExceeded: true,
+		},
+		{
+			name: "bedrock expired fixed weekly window", platform: service.PlatformAnthropic, typ: service.AccountTypeBedrock,
+			extra: map[string]any{
+				"quota_weekly_limit": 30.0, "quota_weekly_used": 30.0, "quota_weekly_start": expiredWeeklyStart,
+				"quota_weekly_reset_mode": "fixed", "quota_weekly_reset_day": weeklyResetDay,
+				"quota_weekly_reset_hour": 0.0, "quota_reset_timezone": "UTC",
+			},
+		},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			extra := make(map[string]any, len(tc.extra)+1)
+			for key, value := range tc.extra {
+				extra[key] = value
+			}
+			extra["unrelated"] = "drop me"
+			account := service.Account{
+				ID: int64(46690 + i), Platform: tc.platform, Type: tc.typ, Extra: extra,
+				Status: service.StatusActive, Schedulable: true,
+			}
+			cache := newSchedulerCacheUnit(t)
+			ctx := context.Background()
+			bucket := service.SchedulerBucket{GroupID: int64(46690 + i), Platform: tc.platform, Mode: service.SchedulerModeSingle}
+			token, err := cache.CaptureBucketWriteToken(ctx, bucket)
+			require.NoError(t, err)
+			require.NoError(t, cache.SetSnapshot(ctx, bucket, token, []service.Account{account}))
+
+			snapshot, hit, err := cache.GetSnapshot(ctx, bucket)
+			require.NoError(t, err)
+			require.True(t, hit)
+			require.Len(t, snapshot, 1)
+			cached := snapshot[0]
+			require.Equal(t, tc.extra, cached.Extra)
+			require.NotContains(t, cached.Extra, "unrelated")
+			require.Equal(t, tc.quotaExceeded, cached.IsQuotaExceeded())
+			require.Equal(t, !tc.quotaExceeded, cached.IsSchedulable())
+		})
+	}
+}
+
+func TestBuildSchedulerMetadataAccount_KeepsOpenAIImageSizeTiers(t *testing.T) {
+	account := service.Account{
+		ID:       91,
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeAPIKey,
+		Extra: map[string]any{
+			service.AccountExtraOpenAIImageSizeTiers: []any{"4K"},
+			"unused_large_field":                     "drop-me",
+		},
+	}
+
+	got := buildSchedulerMetadataAccount(account)
+
+	require.Equal(t, []string{"4K"}, got.OpenAIImageSizeTiers())
+	require.Nil(t, got.Extra["unused_large_field"])
+}
+
 func TestBuildSchedulerMetadataAccount_KeepsModelRateLimits(t *testing.T) {
 	account := service.Account{
 		ID:       90,
@@ -994,4 +1132,92 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *tes
 			require.Equal(t, map[string]any{"gpt-5.5": "gpt-5.5"}, restored.Credentials["model_mapping"])
 		})
 	}
+}
+
+// 透传账号显式开启"按模型筛选"后，候选过滤同样读的是本投影；裁掉
+// openai_passthrough_model_filter 会让账号在选号阶段退回"透传放行全部模型"，
+// 而模型列表等读完整账号的路径仍按白名单收窄，两边口径分裂。
+func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughModelFilter(t *testing.T) {
+	account := service.Account{
+		ID:       8748,
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"qwen3.8-max": "qwen3.8-max"},
+			"api_key":       "drop-me",
+		},
+		Extra: map[string]any{"openai_passthrough": true, "openai_passthrough_model_filter": true},
+	}
+	require.False(t, account.IsModelSupported("gpt-6.1-sol"), "前置条件：开启筛选的透传账号应拒绝白名单外模型")
+
+	payload, err := json.Marshal(buildSchedulerMetadataAccount(account))
+	require.NoError(t, err)
+	var restored service.Account
+	require.NoError(t, json.Unmarshal(payload, &restored))
+
+	require.Equal(t, true, restored.Extra["openai_passthrough_model_filter"])
+	require.True(t, restored.IsOpenAIPassthroughModelFilterEnabled())
+	require.False(t, restored.IsModelSupported("gpt-6.1-sol"))
+	require.True(t, restored.IsModelSupported("qwen3.8-max"))
+}
+
+// 调度投影必须保留账号的 RPM 配置。
+//
+// 候选过滤走 ListSchedulableAccounts，读的是 buildSchedulerMetadataAccount 产出的精简投影；
+// isAccountSchedulableForRPM 靠 extra 上的 base_rpm 判定，缺失时 GetBaseRPM() 返回 0，
+// baseRPM <= 0 直接放行，已配置限流的账号在选号阶段被当作未开启 RPM（#7225）。
+// rpm_strategy / rpm_sticky_buffer 同理：只保留 base_rpm 会让三区判定退回默认值，
+// 红区（不可调度）被误判成黄区（仅粘性），超额请求照样被转发。
+func TestBuildSchedulerMetadataAccount_KeepsRPMFieldsForRPMGate(t *testing.T) {
+	newAccount := func(extra map[string]any) service.Account {
+		return service.Account{
+			ID:       7225,
+			Platform: service.PlatformAnthropic,
+			Type:     service.AccountTypeOAuth,
+			Extra:    extra,
+		}
+	}
+	roundTrip := func(t *testing.T, account service.Account) service.Account {
+		t.Helper()
+		// 走一遍真实的序列化/反序列化路径（写入 sched:meta 再由 decodeCachedAccount 读回）。
+		payload, err := json.Marshal(buildSchedulerMetadataAccount(account))
+		require.NoError(t, err)
+		var restored service.Account
+		require.NoError(t, json.Unmarshal(payload, &restored))
+		return restored
+	}
+
+	t.Run("tiered", func(t *testing.T) {
+		account := newAccount(map[string]any{
+			"base_rpm":          10,
+			"rpm_strategy":      "tiered",
+			"rpm_sticky_buffer": 1,
+		})
+		require.Equal(t, service.WindowCostNotSchedulable, account.CheckRPMSchedulability(11),
+			"前置条件：base_rpm=10 + 缓冲 1，当前 11 次已进红区")
+
+		restored := roundTrip(t, account)
+
+		require.Equal(t, 10, restored.GetBaseRPM())
+		require.Equal(t, "tiered", restored.GetRPMStrategy())
+		require.Equal(t, 1, restored.GetRPMStickyBuffer())
+		require.Equal(t, service.WindowCostNotSchedulable, restored.CheckRPMSchedulability(11),
+			"投影裁掉 RPM 配置会让已配置限流的账号在候选过滤阶段被放行")
+	})
+
+	t.Run("sticky_exempt", func(t *testing.T) {
+		account := newAccount(map[string]any{
+			"base_rpm":     10,
+			"rpm_strategy": "sticky_exempt",
+		})
+		require.Equal(t, service.WindowCostStickyOnly, account.CheckRPMSchedulability(100),
+			"前置条件：粘性豁免策略没有红区")
+
+		restored := roundTrip(t, account)
+
+		require.Equal(t, 10, restored.GetBaseRPM())
+		require.Equal(t, "sticky_exempt", restored.GetRPMStrategy())
+		require.Equal(t, service.WindowCostStickyOnly, restored.CheckRPMSchedulability(100),
+			"投影裁掉 rpm_strategy 会让粘性豁免账号退回三区判定")
+	})
 }

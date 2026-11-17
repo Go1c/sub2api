@@ -390,6 +390,8 @@ export const useAppStore = defineStore('app', () => {
         site_messages_enabled: false,
         site_messages_default_recipient_email: '',
         service_quota_enabled: false,
+        allow_user_view_error_requests: false,
+        mcp_enabled: false,
       })
     }
 

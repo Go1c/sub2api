@@ -2,6 +2,70 @@
   <AppLayout>
     <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
+    <div class="mb-6 space-y-4">
+      <div class="card p-4">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
+            <DateRangePicker
+              v-model:start-date="startDate"
+              v-model:end-date="endDate"
+              @change="onDateRangeChange"
+            />
+          </div>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
+            <div class="w-28">
+              <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ModelDistributionChart
+          v-model:metric="modelDistributionMetric"
+          :model-stats="requestedModelStats"
+          :loading="modelStatsLoading"
+          :show-source-toggle="false"
+          :show-metric-toggle="true"
+          :enable-breakdown="false"
+          :show-account-cost="false"
+          :start-date="startDate"
+          :end-date="endDate"
+        />
+        <GroupDistributionChart
+          v-model:metric="groupDistributionMetric"
+          :group-stats="groupStats"
+          :loading="chartsLoading"
+          :show-metric-toggle="true"
+          :enable-breakdown="false"
+          :show-account-cost="false"
+          :start-date="startDate"
+          :end-date="endDate"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <EndpointDistributionChart
+          v-model:source="endpointDistributionSource"
+          v-model:metric="endpointDistributionMetric"
+          :endpoint-stats="inboundEndpointStats"
+          :upstream-endpoint-stats="upstreamEndpointStats"
+          :endpoint-path-stats="endpointPathStats"
+          :loading="endpointStatsLoading"
+          :show-source-toggle="false"
+          :show-metric-toggle="true"
+          :enable-breakdown="false"
+          :show-account-cost="false"
+          :title="t('usage.endpointDistribution')"
+          :start-date="startDate"
+          :end-date="endDate"
+        />
+        <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+      </div>
+    </div>
+
     <TablePageLayout>
       <template #filters>
         <div class="card">
@@ -75,6 +139,22 @@
                   searchable
                   @change="applyFilters"
                 />
+              </div>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.type') }}</label>
+                <Select v-model="filters.request_type" :options="requestTypeOptions" @change="applyFilters" />
+              </div>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.compactionFilter') }}</label>
+                <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="applyFilters" />
+              </div>
+              <div v-if="subscriptionFeatureEnabled" class="min-w-[200px]">
+                <label class="input-label">{{ t('admin.usage.billingType') }}</label>
+                <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="applyFilters" />
+              </div>
+              <div class="min-w-[200px]">
+                <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
+                <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="applyFilters" />
               </div>
             </template>
 
@@ -641,8 +721,13 @@
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
+import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'
+import EndpointDistributionChart from '@/components/charts/EndpointDistributionChart.vue'
+import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -906,6 +991,45 @@ const modelOptions = computed<SelectOption[]>(() => [
 const groupOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('admin.usage.allGroups') },
   ...groups.value.map((group) => ({ value: group.id, label: group.name })),
+])
+
+type DistributionMetric = 'tokens' | 'actual_cost'
+type EndpointSource = 'inbound' | 'upstream' | 'path'
+
+const modelDistributionMetric = ref<DistributionMetric>('tokens')
+const groupDistributionMetric = ref<DistributionMetric>('tokens')
+const endpointDistributionMetric = ref<DistributionMetric>('tokens')
+const endpointDistributionSource = ref<EndpointSource>('inbound')
+
+const granularityOptions = computed<SelectOption[]>(() => [
+  { value: 'day', label: t('admin.dashboard.day') },
+  { value: 'hour', label: t('admin.dashboard.hour') },
+])
+const requestTypeOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.allTypes') },
+  { value: 'ws_v2', label: t('usage.ws') },
+  { value: 'live', label: t('usage.live') },
+  { value: 'stream', label: t('usage.stream') },
+  { value: 'sync', label: t('usage.sync') },
+])
+const compactionOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.allCompactionTypes') },
+  { value: true, label: t('usage.compactionOnly') },
+])
+const subscriptionFeatureEnabled = computed(() =>
+  resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription)
+)
+const billingTypeOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.allBillingTypes') },
+  { value: 0, label: t('admin.usage.billingTypeBalance') },
+  { value: 1, label: t('admin.usage.billingTypeSubscription') },
+])
+const billingModeOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.allBillingModes') },
+  { value: 'token', label: t('admin.usage.billingModeToken') },
+  { value: 'per_request', label: t('admin.usage.billingModePerRequest') },
+  { value: 'image', label: t('admin.usage.billingModeImage') },
+  { value: 'video', label: t('admin.usage.billingModeVideo') },
 ])
 
 const formatUserAgent = (ua: string): string => ua
@@ -1278,6 +1402,27 @@ const escapeCSVValue = (value: unknown): string => {
   return str
 }
 
+const EXPORT_PAGE_SIZE = 1000
+const EXPORT_RATE_LIMIT_MAX_RETRIES = 3
+const EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS = 60
+
+// 导出逐页请求计入按用户的重查询限流；429 时按 Retry-After 等待后重试同一页。
+const queryExportPage = async (params: UsageQueryParams) => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await usageAPI.query(params)
+    } catch (error: any) {
+      if (error?.status !== 429 || attempt >= EXPORT_RATE_LIMIT_MAX_RETRIES) throw error
+      const waitSeconds = Math.min(
+        Math.max(error.retry_after_seconds ?? EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS, 1),
+        EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS
+      )
+      appStore.showInfo(t('usage.exportRateLimited', { seconds: waitSeconds }))
+      await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000))
+    }
+  }
+}
+
 const exportToCSV = async () => {
   if (pagination.total === 0) {
     appStore.showWarning(t('usage.noDataToExport'))
@@ -1287,11 +1432,10 @@ const exportToCSV = async () => {
   appStore.showInfo(t('usage.preparingExport'))
   try {
     const allLogs: UsageLog[] = []
-    const pageSize = 100
-    const exportParams = buildUsageListParams(1, pageSize)
-    const totalPages = Math.ceil(pagination.total / pageSize)
+    const exportParams = buildUsageListParams(1, EXPORT_PAGE_SIZE)
+    const totalPages = Math.ceil(pagination.total / EXPORT_PAGE_SIZE)
     for (let page = 1; page <= totalPages; page++) {
-      const response = await usageAPI.query({ ...exportParams, page })
+      const response = await queryExportPage({ ...exportParams, page })
       allLogs.push(...response.items)
     }
     if (allLogs.length === 0) {
