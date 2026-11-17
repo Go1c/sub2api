@@ -84,7 +84,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin.default,
       upstreamGaps.default,
       { adminAccessKeys: adminAccessKeys.default },
-      mcp.default,
+      { mcp: mcp.default },
       usageGaps.default,
     ]
   }
@@ -145,7 +145,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       checkin.default,
       upstreamGaps.default,
       { adminAccessKeys: adminAccessKeys.default },
-      mcp.default,
+      { mcp: mcp.default },
       usageGaps.default,
     ]
   }
