@@ -113,7 +113,7 @@ pipeline {
             tags+=( -t "${IMAGE_ROOT}:kin" )
           fi
           cd "${WORKSPACE}/src"
-          # GOLANG_IMAGE 需 >= backend/go.mod 的 go 指令（main-kin 线要求 >= 1.27.3）。
+          # GOLANG_IMAGE 需 >= backend/go.mod 的 go 指令（当前 go 1.27.4，镜像内 GOTOOLCHAIN=local）。
           # NODE_OPTIONS / CI_INLINE_TYPECHECK 把前端压进预算（见 vite.config.ts）；
           # GOFLAGS=-p=1 串行编译 worker：GOMEMLIMIT 按进程生效，并行 worker 会让
           # 峰值 = N x GOMEMLIMIT（ent 包单 worker ~2.2G），串行后峰值 = 单包 + 基础设施。
@@ -126,7 +126,7 @@ pipeline {
             --build-arg DATE="${DATE}" \
             --build-arg GOPROXY=https://proxy.golang.org,direct \
             --build-arg GOSUMDB=sum.golang.org \
-            --build-arg GOLANG_IMAGE=golang:1.27.3-alpine \
+            --build-arg GOLANG_IMAGE=golang:1.27.4-alpine \
             --build-arg NODE_OPTIONS=--max-old-space-size=2048 \
             --build-arg CI_INLINE_TYPECHECK=0 \
             --build-arg GOMEMLIMIT=2200MiB \
