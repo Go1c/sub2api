@@ -354,6 +354,9 @@ const showCodexModelCatalog = computed(() =>
   (activeClientTab.value === 'codex' ||
     (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
 )
+const codexManifestContext = computed(() =>
+  showCodexModelCatalog.value ? `${props.baseUrl}\n${props.apiKey}` : ''
+)
 
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {

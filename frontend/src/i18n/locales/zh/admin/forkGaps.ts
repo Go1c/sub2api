@@ -41,6 +41,11 @@ export default {
   channels: {
       emptyModelsInPricing: '定价条目未选择模型',
       form: {
+            cacheReadPriceShort: '缓存读',
+            cacheWrite12hHint: '留空沿用通用缓存写入价，仅对上游报告的 OpenAI 12h 写入生效。',
+            cacheWrite12hPrice: '缓存写入（12h）',
+            cacheWrite12hPriceShort: '缓存写 12h',
+            cacheWrite1hPriceShort: '缓存写 1h',
             imageInputPrice: '图片输入单价'
           },
       noGroupsSelected: '未选择分组'
