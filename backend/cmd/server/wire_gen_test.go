@@ -68,6 +68,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		tokenRefreshSvc,
 		accountExpirySvc,
 		nil, // cnProviderBalanceCheck
+		nil, // codexVersionSync
+		nil, // claudeCodeVersionSync
 		subscriptionExpirySvc,
 		&service.UsageCleanupService{},
 		idempotencyCleanupSvc,
@@ -97,6 +99,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		service.AccountErrorHistoryWiring{},
 		nil, // auditLog
 		nil, // upstreamBillingProbe
+		nil, // opencodeGoUsage
 		nil, // promptAudit
 		nil, // openAIAutoReset
 		nil, // pluginManager

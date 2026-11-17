@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +31,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/mod/semver"
@@ -85,12 +87,12 @@ const (
 	longStreamHTTP2PingTimeout     = 5 * time.Second
 
 	// The Grok CLI proxy rejects requests that do not identify a supported
-	// client version. Keep a known-good stable version in the binary while
-	// allowing operators to bump it without waiting for a Sub2API release.
-	grokCLIProxyHost       = "cli-chat-proxy.grok.com"
+	// client version. Host/env/version pins live in package xai so service,
+	// billing, and transport layers advertise the same identity.
+	grokCLIProxyHost       = xai.CLIProxyHost
 	grokOfficialAPIHost    = "api.x.ai"
-	grokCLIStableVersion   = "0.2.93"
-	grokCLIVersionOverride = "XAI_GROK_CLI_VERSION"
+	grokCLIStableVersion   = xai.CLIClientVersion // preferred pin (not the minimum floor)
+	grokCLIVersionOverride = xai.CLIVersionEnv
 	grokFallbackBodyLimit  = 64 << 10
 )
 
@@ -410,7 +412,7 @@ func (t *grokAccessDeniedFallbackTransport) RoundTrip(req *http.Request) (*http.
 	}
 
 	body, ok := bufferSmallResponseBody(resp, grokFallbackBodyLimit)
-	if !ok || !bytes.Contains(bytes.ToLower(body), []byte("access denied")) {
+	if !ok || !isGrokCLICompatibilityAccessDenied(body) {
 		return resp, nil
 	}
 
@@ -437,6 +439,22 @@ func (t *grokAccessDeniedFallbackTransport) RoundTrip(req *http.Request) (*http.
 	return fallbackResp, nil
 }
 
+func isGrokCLICompatibilityAccessDenied(body []byte) bool {
+	lower := bytes.ToLower(body)
+	if bytes.Contains(lower, []byte("access denied")) {
+		return true
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil || !strings.EqualFold(strings.TrimSpace(payload.Code), "permission_denied") {
+		return false
+	}
+	const chatEndpointDeniedPrefix = "access to the chat endpoint is denied. please ensure you're using the correct credentials. if you believe this is a mistake, please"
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(payload.Error)), chatEndpointDeniedPrefix)
+}
+
 func isGrokCLIAccessDeniedFallbackCandidate(req *http.Request, resp *http.Response) bool {
 	return req != nil && req.URL != nil && req.GetBody != nil && resp != nil &&
 		resp.StatusCode == http.StatusForbidden &&
@@ -461,6 +479,8 @@ func newGrokOfficialAPIFallbackRequest(req *http.Request) (*http.Request, error)
 	for _, header := range []string{
 		"X-XAI-Token-Auth",
 		"X-Grok-Client-Version",
+		"X-Grok-Client-Mode",
+		"X-Authenticateresponse",
 		"X-Grok-Client-Surface",
 		"X-UserID",
 		"X-Email",
@@ -518,6 +538,11 @@ func httpClientForUpstreamRequest(client *http.Client, req *http.Request) *http.
 // the final shared transport boundary. Keying this behavior to the exact CLI
 // proxy host keeps direct api.x.ai traffic unchanged and automatically covers
 // Responses, Chat Completions, media, quota probes, and account tests.
+//
+// Operator overrides must be >= CLIClientVersion (the preferred pin). Package
+// xai.IsSupportedCLIVersion uses a lower floor (CLIStableVersion) for general
+// validation; transport is stricter so we never silently advertise an older pin
+// than the binary default.
 func applyGrokCLIProxyHeaders(req *http.Request) {
 	if req == nil || req.URL == nil || !strings.EqualFold(strings.TrimSpace(req.URL.Hostname()), grokCLIProxyHost) {
 		return
@@ -529,14 +554,17 @@ func applyGrokCLIProxyHeaders(req *http.Request) {
 	if !isSupportedGrokCLIVersion(version) {
 		version = grokCLIStableVersion
 	}
-	req.Header.Set("X-XAI-Token-Auth", "xai-grok-cli")
+	req.Header.Set("X-XAI-Token-Auth", xai.CLITokenAuth)
 	req.Header.Set("x-grok-client-version", version)
-	req.Header.Set("User-Agent", "xai-grok-workspace/"+version)
+	req.Header.Set("x-grok-client-identifier", xai.CLIClientIdentifier)
+	req.Header.Set("x-grok-client-mode", xai.CLIClientMode)
+	req.Header.Set("x-authenticateresponse", "authenticate-response")
+	req.Header.Set("User-Agent", xai.CLIUserAgent(version))
 }
 
 func isSupportedGrokCLIVersion(version string) bool {
 	canonical := "v" + version
-	minimum := "v" + grokCLIStableVersion
+	minimum := "v" + xai.CLIClientVersion
 	return semver.IsValid(canonical) &&
 		semver.Canonical(canonical) == canonical &&
 		semver.Compare(canonical, minimum) >= 0
@@ -964,12 +992,20 @@ func (s *httpUpstreamService) resolvePoolSettings(isolation string, accountConcu
 }
 
 func (s *httpUpstreamService) applyProfilePoolSettings(settings poolSettings, profile service.HTTPUpstreamProfile) poolSettings {
-	if profile != service.HTTPUpstreamProfileOpenAI {
-		return settings
-	}
-	settings.responseHeaderTimeout = 0
-	if s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIResponseHeaderTimeout > 0 {
-		settings.responseHeaderTimeout = time.Duration(s.cfg.Gateway.OpenAIResponseHeaderTimeout) * time.Second
+	switch profile {
+	case service.HTTPUpstreamProfileOpenAI:
+		settings.responseHeaderTimeout = 0
+		if s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIResponseHeaderTimeout > 0 {
+			settings.responseHeaderTimeout = time.Duration(s.cfg.Gateway.OpenAIResponseHeaderTimeout) * time.Second
+		}
+	case service.HTTPUpstreamProfileGrok:
+		// Grok can stall before its first byte under capacity pressure. Keep the
+		// generic 600s gateway timeout from turning one request into a 10-minute
+		// resource hold; streaming after headers is unaffected.
+		settings.responseHeaderTimeout = 120 * time.Second
+		if s != nil && s.cfg != nil {
+			settings.responseHeaderTimeout = time.Duration(s.cfg.Gateway.GrokResponseHeaderTimeout) * time.Second
+		}
 	}
 	return settings
 }
