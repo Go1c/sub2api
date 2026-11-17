@@ -57,7 +57,7 @@ func (s *userUsageRepoFullCapture) GetUserModelStats(_ context.Context, _ int64,
 func newUserUsageAbuseTestRouter(repo *userUsageRepoFullCapture) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	usageSvc := service.NewUsageService(repo, nil, nil, nil)
-	h := NewUsageHandler(usageSvc, nil)
+	h := NewUsageHandler(usageSvc, nil, nil, nil)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 42})

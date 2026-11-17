@@ -625,6 +625,8 @@ func TestAPIContracts(t *testing.T) {
 							"cache_read_tokens": 2,
 							"cache_creation_5m_tokens": 0,
 							"cache_creation_1h_tokens": 0,
+							"cache_creation_30m_tokens": 0,
+							"cache_creation_12h_tokens": 0,
 							"input_cost": 0,
 							"output_cost": 0,
 							"cache_creation_cost": 0,
@@ -1581,10 +1583,10 @@ func newContractDeps(t *testing.T) *contractDeps {
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, nil, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(nil, userRepo, groupRepo, &accountRepo, proxyRepo, nil, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
-	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
+	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -1833,6 +1835,9 @@ func (stubApiKeyCache) GetCreateAttemptCount(ctx context.Context, userID int64) 
 func (stubApiKeyCache) IncrementCreateAttemptCount(ctx context.Context, userID int64) error {
 	return nil
 }
+func (stubApiKeyCache) DeleteCreateAttemptCount(ctx context.Context, userID int64) error {
+	return nil
+}
 
 func (stubApiKeyCache) IncrementCreateCount(ctx context.Context, userID int64, window time.Duration) (int64, error) {
 	return 0, nil
@@ -2007,16 +2012,6 @@ func (s *stubAccountRepo) Update(ctx context.Context, account *service.Account) 
 	return errors.New("not implemented")
 }
 
-func (s *stubAccountRepo) UpdateWithAccountBillingSettings(
-	ctx context.Context,
-	account *service.Account,
-	probeEnabled *bool,
-	rateSyncEnabled *bool,
-	rateMultiplier *float64,
-) error {
-	return errors.New("not implemented")
-}
-
 func (s *stubAccountRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
@@ -2146,6 +2141,10 @@ func (s *stubAccountRepo) ClearAntigravityQuotaScopes(ctx context.Context, id in
 }
 
 func (s *stubAccountRepo) ClearModelRateLimits(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubAccountRepo) ClearModelRateLimit(ctx context.Context, id int64, scope string) error {
 	return errors.New("not implemented")
 }
 
@@ -2345,6 +2344,9 @@ func (stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSub
 	return errors.New("not implemented")
 }
 func (stubUserSubscriptionRepo) GetByID(ctx context.Context, id int64) (*service.UserSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (stubUserSubscriptionRepo) GetByIDForUpdate(ctx context.Context, id int64) (*service.UserSubscription, error) {
 	return nil, errors.New("not implemented")
 }
 func (stubUserSubscriptionRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.UserSubscription, error) {

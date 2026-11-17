@@ -27,6 +27,12 @@ type userHandlerRepoStub struct {
 }
 
 func (s *userHandlerRepoStub) Create(context.Context, *service.User) error { return nil }
+func (s *userHandlerRepoStub) AdjustBalance(context.Context, int64, float64) (service.BalanceChange, error) {
+	return service.BalanceChange{}, nil
+}
+func (s *userHandlerRepoStub) SetBalance(context.Context, int64, float64) (service.BalanceChange, error) {
+	return service.BalanceChange{}, nil
+}
 func (s *userHandlerRepoStub) CreateWithEmailAliasGuard(context.Context, *service.User) error {
 	return nil
 }
@@ -432,6 +438,10 @@ func (s *userHandlerRefreshTokenCacheStub) DeleteUserRefreshTokens(_ context.Con
 
 func (s *userHandlerRefreshTokenCacheStub) DeleteTokenFamily(context.Context, string) error {
 	return nil
+}
+
+func (s *userHandlerRefreshTokenCacheStub) ConsumeRefreshToken(context.Context, string) (*service.RefreshTokenData, error) {
+	return nil, service.ErrRefreshTokenNotFound
 }
 
 func (s *userHandlerRefreshTokenCacheStub) AddToUserTokenSet(context.Context, int64, string, time.Duration) error {

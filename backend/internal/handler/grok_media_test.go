@@ -68,7 +68,15 @@ func TestShouldRecordGrokMediaUsage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, shouldRecordGrokMediaUsage(tt.endpoint, tt.model))
+			result := &service.OpenAIForwardResult{ImageCount: 1}
+			if tt.model == "" || tt.model == " " {
+				result = nil
+			}
+			want := tt.want
+			if tt.endpoint == service.GrokMediaEndpointVideosGenerations {
+				want = false
+			}
+			require.Equal(t, want, shouldRecordGrokMediaUsage(tt.endpoint, tt.model, result))
 		})
 	}
 }

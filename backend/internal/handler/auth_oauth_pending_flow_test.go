@@ -2745,6 +2745,13 @@ func (r *oauthPendingFlowPromoRepoStub) GetUsageByPromoCodeAndUser(context.Conte
 func (r *oauthPendingFlowPromoRepoStub) ListUsagesByPromoCode(context.Context, int64, pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
 	panic("unexpected ListUsagesByPromoCode call")
 }
+func (r *oauthPendingFlowPromoRepoStub) ListUsagesByUser(context.Context, int64, pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
+	items := append([]service.PromoCodeUsage(nil), r.usages...)
+	return items, &pagination.PaginationResult{Total: int64(len(items))}, nil
+}
+func (r *oauthPendingFlowPromoRepoStub) SumUsagesByUser(context.Context, int64) (float64, error) {
+	return 0, nil
+}
 
 func (r *oauthPendingFlowPromoRepoStub) IncrementUsedCount(context.Context, int64) error {
 	if r.promo != nil {
@@ -2881,6 +2888,10 @@ func (s *oauthPendingFlowRefreshTokenCacheStub) DeleteTokenFamily(context.Contex
 	return nil
 }
 
+func (s *oauthPendingFlowRefreshTokenCacheStub) ConsumeRefreshToken(context.Context, string) (*service.RefreshTokenData, error) {
+	return nil, service.ErrRefreshTokenNotFound
+}
+
 func (s *oauthPendingFlowRefreshTokenCacheStub) AddToUserTokenSet(context.Context, int64, string, time.Duration) error {
 	return nil
 }
@@ -2942,10 +2953,6 @@ func (r *oauthPendingFlowRedeemCodeRepo) GetByCode(ctx context.Context, code str
 		GroupID:      entity.GroupID,
 		ValidityDays: entity.ValidityDays,
 	}, nil
-}
-
-func (r *oauthPendingFlowRedeemCodeRepo) BatchUpdate(context.Context, []int64, service.RedeemCodeBatchUpdateFields) (int64, error) {
-	return 0, nil
 }
 
 func (r *oauthPendingFlowRedeemCodeRepo) Update(ctx context.Context, code *service.RedeemCode) error {

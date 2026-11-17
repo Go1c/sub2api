@@ -130,7 +130,7 @@ func (s *GatewayService) forwardBedrock(
 
 	// 错误/failover 处理
 	if resp.StatusCode >= 400 {
-		return s.handleBedrockUpstreamErrors(ctx, resp, c, account)
+		return s.handleBedrockUpstreamErrors(ctx, resp, c, account, bedrockSchedulingModelKey(ctx, account, reqModel))
 	}
 
 	// Bedrock 分支绕过通用 Forward 成功路径，这里保持上游接受回调语义一致。
@@ -145,6 +145,10 @@ func (s *GatewayService) forwardBedrock(
 	if reqStream {
 		streamResult, err := s.handleBedrockStreamingResponse(ctx, resp, c, account, startTime, reqModel)
 		if err != nil {
+			// 流中断时保留已观测到的 usage 与错误一起返回，handler 照常提交 usage 记录。
+			if partial := partialStreamUsageResult(c, resp, streamResult, reqModel, mappedModel, startTime, err); partial != nil {
+				return partial, err
+			}
 			return nil, err
 		}
 		usage = streamResult.usage
@@ -282,7 +286,18 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 	resp *http.Response,
 	c *gin.Context,
 	account *Account,
+	modelKey string,
 ) (*ForwardResult, error) {
+	// 内容过滤由请求内容决定，换号结果相同：不换号，按普通错误返回客户端。
+	if resp.StatusCode >= http.StatusInternalServerError {
+		respBody, _ := s.readUpstreamErrorBody(resp)
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+		if isBedrockContentFilterError(resp.StatusCode, respBody) {
+			return s.handleErrorResponse(ctx, resp, c, account, modelKey)
+		}
+	}
+
 	// retry exhausted + failover
 	if s.shouldRetryUpstreamError(account, resp.StatusCode) {
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {

@@ -716,7 +716,7 @@ func TestReserveGeminiCachedContentCharge_UnsettledChargeHoldsSubscriptionHeadro
 	env.group.DailyLimitUSD = &limit
 	enableCachedBillingReservations(t, env, &cachedBillingReservationCache{balance: 1000,
 		sub: &service.SubscriptionCacheData{Status: service.SubscriptionStatusActive, ExpiresAt: time.Now().Add(time.Hour)}})
-	sub := &service.UserSubscription{ID: 1, UserID: env.apiKey.UserID, GroupID: env.group.ID, Status: service.SubscriptionStatusActive,
+	sub := &service.UserSubscription{ID: 1, UserID: env.apiKey.UserID, GroupID: int64Ptr(env.group.ID), Status: service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(time.Hour)}
 	reserve := func() (func(), error) {
 		var done func()

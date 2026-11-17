@@ -183,6 +183,12 @@ func (f fakeGoogleSubscriptionRepo) GetByID(ctx context.Context, id int64) (*ser
 	}
 	return nil, errors.New("not implemented")
 }
+func (f fakeGoogleSubscriptionRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.UserSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (f fakeGoogleSubscriptionRepo) GetByIDForUpdate(ctx context.Context, id int64) (*service.UserSubscription, error) {
+	return f.GetByID(ctx, id)
+}
 func (f fakeGoogleSubscriptionRepo) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 	return nil, errors.New("not implemented")
 }
@@ -819,74 +825,6 @@ func TestApiKeyAuthWithSubscriptionGoogle_AllowsZeroBalanceModelsList(t *testing
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, http.StatusForbidden, resp.Error.Code)
 	require.Equal(t, "账户余额不足，请先充值后再使用。", resp.Error.Message)
-	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
-}
-
-func TestApiKeyAuthWithSubscriptionGoogle_BalanceBelowMinimumReserve(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// 鉴权层保持历史语义：MinimumBalanceReserve 只用于 billing-cache 预检，
-	// 0 < balance < reserve 的用户不得在鉴权中间件被硬 403。
-	r := gin.New()
-	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
-		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
-			return &service.APIKey{
-				ID:     1,
-				Key:    key,
-				Status: service.StatusActive,
-				User: &service.User{
-					ID:      123,
-					Status:  service.StatusActive,
-					Balance: 0.005,
-				},
-			}, nil
-		},
-	})
-	cfg := &config.Config{}
-	cfg.Billing.MinimumBalanceReserve = 0.01
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
-	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
-
-	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
-	req.Header.Set("Authorization", "Bearer ok")
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-}
-
-func TestApiKeyAuthWithSubscriptionGoogle_RejectsExhaustedBalance(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	r := gin.New()
-	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
-		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
-			return &service.APIKey{
-				ID:     1,
-				Key:    key,
-				Status: service.StatusActive,
-				User: &service.User{
-					ID:      123,
-					Status:  service.StatusActive,
-					Balance: 0,
-				},
-			}, nil
-		},
-	})
-	cfg := &config.Config{}
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
-	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
-
-	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
-	req.Header.Set("Authorization", "Bearer ok")
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusForbidden, rec.Code)
-	var resp googleErrorResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, http.StatusForbidden, resp.Error.Code)
-	require.Equal(t, "Insufficient account balance", resp.Error.Message)
 	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
 }
 

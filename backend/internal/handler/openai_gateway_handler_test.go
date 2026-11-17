@@ -13,9 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
+
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	coderws "github.com/coder/websocket"
@@ -174,7 +177,7 @@ func TestOpenAIResponsesRequiredCapability(t *testing.T) {
 func TestResolveOpenAIMessagesMetadataSession_DoesNotDerivePromptCacheKey(t *testing.T) {
 	body := []byte(`{"model":"claude-sonnet-4-5","metadata":{"user_id":"claude-code-session"},"messages":[{"role":"user","content":"hello"}]}`)
 
-	sessionHash, promptCacheKey := resolveOpenAIMessagesMetadataSession("", "", "claude-sonnet-4-5", body)
+	sessionHash, promptCacheKey := resolveOpenAIMessagesMetadataSession(nil, "", "", "claude-sonnet-4-5", body)
 
 	require.NotEmpty(t, sessionHash)
 	require.Empty(t, promptCacheKey)
@@ -183,7 +186,7 @@ func TestResolveOpenAIMessagesMetadataSession_DoesNotDerivePromptCacheKey(t *tes
 func TestResolveOpenAIMessagesMetadataSession_PreservesExplicitPromptCacheKey(t *testing.T) {
 	body := []byte(`{"metadata":{"user_id":"claude-code-session"}}`)
 
-	sessionHash, promptCacheKey := resolveOpenAIMessagesMetadataSession("", "explicit-cache", "claude-sonnet-4-5", body)
+	sessionHash, promptCacheKey := resolveOpenAIMessagesMetadataSession(nil, "", "explicit-cache", "claude-sonnet-4-5", body)
 
 	require.NotEmpty(t, sessionHash)
 	require.Equal(t, "explicit-cache", promptCacheKey)
@@ -644,8 +647,8 @@ func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
 				},
 			},
 		}
-		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
-		require.Equal(t, "gpt-5.6-sol", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-fable-5"))
+		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(nil, apiKey, "claude-sonnet-4-5-20250929"))
+		require.Equal(t, "gpt-5.6-sol", resolveOpenAIMessagesDispatchMappedModel(nil, apiKey, "claude-fable-5"))
 	})
 
 	t.Run("uses_family_default_when_no_override", func(t *testing.T) {
@@ -1270,6 +1273,7 @@ func TestOpenAIResponsesWebSocket_ContentModerationBlocksFirstFrame(t *testing.T
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 	decision, err := moderationSvc.Check(context.Background(), service.ContentModerationCheckInput{
 		UserID:   1,
@@ -1521,14 +1525,42 @@ func newOpenAIWSHandlerTestServer(t *testing.T, h *OpenAIGatewayHandler, subject
 }
 
 type openAIResponsesWSUsageLogCase struct {
-	firstPayload   string
-	userAgent      *string
-	channelMapping map[string]string
+	simpleModeRejectAtRead int64
+	compositeResolver      *service.CompositeRouteResolver
+	accountPlatform        string
+	closeReason            string
+	closeStatus            coderws.StatusCode
+	firstPayload           string
+	// midPayload 在首个 turn 完成后发送（如 session.update），上游桩会为它
+	// 回一个 response.completed，客户端按普通事件读取。
+	midPayload                string
+	secondPayload             string
+	userAgent                 *string
+	ingressMode               string
+	channelMapping            map[string]string
+	billingModelSource        string
+	accountModelMapping       map[string]any
+	afterFirstUpstreamRequest func(channelSvc *service.ChannelService) error
+	// group 覆盖 apiKey.Group（分组级模型白名单测试用）；nil 保持原有无分组行为。
+	group *service.Group
+	// apiKeyService 非 nil 时模拟 API Key 认证中间件：连接认证快照经它按
+	// apiKeyCredential 取得，并把其分组放入请求 ctx；handler 也使用它。
+	apiKeyService    *service.APIKeyService
+	apiKeyCredential string
+	// accountRateMultiplier 覆盖账号倍率（利润门测试用）。
+	accountRateMultiplier *float64
+	// firstFrameCloseExpected：首帧即被拒（连接被 1008 关闭），不期待任何响应帧。
+	firstFrameCloseExpected bool
+	// secondTurnCloseExpected：第二个 turn 被拒（连接被 1008 关闭）。
+	secondTurnCloseExpected bool
 }
 
 type openAIResponsesWSUsageLogResult struct {
 	log                  *service.UsageLog
+	logs                 []*service.UsageLog
 	upstreamFirstPayload []byte
+	upstreamPayloads     [][]byte
+	clientEvents         [][]byte
 }
 
 type openAIWSUsageHandlerAccountRepoStub struct {
@@ -1747,23 +1779,76 @@ func TestOpenAIResponses_APIKeyPassthroughPool5xxRetriesThenExhaustsMaxSwitches(
 }
 
 func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T) {
+	for _, mode := range []string{service.OpenAIWSIngressModePassthrough, service.OpenAIWSIngressModeCtxPool} {
+		t.Run(mode, func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLimitCase(t, mode, nil, false)
+		})
+	}
+}
+
+func TestOpenAIResponsesWebSocket_NativeLaterTurnUsageLimitDoesNotReplayFirstMessage(t *testing.T) {
+	for _, continuation := range []struct {
+		name           string
+		input          string
+		handshakeLimit bool
+	}{
+		{name: "user message", input: `[{"role":"user","content":"continue the task"}]`},
+		{name: "tool result", input: `[{"type":"function_call_output","call_id":"call_inspect","output":"file contents"}]`},
+		{name: "handshake after disconnect", input: `[{"role":"user","content":"continue the task"}]`, handshakeLimit: true},
+	} {
+		t.Run(continuation.name, func(t *testing.T) {
+			runOpenAIResponsesWebSocketUsageLimitCase(t, service.OpenAIWSIngressModeCtxPool, []string{
+				`{"type":"response.create","model":"gpt-5.1","instructions":"Inspect the project before editing it.","tools":[{"type":"function","name":"inspect","parameters":{"type":"object"}}],"input":[{"role":"user","content":"fix the project"}]}`,
+				fmt.Sprintf(`{"type":"response.create","model":"gpt-5.1","store":%t,"previous_response_id":"resp_ws_turn_2","input":%s}`, continuation.handshakeLimit, continuation.input),
+			}, continuation.handshakeLimit)
+		})
+	}
+}
+
+func runOpenAIResponsesWebSocketUsageLimitCase(t *testing.T, mode string, followups []string, handshakeLimit bool) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	firstHitCh := make(chan []byte, 1)
+	firstHitCh := make(chan []byte, len(followups)+1)
 	secondHitCh := make(chan []byte, 1)
+	var firstConnections atomic.Int32
+	var secondConnections atomic.Int32
 
 	firstUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if firstConnections.Add(1) > 1 && handshakeLimit {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
 		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{CompressionMode: coderws.CompressionContextTakeover})
 		if err != nil {
 			return
 		}
 		defer func() { _ = conn.CloseNow() }()
 
-		readCtx, cancelRead := context.WithTimeout(r.Context(), 3*time.Second)
-		_, payload, readErr := conn.Read(readCtx)
-		cancelRead()
-		if readErr == nil {
+		for turn := 0; turn <= len(followups); turn++ {
+			readCtx, cancelRead := context.WithTimeout(r.Context(), 3*time.Second)
+			_, payload, readErr := conn.Read(readCtx)
+			cancelRead()
+			if readErr != nil {
+				return
+			}
 			firstHitCh <- payload
+			if turn < len(followups) {
+				output := `[]`
+				if turn > 0 {
+					output = `[{"type":"function_call","call_id":"call_inspect","name":"inspect","arguments":"{}"}]`
+				}
+				completed := fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_ws_turn_%d","model":"gpt-5.1","output":%s,"usage":{"input_tokens":1,"output_tokens":1}}}`, turn+1, output)
+				writeCtx, cancelWrite := context.WithTimeout(r.Context(), 3*time.Second)
+				writeErr := conn.Write(writeCtx, coderws.MessageText, []byte(completed))
+				cancelWrite()
+				if writeErr != nil {
+					return
+				}
+				if handshakeLimit && turn == len(followups)-1 {
+					return
+				}
+			}
 		}
 
 		writeCtx, cancelWrite := context.WithTimeout(r.Context(), 3*time.Second)
@@ -1773,6 +1858,7 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 	defer firstUpstream.Close()
 
 	secondUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondConnections.Add(1)
 		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{CompressionMode: coderws.CompressionContextTakeover})
 		if err != nil {
 			return
@@ -1810,7 +1896,7 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 			},
 			Extra: map[string]any{
 				"openai_apikey_responses_websockets_v2_enabled": true,
-				"openai_apikey_responses_websockets_v2_mode":    service.OpenAIWSIngressModePassthrough,
+				"openai_apikey_responses_websockets_v2_mode":    mode,
 			},
 		},
 		{
@@ -1828,7 +1914,7 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 			},
 			Extra: map[string]any{
 				"openai_apikey_responses_websockets_v2_enabled": true,
-				"openai_apikey_responses_websockets_v2_mode":    service.OpenAIWSIngressModePassthrough,
+				"openai_apikey_responses_websockets_v2_mode":    mode,
 			},
 		},
 	}
@@ -1850,6 +1936,7 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 	accountRepo := &openAIWSFailoverHandlerAccountRepoStub{accounts: accounts}
 	rateLimitSvc := service.NewRateLimitService(accountRepo, nil, cfg, nil, nil)
 	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
+	t.Cleanup(billingCacheSvc.Stop)
 	gatewaySvc := service.NewOpenAIGatewayService(
 		accountRepo,
 		nil,
@@ -1903,7 +1990,11 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.User.ID, Concurrency: 1})
 		c.Next()
 	})
-	router.GET("/openai/v1/responses", h.ResponsesWebSocket)
+	handlerDone := make(chan struct{})
+	router.GET("/openai/v1/responses", func(c *gin.Context) {
+		h.ResponsesWebSocket(c)
+		close(handlerDone)
+	})
 	handlerServer := httptest.NewServer(router)
 	defer handlerServer.Close()
 
@@ -1922,22 +2013,52 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 	cancelWrite()
 	require.NoError(t, err)
 
+	for _, followup := range followups {
+		readCtx, cancelRead := context.WithTimeout(context.Background(), 5*time.Second)
+		_, event, readErr := clientConn.Read(readCtx)
+		cancelRead()
+		require.NoError(t, readErr)
+		require.Equal(t, "response.completed", gjson.GetBytes(event, "type").String())
+
+		writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
+		writeErr := clientConn.Write(writeCtx, coderws.MessageText, []byte(followup))
+		cancelWrite()
+		require.NoError(t, writeErr)
+	}
+
 	readCtx, cancelRead := context.WithTimeout(context.Background(), 5*time.Second)
 	_, event, err := clientConn.Read(readCtx)
 	cancelRead()
-	require.NoError(t, err)
-	require.Equal(t, "response.completed", gjson.GetBytes(event, "type").String())
-	require.Equal(t, "resp_ws_failover_ok", gjson.GetBytes(event, "response.id").String())
-
-	select {
-	case <-firstHitCh:
-	case <-time.After(3 * time.Second):
-		t.Fatal("等待第一个上游收到首帧超时")
+	if len(followups) > 0 {
+		require.Equal(t, coderws.StatusTryAgainLater, coderws.CloseStatus(err), "a later-turn limit must not turn into a successful replay: %s", event)
+		require.ErrorContains(t, err, "rate limit")
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, "response.completed", gjson.GetBytes(event, "type").String())
+		require.Equal(t, "resp_ws_failover_ok", gjson.GetBytes(event, "response.id").String())
 	}
+	_ = clientConn.CloseNow()
 	select {
-	case <-secondHitCh:
-	case <-time.After(3 * time.Second):
-		t.Fatal("等待第二个上游收到重放首帧超时")
+	case <-handlerDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for websocket handler")
+	}
+
+	expectedFrames := len(followups) + 1
+	if handshakeLimit {
+		expectedFrames--
+		require.Equal(t, int32(2), firstConnections.Load(), "the same account must reject the replacement handshake")
+	}
+	require.Len(t, firstHitCh, expectedFrames)
+	if len(followups) > 0 {
+		require.Zero(t, secondConnections.Load(), "the replacement account must not receive the original connection message")
+		require.Empty(t, secondHitCh)
+	} else {
+		select {
+		case <-secondHitCh:
+		case <-time.After(3 * time.Second):
+			t.Fatal("等待第二个上游收到重放首帧超时")
+		}
 	}
 	require.Equal(t, []int64{int64(9902)}, accountRepo.rateLimitedIDs)
 }
@@ -2239,7 +2360,7 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 				ModelMapping: map[string]map[string]string{service.PlatformOpenAI: tc.channelMapping},
 			}},
 			groupPlatforms: map[int64]string{groupID: service.PlatformOpenAI},
-		}, nil, nil, nil)
+		}, nil, nil, nil, nil)
 	}
 
 	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)

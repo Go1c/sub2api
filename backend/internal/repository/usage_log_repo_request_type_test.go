@@ -48,8 +48,6 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			log.Model,
 			log.RequestedModel,
 			sqlmock.AnyArg(), // upstream_model
-			sqlmock.AnyArg(), // upstream_response_model
-			sqlmock.AnyArg(), // upstream_model_mismatch
 			sqlmock.AnyArg(), // group_id
 			sqlmock.AnyArg(), // subscription_id
 			log.InputTokens,
@@ -104,6 +102,11 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // correlation_id
 			sqlmock.AnyArg(), // upstream_response_model
 			sqlmock.AnyArg(), // upstream_model_mismatch
+			sqlmock.AnyArg(), // upstream_request_id
+			sqlmock.AnyArg(), // session_id
+			sqlmock.AnyArg(), // native_compaction_v2
+			log.CacheCreation30mTokens,
+			log.CacheCreation12hTokens,
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -145,8 +148,6 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			log.Model,
 			log.RequestedModel,
 			sqlmock.AnyArg(), // upstream_model
-			sqlmock.AnyArg(), // upstream_response_model
-			sqlmock.AnyArg(), // upstream_model_mismatch
 			sqlmock.AnyArg(), // group_id
 			sqlmock.AnyArg(), // subscription_id
 			log.InputTokens,
@@ -201,6 +202,11 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // correlation_id
 			sqlmock.AnyArg(), // upstream_response_model
 			sqlmock.AnyArg(), // upstream_model_mismatch
+			sqlmock.AnyArg(), // upstream_request_id
+			sqlmock.AnyArg(), // session_id
+			sqlmock.AnyArg(), // native_compaction_v2
+			log.CacheCreation30mTokens,
+			log.CacheCreation12hTokens,
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
@@ -279,7 +285,7 @@ func TestPrepareUsageLogInsert_PersistsCorrelationID(t *testing.T) {
 		CorrelationID:  &corr,
 		CreatedAt:      time.Date(2025, 1, 7, 12, 0, 0, 0, time.UTC),
 	})
-	require.Equal(t, sql.NullString{String: corr, Valid: true}, prepared.args[len(prepared.args)-4])
+	require.Equal(t, sql.NullString{String: corr, Valid: true}, prepared.args[len(prepared.args)-9])
 }
 
 func TestListExport_UsesIDCursorWithoutHydration(t *testing.T) {
@@ -330,6 +336,30 @@ func TestListExport_UsesIDCursorWithoutHydration(t *testing.T) {
 	require.Equal(t, corr, *rows[0].CorrelationID)
 	require.Equal(t, "client:"+corr, rows[0].RequestID)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPrepareUsageLogInsert_PersistsNativeCompactionV2WithoutChangingRequestType(t *testing.T) {
+	log := &service.UsageLog{
+		UserID:             1,
+		APIKeyID:           2,
+		AccountID:          3,
+		RequestID:          "req-native-compaction-v2",
+		Model:              "gpt-5",
+		RequestedModel:     "gpt-5",
+		RequestType:        service.RequestTypeStream,
+		NativeCompactionV2: true,
+		CreatedAt:          time.Date(2025, 1, 5, 13, 0, 0, 0, time.UTC),
+	}
+
+	prepared := prepareUsageLogInsert(log)
+
+	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
+	require.Equal(t, "boolean", usageLogInsertArgTypes[len(usageLogInsertArgTypes)-4])
+	require.Equal(t, true, prepared.args[len(prepared.args)-4])
+	require.Equal(t, int16(service.RequestTypeStream), prepared.args[30])
+	require.Equal(t, service.RequestTypeStream, log.RequestType)
+	require.True(t, log.Stream)
+	require.False(t, log.OpenAIWSMode)
 }
 
 func TestPrepareUsageLogInsert_PersistsImageSizeMetadata(t *testing.T) {
@@ -873,9 +903,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{Valid: true, String: "req-image-metadata"},
 			"gpt-image-2",
 			sql.NullString{Valid: true, String: "gpt-image-2"},
-			sql.NullString{},
-			sql.NullInt64{},
-			sql.NullInt64{},
+			sql.NullString{}, // upstream_model
+			sql.NullInt64{},  // group_id
+			sql.NullInt64{},  // subscription_id
 			0, 0, 0, 0, 0, 0,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
@@ -900,10 +930,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			0,                // video_count
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullString{}, // service_tier
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},
@@ -913,6 +944,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{},
 			sql.NullString{}, // upstream_response_model
 			sql.NullBool{},   // upstream_model_mismatch
+			sql.NullString{}, // upstream_request_id
+			sql.NullString{}, // session_id
+			false,            // native_compaction_v2
+			0,                // cache_creation_30m_tokens
+			0,                // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
@@ -939,8 +975,6 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			"gpt-5", // model
 			sql.NullString{Valid: true, String: "gpt-5"}, // requested_model
 			sql.NullString{},  // upstream_model
-			sql.NullString{},  // upstream_response_model
-			sql.NullBool{},    // upstream_model_mismatch
 			sql.NullInt64{},   // group_id
 			sql.NullInt64{},   // subscription_id
 			1,                 // input_tokens
@@ -981,11 +1015,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "priority"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			false,
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -995,6 +1028,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // upstream_response_model
 			sql.NullBool{},    // upstream_model_mismatch
+			sql.NullString{},  // upstream_request_id
+			sql.NullString{},  // session_id
+			false,             // native_compaction_v2
+			0,                 // cache_creation_30m_tokens
+			0,                 // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
@@ -1015,11 +1053,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{Valid: true, String: "req-2"},
 			"gpt-5",
 			sql.NullString{Valid: true, String: "gpt-5"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullBool{},
-			sql.NullInt64{},
-			sql.NullInt64{},
+			sql.NullString{}, // upstream_model
+			sql.NullInt64{},  // group_id
+			sql.NullInt64{},  // subscription_id
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
@@ -1045,11 +1081,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "flex"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			false,
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -1059,6 +1094,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // upstream_response_model
 			sql.NullBool{},    // upstream_model_mismatch
+			sql.NullString{},  // upstream_request_id
+			sql.NullString{},  // session_id
+			true,              // native_compaction_v2
+			0,                 // cache_creation_30m_tokens
+			0,                 // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
@@ -1080,11 +1120,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{Valid: true, String: "req-3"},
 			"gpt-5.4",
 			sql.NullString{Valid: true, String: "gpt-5.4"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullBool{},
-			sql.NullInt64{},
-			sql.NullInt64{},
+			sql.NullString{}, // upstream_model
+			sql.NullInt64{},  // group_id
+			sql.NullInt64{},  // subscription_id
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0, 0.0, // image_input_tokens, image_input_cost
@@ -1110,11 +1148,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "priority"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
-			false,
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -1124,6 +1161,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // upstream_response_model
 			sql.NullBool{},    // upstream_model_mismatch
+			sql.NullString{},  // upstream_request_id
+			sql.NullString{},  // session_id
+			false,             // native_compaction_v2
+			0,                 // cache_creation_30m_tokens
+			0,                 // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
@@ -1131,4 +1173,49 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 		require.Equal(t, "priority", *log.ServiceTier)
 	})
 
+}
+
+func TestUsageLogRepositoryGetModelStatsAccountFilterKeepsActualCost(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	accountID := int64(42)
+
+	mock.ExpectQuery("COALESCE\\(SUM\\(actual_cost\\), 0\\) as actual_cost,\\s+COALESCE\\(SUM\\(COALESCE\\(account_stats_cost, total_cost\\) \\* COALESCE\\(account_rate_multiplier, 1\\)\\), 0\\) as account_cost").
+		WithArgs(start, end, accountID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"model", "requests", "input_tokens", "output_tokens",
+			"cache_creation_tokens", "cache_read_tokens", "total_tokens",
+			"cost", "actual_cost", "account_cost",
+		}).AddRow("gemini-4-argon", int64(3), int64(10), int64(20), int64(0), int64(0), int64(30), 6.0, 2.4, 0.9))
+
+	results, err := repo.GetModelStatsWithUsageFiltersBySource(context.Background(), start, end, usagestats.UsageLogFilters{AccountID: accountID}, usagestats.ModelSourceRequested)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, 2.4, results[0].ActualCost)
+	require.Equal(t, 0.9, results[0].AccountCost)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageLogRepositoryGetEndpointStatsAccountFilterKeepsActualCost(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	accountID := int64(42)
+
+	mock.ExpectQuery("COALESCE\\(SUM\\(actual_cost\\), 0\\) as actual_cost,\\s+COALESCE\\(SUM\\(COALESCE\\(account_stats_cost, total_cost\\) \\* COALESCE\\(account_rate_multiplier, 1\\)\\), 0\\) as account_cost").
+		WithArgs(start, end, accountID).
+		WillReturnRows(sqlmock.NewRows([]string{"endpoint", "requests", "total_tokens", "cost", "actual_cost", "account_cost"}).
+			AddRow("/v1beta/models", int64(3), int64(30), 6.0, 2.4, 0.9))
+
+	results, err := repo.GetEndpointStatsWithFilters(context.Background(), start, end, 0, 0, accountID, 0, "", nil, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, 2.4, results[0].ActualCost)
+	require.Equal(t, 0.9, results[0].AccountCost)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

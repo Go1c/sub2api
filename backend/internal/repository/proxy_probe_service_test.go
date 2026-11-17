@@ -166,7 +166,7 @@ func (s *ProxyProbeServiceSuite) TestParseIPify_NoIP() {
 	require.ErrorContains(s.T(), err, "no IP found")
 }
 
-func (s *ProxyProbeServiceSuite) TestParseIPify_Success() {
+func (s *ProxyProbeServiceSuite) TestParseIPify_IPv4Success() {
 	body := []byte(`{"ip":"203.0.113.9"}`)
 	info, latencyMs, err := s.prober.parseIPify(body, 40)
 	require.NoError(s.T(), err)

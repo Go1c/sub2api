@@ -160,17 +160,26 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyEmailVerifyEnabled,
 		SettingKeyForceEmailOnThirdPartySignup,
 		SettingKeyRegistrationEmailSuffixWhitelist,
+		SettingKeyRegistrationEmailDomainQuotaEnabled,
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
 		SettingKeyInvitationCodeEnabled,
 		SettingKeyInvitationRegistrationMode,
 		SettingKeyTotpEnabled,
+		SettingKeyPasskeyEnabled,
 		SettingKeyLoginAgreementEnabled,
 		SettingKeyLoginAgreementMode,
 		SettingKeyLoginAgreementUpdatedAt,
 		SettingKeyLoginAgreementDocuments,
 		SettingKeyTurnstileEnabled,
 		SettingKeyTurnstileSiteKey,
+		SettingKeyTencentCaptchaEnabled,
+		SettingKeyTencentCaptchaAppID,
+		SettingKeyTencentCaptchaRegion,
+		SettingKeyAliyunCaptchaEnabled,
+		SettingKeyAliyunCaptchaSceneID,
+		SettingKeyAliyunCaptchaPrefix,
+		SettingKeyAliyunCaptchaRegion,
 		SettingKeyAPIKeyACLTrustForwardedIP,
 		SettingKeySiteName,
 		SettingKeySiteLogo,
@@ -187,6 +196,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyDocURL,
 		SettingKeySitePages,
 		SettingKeyHomeContent,
+		SettingKeyCompactHomeEnabled,
 		SettingKeyHideCcsImportButton,
 		SettingKeyFrontendLocales,
 		SettingKeyCCSwitchDefaultModelAnthropic,
@@ -221,6 +231,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyWeChatConnectFrontendRedirectURL,
 		SettingKeyBackendModeEnabled,
 		SettingPaymentEnabled,
+		SettingBalancePayDisabled,
 		SettingKeyOIDCConnectEnabled,
 		SettingKeyOIDCConnectProviderName,
 		SettingKeyGitHubOAuthEnabled,
@@ -234,10 +245,17 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyBalanceLowNotifyRechargeURL,
 		SettingKeyAccountQuotaNotifyEnabled,
 		SettingKeyChannelMonitorEnabled,
+		SettingKeyChannelMonitorMode,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
 		SettingKeyChannelMonitorStatusBanner,
+		SettingKeyChannelMonitorHideThroughput,
 		SettingKeyChannelMonitorShowQuota,
+		SettingKeyChannelMonitorHideUserRanking,
 		SettingKeyAvailableChannelsEnabled,
+		SettingKeySubscriptionEnabled,
+		SettingKeyModelPlazaEnabled,
+		SettingKeyModelPlazaRequireAuth,
+		SettingKeyPluginManagementEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeySiteMessagesEnabled,
@@ -305,11 +323,13 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		EmailVerifyEnabled:                    emailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:          settings[SettingKeyForceEmailOnThirdPartySignup] == "true",
 		RegistrationEmailSuffixWhitelist:      registrationEmailSuffixWhitelist,
+		RegistrationEmailDomainQuotaEnabled:   settings[SettingKeyRegistrationEmailDomainQuotaEnabled] == "true",
 		PromoCodeEnabled:                      settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:                  passwordResetEnabled,
 		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
 		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
+		PasskeyEnabled:                        s.passkeyConfigured() && s.passkeySettingEnabled(settings),
 		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true" && len(loginAgreementDocuments) > 0,
 		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
 		LoginAgreementUpdatedAt:               loginAgreementUpdatedAt,
@@ -317,6 +337,13 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		LoginAgreementDocuments:               loginAgreementDocuments,
 		TurnstileEnabled:                      settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                      settings[SettingKeyTurnstileSiteKey],
+		TencentCaptchaEnabled:                 settings[SettingKeyTencentCaptchaEnabled] == "true",
+		TencentCaptchaAppID:                   settings[SettingKeyTencentCaptchaAppID],
+		TencentCaptchaRegion:                  normalizeTencentCaptchaRegion(settings[SettingKeyTencentCaptchaRegion]),
+		AliyunCaptchaEnabled:                  settings[SettingKeyAliyunCaptchaEnabled] == "true",
+		AliyunCaptchaSceneID:                  settings[SettingKeyAliyunCaptchaSceneID],
+		AliyunCaptchaPrefix:                   settings[SettingKeyAliyunCaptchaPrefix],
+		AliyunCaptchaRegion:                   normalizeAliyunCaptchaRegion(settings[SettingKeyAliyunCaptchaRegion]),
 		SiteName:                              s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                              settings[SettingKeySiteLogo],
 		SiteSubtitle:                          s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
@@ -332,6 +359,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		DocURL:                                settings[SettingKeyDocURL],
 		SitePages:                             string(filterEnabledSitePages(settings[SettingKeySitePages])),
 		HomeContent:                           settings[SettingKeyHomeContent],
+		CompactHomeEnabled:                    settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
 		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
 		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
@@ -353,7 +381,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		WeChatOAuthMPEnabled:                  weChatMPEnabled,
 		WeChatOAuthMobileEnabled:              weChatMobileEnabled,
 		BackendModeEnabled:                    settings[SettingKeyBackendModeEnabled] == "true",
+		MCPEnabled:                            s.cfg != nil && s.cfg.MCP.Enabled(),
 		PaymentEnabled:                        settings[SettingPaymentEnabled] == "true",
+		PaymentBalanceDisabled:                settings[SettingBalancePayDisabled] == "true",
 		OIDCOAuthEnabled:                      oidcEnabled,
 		OIDCOAuthProviderName:                 oidcProviderName,
 		GitHubOAuthEnabled:                    gitHubEnabled,
@@ -364,11 +394,20 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		BalanceLowNotifyRechargeURL:           settings[SettingKeyBalanceLowNotifyRechargeURL],
 
 		ChannelMonitorEnabled:                !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled]),
+		ChannelMonitorMode:                   normalizeChannelMonitorMode(settings[SettingKeyChannelMonitorMode]),
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 		ChannelMonitorStatusBanner:           normalizeChannelMonitorStatusBanner(settings[SettingKeyChannelMonitorStatusBanner]),
+		ChannelMonitorHideThroughput:         !isFalseSettingValue(settings[SettingKeyChannelMonitorHideThroughput]),
 		ChannelMonitorShowQuota:              settings[SettingKeyChannelMonitorShowQuota] == "true",
+		ChannelMonitorHideUserRanking:        isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking]),
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
+
+		SubscriptionEnabled: !isFalseSettingValue(settings[SettingKeySubscriptionEnabled]),
+
+		ModelPlazaEnabled:       settings[SettingKeyModelPlazaEnabled] == "true",
+		ModelPlazaRequireAuth:   settings[SettingKeyModelPlazaRequireAuth] == "true",
+		PluginManagementEnabled: settings[SettingKeyPluginManagementEnabled] == "true",
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -550,11 +589,13 @@ type PublicSettingsInjectionPayload struct {
 	RegistrationEnabled                   bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled                    bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist      []string                 `json:"registration_email_suffix_whitelist"`
+	RegistrationEmailDomainQuotaEnabled   bool                     `json:"registration_email_domain_quota_enabled"`
 	PromoCodeEnabled                      bool                     `json:"promo_code_enabled"`
 	PasswordResetEnabled                  bool                     `json:"password_reset_enabled"`
 	InvitationCodeEnabled                 bool                     `json:"invitation_code_enabled"`
 	InvitationRegistrationMode            string                   `json:"invitation_registration_mode"`
 	TotpEnabled                           bool                     `json:"totp_enabled"`
+	PasskeyEnabled                        bool                     `json:"passkey_enabled"`
 	LoginAgreementEnabled                 bool                     `json:"login_agreement_enabled"`
 	LoginAgreementMode                    string                   `json:"login_agreement_mode"`
 	LoginAgreementUpdatedAt               string                   `json:"login_agreement_updated_at"`
@@ -562,6 +603,13 @@ type PublicSettingsInjectionPayload struct {
 	LoginAgreementDocuments               []LoginAgreementDocument `json:"login_agreement_documents"`
 	TurnstileEnabled                      bool                     `json:"turnstile_enabled"`
 	TurnstileSiteKey                      string                   `json:"turnstile_site_key"`
+	TencentCaptchaEnabled                 bool                     `json:"tencent_captcha_enabled"`
+	TencentCaptchaAppID                   string                   `json:"tencent_captcha_app_id"`
+	TencentCaptchaRegion                  string                   `json:"tencent_captcha_region"`
+	AliyunCaptchaEnabled                  bool                     `json:"aliyun_captcha_enabled"`
+	AliyunCaptchaSceneID                  string                   `json:"aliyun_captcha_scene_id"`
+	AliyunCaptchaPrefix                   string                   `json:"aliyun_captcha_prefix"`
+	AliyunCaptchaRegion                   string                   `json:"aliyun_captcha_region"`
 	SiteName                              string                   `json:"site_name"`
 	SiteLogo                              string                   `json:"site_logo"`
 	SiteSubtitle                          string                   `json:"site_subtitle"`
@@ -577,6 +625,7 @@ type PublicSettingsInjectionPayload struct {
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             json.RawMessage          `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
+	CompactHomeEnabled                    bool                     `json:"compact_home_enabled"`
 	HideCcsImportButton                   bool                     `json:"hide_ccs_import_button"`
 	FrontendLocales                       []string                 `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
@@ -588,7 +637,6 @@ type PublicSettingsInjectionPayload struct {
 	PurchaseSubscriptionEnabled           bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               string                   `json:"purchase_subscription_url"`
 	SubscriptionEnabled                   bool                     `json:"subscription_enabled"`
-	PaymentBalanceDisabled                bool                     `json:"payment_balance_disabled"`
 	TableDefaultPageSize                  int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                  []int                    `json:"table_page_size_options"`
 	CustomMenuItems                       json.RawMessage          `json:"custom_menu_items"`
@@ -604,7 +652,9 @@ type PublicSettingsInjectionPayload struct {
 	GitHubOAuthEnabled                    bool                     `json:"github_oauth_enabled"`
 	GoogleOAuthEnabled                    bool                     `json:"google_oauth_enabled"`
 	BackendModeEnabled                    bool                     `json:"backend_mode_enabled"`
+	MCPEnabled                            bool                     `json:"mcp_enabled"`
 	PaymentEnabled                        bool                     `json:"payment_enabled"`
+	PaymentBalanceDisabled                bool                     `json:"payment_balance_disabled"`
 	Version                               string                   `json:"version"`
 	// 服务器全局时区（IANA 名称与当前 UTC 偏移），高峰时段等服务端本地时间窗口的展示标注用
 	ServerTimezone              string  `json:"server_timezone"`
@@ -618,12 +668,22 @@ type PublicSettingsInjectionPayload struct {
 	// frontend/src/utils/featureFlags.ts. Missing a field here is the bug
 	// that hid the "可用渠道" menu on page refresh.
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
+	// ChannelMonitorHideThroughput is public so the user UI can hide RPM/TPM
+	// without waiting for API redaction alone (defense in depth).
+	ChannelMonitorHideThroughput bool `json:"channel_monitor_hide_throughput"`
 	// ChannelMonitorShowQuota gates the user-facing quota/balance display on
 	// monitors; fail-closed (absent/false = hidden). Admin UI always shows it.
-	ChannelMonitorShowQuota           bool   `json:"channel_monitor_show_quota"`
+	ChannelMonitorShowQuota bool `json:"channel_monitor_show_quota"`
+	// ChannelMonitorHideUserRanking hides the user ranking tab and /users payload
+	// from non-admin channel-monitor v2 viewers; default false (visible).
+	ChannelMonitorHideUserRanking     bool   `json:"channel_monitor_hide_user_ranking"`
 	AvailableChannelsEnabled          bool   `json:"available_channels_enabled"`
+	ModelPlazaEnabled                 bool   `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth             bool   `json:"model_plaza_require_auth"`
+	PluginManagementEnabled           bool   `json:"plugin_management_enabled"`
 	AffiliateEnabled                  bool   `json:"affiliate_enabled"`
 	RiskControlEnabled                bool   `json:"risk_control_enabled"`
 	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
@@ -643,11 +703,13 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		RegistrationEnabled:                   settings.RegistrationEnabled,
 		EmailVerifyEnabled:                    settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:      settings.RegistrationEmailSuffixWhitelist,
+		RegistrationEmailDomainQuotaEnabled:   settings.RegistrationEmailDomainQuotaEnabled,
 		PromoCodeEnabled:                      settings.PromoCodeEnabled,
 		PasswordResetEnabled:                  settings.PasswordResetEnabled,
 		InvitationCodeEnabled:                 settings.InvitationCodeEnabled,
 		InvitationRegistrationMode:            settings.InvitationRegistrationMode,
 		TotpEnabled:                           settings.TotpEnabled,
+		PasskeyEnabled:                        settings.PasskeyEnabled,
 		LoginAgreementEnabled:                 settings.LoginAgreementEnabled,
 		LoginAgreementMode:                    settings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:               settings.LoginAgreementUpdatedAt,
@@ -655,6 +717,13 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		LoginAgreementDocuments:               settings.LoginAgreementDocuments,
 		TurnstileEnabled:                      settings.TurnstileEnabled,
 		TurnstileSiteKey:                      settings.TurnstileSiteKey,
+		TencentCaptchaEnabled:                 settings.TencentCaptchaEnabled,
+		TencentCaptchaAppID:                   settings.TencentCaptchaAppID,
+		TencentCaptchaRegion:                  settings.TencentCaptchaRegion,
+		AliyunCaptchaEnabled:                  settings.AliyunCaptchaEnabled,
+		AliyunCaptchaSceneID:                  settings.AliyunCaptchaSceneID,
+		AliyunCaptchaPrefix:                   settings.AliyunCaptchaPrefix,
+		AliyunCaptchaRegion:                   settings.AliyunCaptchaRegion,
 		SiteName:                              settings.SiteName,
 		SiteLogo:                              settings.SiteLogo,
 		SiteSubtitle:                          settings.SiteSubtitle,
@@ -670,6 +739,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		DocURL:                                settings.DocURL,
 		SitePages:                             safeRawJSONArray(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
+		CompactHomeEnabled:                    settings.CompactHomeEnabled,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
 		FrontendLocales:                       settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
@@ -681,7 +751,6 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PurchaseSubscriptionEnabled:           settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
 		SubscriptionEnabled:                   settings.SubscriptionEnabled,
-		PaymentBalanceDisabled:                settings.PaymentBalanceDisabled,
 		TableDefaultPageSize:                  settings.TableDefaultPageSize,
 		TablePageSizeOptions:                  settings.TablePageSizeOptions,
 		CustomMenuItems:                       filterUserVisibleMenuItems(settings.CustomMenuItems),
@@ -697,7 +766,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		GitHubOAuthEnabled:                    settings.GitHubOAuthEnabled,
 		GoogleOAuthEnabled:                    settings.GoogleOAuthEnabled,
 		BackendModeEnabled:                    settings.BackendModeEnabled,
+		MCPEnabled:                            settings.MCPEnabled,
 		PaymentEnabled:                        settings.PaymentEnabled,
+		PaymentBalanceDisabled:                settings.PaymentBalanceDisabled,
 		Version:                               s.version,
 		ServerTimezone:                        timezone.Name(),
 		ServerUTCOffset:                       timezone.UTCOffset(),
@@ -707,10 +778,16 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		BalanceLowNotifyRechargeURL:           settings.BalanceLowNotifyRechargeURL,
 
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
+		ChannelMonitorMode:                   settings.ChannelMonitorMode,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorStatusBanner:           settings.ChannelMonitorStatusBanner,
+		ChannelMonitorHideThroughput:         settings.ChannelMonitorHideThroughput,
 		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
+		ChannelMonitorHideUserRanking:        settings.ChannelMonitorHideUserRanking,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
+		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
+		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
+		PluginManagementEnabled:              settings.PluginManagementEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		SiteMessagesEnabled:                  settings.SiteMessagesEnabled,

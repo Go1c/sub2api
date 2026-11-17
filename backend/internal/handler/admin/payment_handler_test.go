@@ -54,7 +54,7 @@ func TestAdminSubscriptionPlansForResponseIncludesCompositeGroupInfo(t *testing.
 	plans := []*dbent.SubscriptionPlan{
 		{
 			ID:           11,
-			GroupID:      7,
+			GroupID:      int64Ptr(7),
 			Name:         "All models",
 			Description:  "Composite access",
 			Price:        19.99,

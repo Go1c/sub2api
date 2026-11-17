@@ -9,6 +9,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+func int64Ptr(v int64) *int64 { return &v }
+
 type stubAdminService struct {
 	lastBalanceSummaryLimit             int
 	users                               []service.User
@@ -37,6 +39,15 @@ type stubAdminService struct {
 	bulkUpdateAccountErr                error
 	getAccountResult                    *service.Account
 	updateAccountCalls                  int
+	lastUpdateAccountInput              *service.UpdateAccountInput
+	lastBulkUpdateAccountInput          *service.BulkUpdateAccountsInput
+	lastListGroupsIsExclusive           *bool
+	createdGroups                       []*service.CreateGroupInput
+	updatedGroups                       []*service.UpdateGroupInput
+	deletedGroupIDs                     []int64
+	guardedDeletedGroupIDs              []int64
+	deleteGroupIfEmptyErr               error
+	advancedGroupOperationCalls         int
 	updateAccountExtraCalls             int
 	checkMixedErr                       error
 	lastMixedCheck                      struct {
@@ -220,6 +231,14 @@ func (s *stubAdminService) BatchUpdateLimits(ctx context.Context, userIDs []int6
 	return 0, nil
 }
 
+func (s *stubAdminService) FindActiveUsersByBlacklistedEmails(ctx context.Context, emails []string) ([]service.User, error) {
+	return []service.User{}, nil
+}
+
+func (s *stubAdminService) BatchDisableUsers(ctx context.Context, userIDs []int64) (int, error) {
+	return len(userIDs), nil
+}
+
 func (s *stubAdminService) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]service.APIKey, int64, error) {
 	return s.apiKeys, int64(len(s.apiKeys)), nil
 }
@@ -312,14 +331,6 @@ func (s *stubAdminService) GetGroupModelsListCandidates(ctx context.Context, id 
 		return []string{"gpt-5.5", "gpt-5.4"}, nil
 	}
 	return []string{"claude-sonnet-4-6"}, nil
-}
-
-func (s *stubAdminService) DuplicateGroup(ctx context.Context, id int64, actorScope, operationKey string) (*service.Group, error) {
-	return nil, nil
-}
-
-func (s *stubAdminService) RecoverDuplicateGroup(ctx context.Context, id int64, actorScope, operationKey string) (*service.Group, error) {
-	return nil, nil
 }
 
 func (s *stubAdminService) CreateGroup(ctx context.Context, input *service.CreateGroupInput) (*service.Group, error) {
@@ -484,6 +495,7 @@ func (s *stubAdminService) RecoverDuplicateAccount(ctx context.Context, id int64
 
 func (s *stubAdminService) UpdateAccount(ctx context.Context, id int64, input *service.UpdateAccountInput) (*service.Account, error) {
 	s.updateAccountCalls++
+	s.lastUpdateAccountInput = input
 	if s.updateAccountErr != nil {
 		return nil, s.updateAccountErr
 	}
@@ -853,6 +865,10 @@ func (s *stubAdminService) CreateShadow(ctx context.Context, parentID int64, opt
 		Credentials:     map[string]any{},
 		Extra:           map[string]any{},
 	}, nil
+}
+
+func (s *stubAdminService) ValidateAccountGroupBindings(context.Context, []int64) error {
+	return nil
 }
 
 // Ensure stub implements interface.

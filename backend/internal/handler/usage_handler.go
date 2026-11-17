@@ -424,17 +424,17 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		return
 	}
 
-	var stats *service.UsageStats
-	var err error
-	if parsed.Filters.APIKeyID > 0 {
-		stats, err = h.usageService.GetStatsByAPIKey(c.Request.Context(), parsed.Filters.APIKeyID, parsed.StartTime, parsed.EndTime)
-	} else {
-		stats, err = h.usageService.GetStatsByUser(c.Request.Context(), parsed.Filters.UserID, parsed.StartTime, parsed.EndTime)
-	}
+	stats, err := h.usageService.GetStatsWithFilters(c.Request.Context(), parsed.Filters)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
+	stats.TotalAccountCost = nil
+	for i := range stats.Endpoints {
+		stats.Endpoints[i].AccountCost = 0
+	}
+	stats.UpstreamEndpoints = nil
+	stats.EndpointPaths = nil
 
 	response.Success(c, stats)
 }

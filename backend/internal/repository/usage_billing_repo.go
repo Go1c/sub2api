@@ -19,7 +19,7 @@ type usageBillingRepository struct {
 	db *sql.DB
 }
 
-func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
+func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingBatchRepository {
 	return &usageBillingRepository{db: sqlDB}
 }
 
@@ -1023,9 +1023,9 @@ func userExistsForBilling(ctx context.Context, tx *sql.Tx, userID int64) (bool, 
 	return true, nil
 }
 
-func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {
-	var exhausted bool
-	err := tx.QueryRowContext(ctx, `
+// usageBillingAPIKeyQuotaUpdate 累加 Key 已用额度（$1），本次累加从未达额度跨到达到额度时把 active 状态置为额度耗尽。
+// 参数：$1=金额 $2=api_key_id $3=active 状态 $4=额度耗尽状态。
+const usageBillingAPIKeyQuotaUpdate = `
 		UPDATE api_keys
 		SET quota_used = quota_used + $1,
 			status = CASE
@@ -1037,7 +1037,39 @@ func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID 
 				ELSE status
 			END,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
+		WHERE id = $2 AND deleted_at IS NULL`
+
+func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
+	const updateSQL = `
+		UPDATE user_subscriptions us
+		SET
+			daily_usage_usd = us.daily_usage_usd + $1,
+			weekly_usage_usd = us.weekly_usage_usd + $1,
+			monthly_usage_usd = us.monthly_usage_usd + $1,
+			updated_at = NOW()
+		FROM groups g
+		WHERE us.id = $2
+			AND us.deleted_at IS NULL
+			AND us.group_id = g.id
+			AND g.deleted_at IS NULL
+	`
+	res, err := tx.ExecContext(ctx, updateSQL, costUSD, subscriptionID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected > 0 {
+		return nil
+	}
+	return service.ErrSubscriptionNotFound
+}
+
+func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {
+	var exhausted bool
+	err := tx.QueryRowContext(ctx, usageBillingAPIKeyQuotaUpdate+`
 		RETURNING quota > 0 AND quota_used >= quota AND quota_used - $1 < quota
 	`, amount, apiKeyID, service.StatusAPIKeyActive, service.StatusAPIKeyQuotaExhausted).Scan(&exhausted)
 	if errors.Is(err, sql.ErrNoRows) {

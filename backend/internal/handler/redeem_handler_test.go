@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,10 @@ func (s *redeemCodeRedeemerStub) Redeem(_ context.Context, userID int64, code st
 
 func (s *redeemCodeRedeemerStub) GetUserHistory(context.Context, int64, int) ([]service.RedeemCode, error) {
 	return append([]service.RedeemCode(nil), s.history...), nil
+}
+func (s *redeemCodeRedeemerStub) GetUserHistoryPaginated(context.Context, int64, pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+	items := append([]service.RedeemCode(nil), s.history...)
+	return items, &pagination.PaginationResult{Total: int64(len(items))}, nil
 }
 
 type promoCodeRedeemerStub struct {

@@ -1575,6 +1575,19 @@
           </p>
           <div class="flex items-center justify-between gap-4 mt-4">
             <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.forceUltrafast") }}
+            </label>
+            <Toggle
+              data-testid="create-force-openai-ultrafast"
+              :aria-label="t('admin.groups.openaiFast.forceUltrafast')"
+              v-model="createForm.force_openai_ultrafast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.ultrafastHint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
               {{ t("admin.groups.openaiFast.free") }}
             </label>
             <Toggle
@@ -3258,6 +3271,19 @@
           </p>
           <div class="flex items-center justify-between gap-4 mt-4">
             <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.forceUltrafast") }}
+            </label>
+            <Toggle
+              data-testid="edit-force-openai-ultrafast"
+              :aria-label="t('admin.groups.openaiFast.forceUltrafast')"
+              v-model="editForm.force_openai_ultrafast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.ultrafastHint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
               {{ t("admin.groups.openaiFast.free") }}
             </label>
             <Toggle
@@ -4537,7 +4563,7 @@ import {
 } from "./groupsWebSearchPricing";
 import { serializeVideoModelPrices, createVideoModelPricesForm } from './groupsVideoModelPricing'
 import { createModelAllowlistState as createInitialModelAllowlistState } from './groupModelAllowlist'
-import { supportsGroupOpenAIFast } from './groupsOpenAIFast'
+import { normalizeGroupOpenAIFast, supportsGroupOpenAIFast } from './groupsOpenAIFast'
 
 const editCodexManifestAccountNames = ref<Record<number, string>>({});
 
@@ -4611,6 +4637,8 @@ const emptyGroupPricing = (): PricingFormEntry => ({
   input_price: null,
   output_price: null,
   cache_write_price: null,
+  cache_write_1h_price: null,
+  cache_write_12h_price: null,
   cache_read_price: null,
   fast_multiplier: null,
   flex_multiplier: null,
@@ -4633,6 +4661,8 @@ const groupPricingFromAPI = (
     input_price: perTokenToMTok(entry.input_price),
     output_price: perTokenToMTok(entry.output_price),
     cache_write_price: perTokenToMTok(entry.cache_write_price),
+    cache_write_1h_price: perTokenToMTok(entry.cache_write_1h_price),
+    cache_write_12h_price: perTokenToMTok(entry.cache_write_12h_price),
     cache_read_price: perTokenToMTok(entry.cache_read_price),
     fast_multiplier: entry.fast_multiplier ?? null,
     flex_multiplier: entry.flex_multiplier ?? null,
@@ -4656,6 +4686,8 @@ const groupPricingToAPI = (
       input_price: mTokToPerToken(entry.input_price),
       output_price: mTokToPerToken(entry.output_price),
       cache_write_price: mTokToPerToken(entry.cache_write_price),
+      cache_write_1h_price: mTokToPerToken(entry.cache_write_1h_price),
+      cache_write_12h_price: mTokToPerToken(entry.cache_write_12h_price),
       cache_read_price: mTokToPerToken(entry.cache_read_price),
       fast_multiplier: null,
       flex_multiplier: null,
@@ -5185,6 +5217,7 @@ const createForm = reactive({
   audio_stt_price_per_hour: null as number | null,
   audio_tts_price_per_million_chars: null as number | null,
   force_openai_fast: false,
+  force_openai_ultrafast: false,
   free_openai_fast: false,
   profit_control_enabled: false,
   profit_min_margin_percent: 0,
@@ -5558,6 +5591,8 @@ audio_stt_price_per_hour: null as number | null,
 audio_tts_price_per_million_chars: null as number | null,
 
 force_openai_fast: false,
+
+force_openai_ultrafast: false,
 
 free_openai_fast: false,
 
@@ -5999,6 +6034,10 @@ const closeCreateModal = () => {
   createForm.video_price_480p = null;
   createForm.video_price_720p = null;
   createForm.video_price_1080p = null;
+  createForm.video_model_prices = createVideoModelPricesForm();
+  createForm.force_openai_fast = false;
+  createForm.force_openai_ultrafast = false;
+  createForm.free_openai_fast = false;
   createForm.web_search_price_per_call = null;
   createForm.web_search_rate_independent = false;
   createForm.web_search_rate_multiplier = 1;
@@ -6085,6 +6124,18 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createForm,
+      force_openai_fast: normalizeGroupOpenAIFast(
+        createForm.platform,
+        createForm.force_openai_fast,
+      ),
+      force_openai_ultrafast: normalizeGroupOpenAIFast(
+        createForm.platform,
+        createForm.force_openai_ultrafast,
+      ),
+      free_openai_fast: normalizeGroupOpenAIFast(
+        createForm.platform,
+        createForm.free_openai_fast,
+      ),
       model_pricing: groupPricingToAPI(
         createForm.model_pricing,
         createForm.platform,
@@ -6210,6 +6261,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.monthly_limit_usd = group.monthly_limit_usd;
   editForm.long_context_pricing_enabled =
     group.long_context_pricing_enabled ?? true;
+  editForm.force_openai_fast = group.force_openai_fast ?? false;
+  editForm.force_openai_ultrafast = group.force_openai_ultrafast ?? false;
+  editForm.free_openai_fast = group.free_openai_fast ?? false;
   editForm.model_pricing = groupPricingFromAPI(group.model_pricing);
   editForm.allow_image_generation = group.allow_image_generation ?? false;
   editForm.allow_batch_image_generation =
@@ -6294,6 +6348,10 @@ const closeEditModal = () => {
   editForm.video_price_480p = null;
   editForm.video_price_720p = null;
   editForm.video_price_1080p = null;
+  editForm.video_model_prices = createVideoModelPricesForm();
+  editForm.force_openai_fast = false;
+  editForm.force_openai_ultrafast = false;
+  editForm.free_openai_fast = false;
   editForm.web_search_price_per_call = null;
   editForm.web_search_rate_independent = false;
   editForm.web_search_rate_multiplier = 1;
@@ -6344,6 +6402,18 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      force_openai_fast: normalizeGroupOpenAIFast(
+        editForm.platform,
+        editForm.force_openai_fast,
+      ),
+      force_openai_ultrafast: normalizeGroupOpenAIFast(
+        editForm.platform,
+        editForm.force_openai_ultrafast,
+      ),
+      free_openai_fast: normalizeGroupOpenAIFast(
+        editForm.platform,
+        editForm.free_openai_fast,
+      ),
       model_pricing: groupPricingToAPI(
         editForm.model_pricing,
         editForm.platform,

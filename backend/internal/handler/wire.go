@@ -131,9 +131,10 @@ func ProvideDesktopPaymentHandoffHandler(
 }
 
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
-func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
+func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, aliyunCaptchaService *service.AliyunCaptchaService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
 	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
 	h.SetNotificationEmailService(notificationEmailService)
+	h.SetAliyunCaptchaService(aliyunCaptchaService)
 	h.SetStepUpDeps(totpService, userService)
 	return h
 }
@@ -142,6 +143,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
+	mcpOAuthHandler *MCPOAuthHandler,
 	apiKeyHandler *APIKeyHandler,
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
@@ -157,11 +159,13 @@ func ProvideHandlers(
 	openaiGatewayHandler *OpenAIGatewayHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	passkeyHandler *PasskeyHandler,
 	userAccessTokenHandler *UserAccessTokenHandler,
 	paymentHandler *PaymentHandler,
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	modelMarketHandler *ModelMarketHandler,
+	modelPlazaHandler *ModelPlazaHandler,
 	batchImageHandler *BatchImageHandler,
 	asyncImageHandler *AsyncImageHandler,
 	desktopPaymentHandoffHandler *DesktopPaymentHandoffHandler,
@@ -171,11 +175,13 @@ func ProvideHandlers(
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.BalanceCacheInvalidationWorker,
+	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	userHandler.SetWebhookBalanceNotifyService(webhookBalanceNotifyService)
 	return &Handlers{
 		Auth:             authHandler,
 		User:             userHandler,
+		MCPOAuth:         mcpOAuthHandler,
 		APIKey:           apiKeyHandler,
 		Usage:            usageHandler,
 		Redeem:           redeemHandler,
@@ -191,11 +197,13 @@ func ProvideHandlers(
 		OpenAIGateway:    openaiGatewayHandler,
 		Setting:          settingHandler,
 		Totp:             totpHandler,
+		Passkey:          passkeyHandler,
 		UserAccessToken:  userAccessTokenHandler,
 		Payment:          paymentHandler,
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
 		ModelMarket:      modelMarketHandler,
+		ModelPlaza:       modelPlazaHandler,
 		BatchImage:       batchImageHandler,
 		AsyncImage:       asyncImageHandler,
 		DesktopHandoff:   desktopPaymentHandoffHandler,
@@ -267,6 +275,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
+	NewMCPOAuthHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	ProvideRedeemCodeRedeemer,
@@ -282,6 +291,7 @@ var ProviderSet = wire.NewSet(
 	ProvideGatewayHandler,
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,
+	NewPasskeyHandler,
 	NewUserAccessTokenHandler,
 	NewBalanceWalletHandler,
 	ProvideSettingHandler,
@@ -289,6 +299,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewModelMarketHandler,
+	NewModelPlazaHandler,
 	ProvideBatchImageHandler,
 	NewAsyncImageHandler,
 	ProvideDesktopPaymentHandoffHandler,
