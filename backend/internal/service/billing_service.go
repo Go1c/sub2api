@@ -624,17 +624,21 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:         2,
 		LongContextOutputMultiplier:        1.5,
 	}
-	// GPT-6.2 has no published rate card yet. Bill Astra at the GPT-6 Astra
-	// card and Sol at the GPT-6.1 Sol card until OpenAI lists 6.2 prices.
+	// GPT-6.2 Astra official Standard rates, checked 2026-11-18.
+	// Per million tokens: input $8, 30-minute cache write $10, cache read $0.40,
+	// output $40. The 12-hour cache write is input × 2.5 ($20) and is filled by
+	// applyModelSpecificPricingPolicyEx. Above 272K input tokens, input and cache
+	// ×2 and output ×1.5 for the whole request. Fast is 2×. Ultrafast is 3×
+	// through 2027-02-28 Pacific and 6× from 2027-03-01.
 	s.fallbackPrices["gpt-6.2-astra"] = &ModelPricing{
-		InputPricePerToken:                 10e-6,
-		InputPricePerTokenPriority:         20e-6,
-		OutputPricePerToken:                50e-6,
-		OutputPricePerTokenPriority:        100e-6,
-		CacheCreationPricePerToken:         12.5e-6,
-		CacheCreationPricePerTokenPriority: 25e-6,
-		CacheReadPricePerToken:             1e-6,
-		CacheReadPricePerTokenPriority:     2e-6,
+		InputPricePerToken:                 8e-6,
+		InputPricePerTokenPriority:         16e-6,
+		OutputPricePerToken:                40e-6,
+		OutputPricePerTokenPriority:        80e-6,
+		CacheCreationPricePerToken:         10e-6,
+		CacheCreationPricePerTokenPriority: 20e-6,
+		CacheReadPricePerToken:             0.4e-6,
+		CacheReadPricePerTokenPriority:     0.8e-6,
 		LongContextInputThreshold:          272_000,
 		LongContextInputMultiplier:         2,
 		LongContextOutputMultiplier:        1.5,
@@ -2172,7 +2176,7 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 		return &cloned
 	}
 	normalized := normalizeKnownOpenAICodexModel(model)
-	usesCacheWritePremium := isOpenAIGPT56Model(normalized) || isOpenAIGPT6AstraModel(normalized) || (openai.IsGPT6SolOrLunaModelSpelling(normalized) || openai.IsGPT61SolModelSpelling(normalized) || openai.IsGPT61TerraModelSpelling(normalized) || normalized == "gpt-6.2-sol")
+	usesCacheWritePremium := isOpenAIGPT56Model(normalized) || isOpenAIGPT6AstraModel(normalized) || isOpenAIGPT62AstraModel(normalized) || (openai.IsGPT6SolOrLunaModelSpelling(normalized) || openai.IsGPT61SolModelSpelling(normalized) || openai.IsGPT61TerraModelSpelling(normalized) || normalized == "gpt-6.2-sol")
 	needsCacheCreationPolicy := usesCacheWritePremium && !pricing.CacheCreationPriceExplicit && (pricing.CacheCreationPricePerToken <= 0 ||
 		(pricing.InputPricePerTokenPriority > 0 && pricing.CacheCreationPricePerTokenPriority <= 0))
 	fastRatio := openAIModelFastPricingRatio(normalized)
@@ -2181,8 +2185,11 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 		return pricing
 	}
 	cloned := *pricing
-	if isOpenAIGPT6AstraModel(normalized) || normalized == "gpt-6.2-astra" || openAIModelSupportsUltrafast(normalized) {
+	if isOpenAIGPT6AstraModel(normalized) || isOpenAIGPT62AstraModel(normalized) || openAIModelSupportsUltrafast(normalized) {
 		cloned.UltrafastMultiplier = 6
+		if isOpenAIGPT62AstraModel(normalized) {
+			cloned.UltrafastMultiplier = openAIGPT62UltrafastMultiplier(pricingAt)
+		}
 	}
 	if needsOpus55FastMultiplier {
 		multiplier := 2.0
@@ -2212,6 +2219,24 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 // openAIModelFastPricingRatio 返回业务口径下 OpenAI GPT 模型 Fast/priority
 // 的标准价倍率：gpt-5.6 / gpt-6-astra / gpt-5.4 为 2x，gpt-5.5 为 2.5x。未定义 Fast
 // 档的模型（如 gpt-5.5-pro、gpt-5.4-mini/nano）返回 0。
+// openAIGPT62UltrafastMultiplier is the official GPT-6.2 Astra Ultrafast ratio:
+// 3× through 2027-02-28 Pacific, 6× from 2027-03-01 00:00 America/Los_Angeles.
+// A zero timestamp uses the current time so GetModelPricing and request billing agree.
+func openAIGPT62UltrafastMultiplier(at time.Time) float64 {
+	if at.IsZero() {
+		at = timezone.Now()
+	}
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		loc = time.FixedZone("PST", -8*60*60)
+	}
+	cutoff := time.Date(2027, 3, 1, 0, 0, 0, 0, loc)
+	if at.Before(cutoff) {
+		return 3
+	}
+	return 6
+}
+
 func openAIModelFastPricingRatio(normalized string) float64 {
 	switch normalized {
 	case "gpt-5.4", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6.2-astra", "gpt-6.2-sol":

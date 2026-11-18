@@ -130,6 +130,10 @@ func TestBuildGrokMediaURLs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, DefaultBaseURL+"/videos/generations", videosURL)
 
+	compatVideosURL, err := BuildVideosURL(DefaultBaseURL)
+	require.NoError(t, err)
+	require.Equal(t, DefaultBaseURL+"/videos", compatVideosURL)
+
 	videoEditsURL, err := BuildVideosEditsURL(DefaultBaseURL)
 	require.NoError(t, err)
 	require.Equal(t, DefaultBaseURL+"/videos/edits", videoEditsURL)

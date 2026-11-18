@@ -50,7 +50,9 @@ metadata:
 
 公开设置若直接读 raw map，用户侧仍可能拿到已写入的值；管理端读回缺口会在下一次整页保存时把空串写回库。
 
-2026-08-16 已补 CCSwitch 五个默认模型的 parse（`ccswitch_default_model_*`）。OpenAI 空值回退 `gpt-5.4`，其余允许空串。新增 fork 设置字段时，defaults / write / parse / 管理员 DTO / 公开 DTO 必须同一条链补齐。
+2026-08-16 已补 CCSwitch 五个默认模型的 parse（`ccswitch_default_model_*`）。OpenAI 空值回退 `gpt-5.4`，其余允许空串。新增 fork 设置字段时，defaults / write / parse / 管理员请求体 / 管理员 GET 与 PUT 响应 / 公开 DTO 必须同一条链补齐。
+
+2026-11-18：合并 upstream 0.2.19（`83d8f7544`）把 `7fec56d3d` 里的 fork 链又丢掉了。CCSwitch 五个默认模型只是其中一段。同一处还丢掉了站点页面、联系渠道、客服聊天、前台语言、用户订阅可见性、订阅通知/多次购买、配额重置时区与小时、Lumio Desktop 配置、邀请注册模式、返利阶梯、注册奖励、余额使用门槛、渠道状态 Banner、站内信，以及支付配置里的 `payment_subscription_balance_enabled`。管理端 GET/PUT 响应不填这些字段时，前端用空串回填，下一次整页保存会把空值写回。公开接口若直接读 raw map，导入仍可能用到库里的旧值。指针字段不在省略键保护里，部分保存必须用上次的 `previousSettings` 合并，否则会写成零值。同一合并还丢掉了设置保存的隐式幂等和 Banner 单字段短路，已按原语义接回。
 
 ## 已决策
 

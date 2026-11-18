@@ -65,3 +65,45 @@ func TestUpdateSettingsSMTPFromAliasIsWritable(t *testing.T) {
 
 	require.Equal(t, "new@example.com", repo.values[service.SettingKeySMTPFrom])
 }
+
+func TestUpdateSettingsCCSwitchDefaultModelsRoundTrip(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyCCSwitchDefaultModelOpenAI: "gpt-5.4",
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{
+		"ccswitch_default_model_anthropic":          "claude-sonnet-4-5",
+		"ccswitch_default_model_openai":             "gpt-5.4-custom",
+		"ccswitch_default_model_gemini":             "gemini-3-pro",
+		"ccswitch_default_model_antigravity":        "claude-opus-4-6",
+		"ccswitch_default_model_antigravity_gemini": "gemini-3-flash",
+	}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.Equal(t, "claude-sonnet-4-5", repo.values[service.SettingKeyCCSwitchDefaultModelAnthropic])
+	require.Equal(t, "gpt-5.4-custom", repo.values[service.SettingKeyCCSwitchDefaultModelOpenAI])
+	require.Equal(t, "gemini-3-pro", repo.values[service.SettingKeyCCSwitchDefaultModelGemini])
+	require.Equal(t, "claude-opus-4-6", repo.values[service.SettingKeyCCSwitchDefaultModelAntigravity])
+	require.Equal(t, "gemini-3-flash", repo.values[service.SettingKeyCCSwitchDefaultModelAntigravityGemini])
+	require.Contains(t, rec.Body.String(), `"ccswitch_default_model_openai":"gpt-5.4-custom"`)
+	require.Contains(t, rec.Body.String(), `"ccswitch_default_model_anthropic":"claude-sonnet-4-5"`)
+}
+
+func TestUpdateSettingsPartialPayloadKeepsCCSwitchDefaultModels(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyCCSwitchDefaultModelAnthropic:         "claude-sonnet-4-5",
+		service.SettingKeyCCSwitchDefaultModelOpenAI:            "gpt-5.4-custom",
+		service.SettingKeyCCSwitchDefaultModelGemini:            "gemini-3-pro",
+		service.SettingKeyCCSwitchDefaultModelAntigravity:       "claude-opus-4-6",
+		service.SettingKeyCCSwitchDefaultModelAntigravityGemini: "gemini-3-flash",
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{"risk_control_enabled": true}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.Equal(t, "claude-sonnet-4-5", repo.values[service.SettingKeyCCSwitchDefaultModelAnthropic])
+	require.Equal(t, "gpt-5.4-custom", repo.values[service.SettingKeyCCSwitchDefaultModelOpenAI])
+	require.Equal(t, "gemini-3-pro", repo.values[service.SettingKeyCCSwitchDefaultModelGemini])
+	require.Equal(t, "claude-opus-4-6", repo.values[service.SettingKeyCCSwitchDefaultModelAntigravity])
+	require.Equal(t, "gemini-3-flash", repo.values[service.SettingKeyCCSwitchDefaultModelAntigravityGemini])
+}

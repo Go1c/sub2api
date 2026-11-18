@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -2169,8 +2170,8 @@ func TestNewModelPricingCatalogFallbackAndContext(t *testing.T) {
 			input, output, write, read float64
 		}{
 			{"gpt-6.1-sol", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
-			{"gpt-6.2-astra", 10e-6, 50e-6, 12.5e-6, 1e-6},
-			{"openai/gpt-6.2-astra-max", 10e-6, 50e-6, 12.5e-6, 1e-6},
+			{"gpt-6.2-astra", 8e-6, 40e-6, 10e-6, 0.4e-6},
+			{"openai/gpt-6.2-astra-max", 8e-6, 40e-6, 10e-6, 0.4e-6},
 			{"gpt-6.2-sol", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
 			{"gpt-6.2-sol-high", 2e-6, 10e-6, 2.5e-6, 0.1e-6},
 			{"gpt-6.1-terra", 1e-6, 5e-6, 1.25e-6, 0.05e-6},
@@ -2318,7 +2319,7 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 	catalog.pricingData, err = catalog.parsePricingData(data)
 	require.NoError(t, err)
 	for _, svc := range []*BillingService{newTestBillingService(), NewBillingService(&config.Config{}, &PricingService{}), NewBillingService(&config.Config{}, catalog)} {
-		for _, model := range []string{"gpt-6-astra", "gpt-6", "openai/gpt-6-astra", "gpt-6.2-astra", "openai/gpt-6.2-astra-high"} {
+		for _, model := range []string{"gpt-6-astra", "gpt-6", "openai/gpt-6-astra"} {
 			for _, n := range []int{271999, 272000, 272001} {
 				tokens := UsageTokens{InputTokens: n - 3000, CacheReadTokens: 2000, CacheCreationTokens: 1000, OutputTokens: 500}
 				cost, err := svc.CalculateCostWithServiceTier(model, tokens, 1, "ultrafast")
@@ -2331,6 +2332,22 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 				require.InDelta(t, 2000*6e-6*im, cost.CacheReadCost, 1e-10)
 				require.InDelta(t, 1000*75e-6*im, cost.CacheCreationCost, 1e-10)
 				require.InDelta(t, 500*300e-6*om, cost.OutputCost, 1e-10)
+			}
+		}
+		// GPT-6.2 Astra Ultrafast is 3× the official card until 2027-03-01 Pacific.
+		for _, model := range []string{"gpt-6.2-astra", "openai/gpt-6.2-astra-high"} {
+			for _, n := range []int{271999, 272000, 272001} {
+				tokens := UsageTokens{InputTokens: n - 3000, CacheReadTokens: 2000, CacheCreationTokens: 1000, OutputTokens: 500}
+				cost, err := svc.CalculateCostWithServiceTier(model, tokens, 1, "ultrafast")
+				require.NoError(t, err)
+				im, om := 1.0, 1.0
+				if n > 272000 {
+					im, om = 2, 1.5
+				}
+				require.InDelta(t, float64(n-3000)*24e-6*im, cost.InputCost, 1e-10)
+				require.InDelta(t, 2000*1.2e-6*im, cost.CacheReadCost, 1e-10)
+				require.InDelta(t, 1000*30e-6*im, cost.CacheCreationCost, 1e-10)
+				require.InDelta(t, 500*120e-6*om, cost.OutputCost, 1e-10)
 			}
 		}
 	}
@@ -2347,6 +2364,21 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 	p, err := svc.GetModelPricing("gpt-6-sol")
 	require.NoError(t, err)
 	require.Equal(t, 2.0, configuredServiceTierMultiplier("ultrafast", p))
+}
+
+func TestGPT62AstraUltrafastSwitchesToSixTimesOn2027March1Pacific(t *testing.T) {
+	svc := newTestBillingService()
+	base, err := svc.GetModelPricing("gpt-6.2-astra")
+	require.NoError(t, err)
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	require.NoError(t, err)
+	before := svc.applyModelSpecificPricingPolicyEx("gpt-6.2-astra", base, true, time.Date(2027, 2, 28, 23, 0, 0, 0, loc))
+	after := svc.applyModelSpecificPricingPolicyEx("gpt-6.2-astra", base, true, time.Date(2027, 3, 1, 0, 0, 0, 0, loc))
+	require.Equal(t, 3.0, before.UltrafastMultiplier)
+	require.Equal(t, 6.0, after.UltrafastMultiplier)
+	legacy, err := svc.GetModelPricing("gpt-6-astra")
+	require.NoError(t, err)
+	require.Equal(t, 6.0, legacy.UltrafastMultiplier)
 }
 
 // 门控与计费共用同一判定：凡是分组会强制写入 ultrafast 的模型，都必须按 6x 计费。
