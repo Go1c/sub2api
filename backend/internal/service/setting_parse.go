@@ -52,6 +52,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("marshal default forwarded client IP headers: %w", err)
 	}
+	lumioDesktopConfigJSON, err := json.Marshal(DefaultLumioDesktopConfig())
+	if err != nil {
+		return fmt.Errorf("marshal default lumio desktop config: %w", err)
+	}
 
 	// 初始化默认设置
 	defaults := map[string]string{
@@ -69,6 +73,27 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		settingKeyForwardedClientIPModeV2:                   "true",
 		SettingKeySiteName:                                  "Sub2API",
 		SettingKeySiteLogo:                                  "",
+		SettingKeyCCSwitchDefaultModelAnthropic:             "",
+		SettingKeyCCSwitchDefaultModelOpenAI:                "gpt-5.4",
+		SettingKeyCCSwitchDefaultModelGemini:                "",
+		SettingKeyCCSwitchDefaultModelAntigravity:           "",
+		SettingKeyCCSwitchDefaultModelAntigravityGemini:     "",
+		SettingKeyContactChannels:                           "[]",
+		SettingKeySupportChatEnabled:                        "false",
+		SettingKeySupportChatGatewayURL:                     "",
+		SettingKeySupportChatTitle:                          "",
+		SettingKeySupportChatWelcomeMessage:                 "",
+		SettingKeySupportChatOfficialContactText:            "",
+		SettingKeySupportChatOfficialContactURL:             "",
+		SettingKeySitePages:                                 "[]",
+		SettingKeyFrontendLocales:                           `["en","zh","zh-Hant"]`,
+		SettingKeyUserSubscriptionsVisible:                  "true",
+		SettingKeySubscriptionMultiplePurchasesEnabled:      "false",
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes:    "0",
+		SettingKeySubscriptionQuotaResetHour:                "0",
+		SettingKeySubscriptionNotifyEmailEnabled:            "false",
+		SettingKeyLumioDesktopConfig:                        string(lumioDesktopConfigJSON),
+		SettingKeyInvitationRegistrationMode:                InvitationRegistrationModeDefault,
 		SettingKeyPurchaseSubscriptionEnabled:               "false",
 		SettingKeyPurchaseSubscriptionURL:                   "",
 		SettingKeyTableDefaultPageSize:                      "20",
@@ -192,6 +217,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorHideThroughput:         "true",
 		SettingKeyChannelMonitorShowQuota:              "false",
 		SettingKeyChannelMonitorHideUserRanking:        "false",
+		SettingKeyChannelMonitorStatusBanner:           "",
 
 		// Grok compatibility defaults: cross-client mapping stays enabled unless
 		// operators explicitly disable it.
@@ -212,11 +238,23 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPluginManagementEnabled: "false",
 
 		// Affiliate (邀请返利) feature (default disabled; opt-in)
-		SettingKeyAffiliateEnabled:              "false",
-		SettingKeyAffiliateAdminRechargeEnabled: strconv.FormatBool(AdminRechargeRebateEnabledDefault),
+		SettingKeyAffiliateEnabled:               "false",
+		SettingKeyAffiliateAdminRechargeEnabled:  strconv.FormatBool(AdminRechargeRebateEnabledDefault),
+		SettingKeyAffiliateRebateTiers:           "[]",
+		SettingKeyAffiliateSignupBonusEnabled:   strconv.FormatBool(AffiliateSignupBonusEnabledDefault),
+		SettingKeyAffiliateSignupBonusAmount:    strconv.FormatFloat(AffiliateSignupBonusAmountDefault, 'f', 2, 64),
+		SettingKeyAffiliateSignupBonusTotalCap:  strconv.FormatFloat(AffiliateSignupBonusTotalCapDefault, 'f', 2, 64),
+		SettingKeyAffiliateSignupBonusDailyCap:  strconv.FormatFloat(AffiliateSignupBonusDailyCapDefault, 'f', 2, 64),
+		SettingKeyBalanceUsageGateEnabled:       strconv.FormatBool(BalanceUsageGateEnabledDefault),
+		SettingKeyBalanceUsageGateMinBalance:    strconv.FormatFloat(BalanceUsageGateMinBalanceDefault, 'f', 2, 64),
+		SettingKeyBalanceUsageGateMinRecharge:   strconv.FormatFloat(BalanceUsageGateMinRechargeDefault, 'f', 2, 64),
 
 		// 风控中心功能（默认关闭，显式启用）
-		SettingKeyRiskControlEnabled: "false",
+		SettingKeyRiskControlEnabled:                "false",
+		SettingKeySiteMessagesEnabled:               strconv.FormatBool(SiteMessagesEnabledDefault),
+		SettingKeySiteMessagesDailySendLimit:        strconv.Itoa(SiteMessagesDailySendLimitDefault),
+		SettingKeySiteMessagesRetentionDays:         strconv.Itoa(SiteMessagesRetentionDaysDefault),
+		SettingKeySiteMessagesDefaultRecipientEmail: "",
 
 		// cyber 会话屏蔽（默认关闭，TTL 默认 3600s）
 		SettingKeyCyberSessionBlockEnabled:    "false",
@@ -327,6 +365,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PasswordResetEnabled:                   emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                            settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:                  settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:             normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                            settings[SettingKeyTotpEnabled] == "true",
 		PasskeyEnabled:                         s.passkeySettingEnabled(settings),
 		SessionBindingEnabled:                  settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
@@ -813,6 +852,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// （与 setting_public.go 公开读取路径保持一致）。
 	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
 	result.ChannelMonitorHideUserRanking = isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking])
+	result.ChannelMonitorStatusBanner = normalizeChannelMonitorStatusBanner(settings[SettingKeyChannelMonitorStatusBanner])
 
 	// Grok default mapping policy
 	result.GrokDefaultTextModel = strings.TrimSpace(settings[SettingKeyGrokDefaultTextModel])
@@ -992,6 +1032,50 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	result.AllowUserViewErrorRequests = settings[SettingKeyAllowUserViewErrorRequests] == "true" // default false
+
+	// CCSwitch 导入默认模型。只写 key、不在这里读回时，管理端保存响应用空串盖掉刚填的值。
+	result.CCSwitchDefaultModelAnthropic = strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic])
+	result.CCSwitchDefaultModelOpenAI = firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4")
+	result.CCSwitchDefaultModelGemini = strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini])
+	result.CCSwitchDefaultModelAntigravity = strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravity])
+	result.CCSwitchDefaultModelAntigravityGemini = strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravityGemini])
+	result.ContactChannels = settings[SettingKeyContactChannels]
+	result.SupportChatEnabled = settings[SettingKeySupportChatEnabled] == "true"
+	result.SupportChatGatewayURL = strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/")
+	result.SupportChatTitle = strings.TrimSpace(settings[SettingKeySupportChatTitle])
+	result.SupportChatWelcomeMessage = strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage])
+	result.SupportChatOfficialContactText = strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText])
+	result.SupportChatOfficialContactURL = strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatOfficialContactURL]), "/")
+	result.SitePages = settings[SettingKeySitePages]
+	result.FrontendLocales = parseFrontendLocales(settings[SettingKeyFrontendLocales])
+	result.UserSubscriptionsVisible = !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible])
+	result.SubscriptionNotifyEmailEnabled = settings[SettingKeySubscriptionNotifyEmailEnabled] == "true"
+	result.SubscriptionMultiplePurchasesEnabled = settings[SettingKeySubscriptionMultiplePurchasesEnabled] == "true"
+	quotaReset := parseSubscriptionQuotaResetConfig(settings)
+	result.SubscriptionQuotaResetUTCOffsetMinutes = quotaReset.UTCOffsetMinutes
+	result.SubscriptionQuotaResetHour = quotaReset.ResetHour
+	result.LumioDesktopConfig = normalizeLumioDesktopConfig(
+		settings[SettingKeyLumioDesktopConfig],
+		result.CCSwitchDefaultModelOpenAI,
+	)
+	result.AffiliateRebateTiers = parseAffiliateRebateTiers(settings[SettingKeyAffiliateRebateTiers])
+	result.AffiliateSignupBonusEnabled = settings[SettingKeyAffiliateSignupBonusEnabled] == "true"
+	result.AffiliateSignupBonusAmount = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusAmount], AffiliateSignupBonusAmountDefault)
+	result.AffiliateSignupBonusTotalCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusTotalCap], AffiliateSignupBonusTotalCapDefault)
+	result.AffiliateSignupBonusDailyCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusDailyCap], AffiliateSignupBonusDailyCapDefault)
+	result.BalanceUsageGateEnabled = settings[SettingKeyBalanceUsageGateEnabled] == "true"
+	result.BalanceUsageGateMinBalance = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault)
+	result.BalanceUsageGateMinRecharge = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault)
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:               settings[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
+		RetentionDays:         parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
+		DefaultRecipientEmail: settings[SettingKeySiteMessagesDefaultRecipientEmail],
+	})
+	result.SiteMessagesEnabled = siteMessageSettings.Enabled
+	result.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	result.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	result.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
 
 	// Publish Grok default model_mapping options for accounts with empty mapping.
 	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{

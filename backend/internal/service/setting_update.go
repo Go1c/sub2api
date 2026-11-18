@@ -51,6 +51,21 @@ func (s *SettingService) UpdateSettingsOmitting(ctx context.Context, settings *S
 	return nil
 }
 
+// UpdateChannelMonitorStatusBanner updates the standalone banner setting without
+// rewriting unrelated system settings from an intentionally partial admin request.
+func (s *SettingService) UpdateChannelMonitorStatusBanner(ctx context.Context, raw string) (string, error) {
+	banner := normalizeChannelMonitorStatusBanner(raw)
+	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
+		SettingKeyChannelMonitorStatusBanner: banner,
+	}); err != nil {
+		return "", err
+	}
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
+	return banner, nil
+}
+
 // UpdateSettingsWithAuthSourceDefaults persists system settings and auth-source defaults in a single write.
 func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Context, settings *SystemSettings, authDefaults *AuthSourceDefaultSettings) error {
 	return s.UpdateSettingsWithAuthSourceDefaultsOmitting(ctx, settings, authDefaults, nil)
@@ -158,6 +173,38 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.GoogleOAuthFrontendRedirectURL == "" {
 		settings.GoogleOAuthFrontendRedirectURL = defaultGoogleOAuthFrontend
 	}
+	settings.SupportChatGatewayURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatGatewayURL), "/")
+	settings.SupportChatTitle = strings.TrimSpace(settings.SupportChatTitle)
+	settings.SupportChatWelcomeMessage = strings.TrimSpace(settings.SupportChatWelcomeMessage)
+	settings.SupportChatOfficialContactText = strings.TrimSpace(settings.SupportChatOfficialContactText)
+	settings.SupportChatOfficialContactURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatOfficialContactURL), "/")
+	if settings.SupportChatEnabled || settings.SupportChatGatewayURL != "" {
+		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatGatewayURL); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_GATEWAY_URL", "support chat gateway URL must be an absolute HTTP(S) URL")
+		}
+	}
+	if settings.SupportChatOfficialContactURL != "" {
+		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatOfficialContactURL); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_OFFICIAL_CONTACT_URL", "support chat official contact URL must be an absolute HTTP(S) URL")
+		}
+	}
+	if settings.SubscriptionQuotaResetUTCOffsetMinutes < SubscriptionQuotaResetMinOffsetMinutes ||
+		settings.SubscriptionQuotaResetUTCOffsetMinutes > SubscriptionQuotaResetMaxOffsetMinutes ||
+		settings.SubscriptionQuotaResetUTCOffsetMinutes%15 != 0 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_UTC_OFFSET", "subscription quota reset UTC offset must be between UTC-12:00 and UTC+14:00 in 15-minute increments")
+	}
+	if settings.SubscriptionQuotaResetHour < 0 || settings.SubscriptionQuotaResetHour > 23 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_HOUR", "subscription quota reset hour must be between 0 and 23")
+	}
+	lumioDesktopConfig, err := normalizeLumioDesktopConfigForWrite(settings.LumioDesktopConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.LumioDesktopConfig = lumioDesktopConfig
+	lumioDesktopConfigJSON, err := json.Marshal(lumioDesktopConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshal lumio desktop config: %w", err)
+	}
 
 	updates := make(map[string]string)
 
@@ -174,6 +221,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
+	updates[SettingKeyInvitationRegistrationMode] = normalizeInvitationRegistrationMode(settings.InvitationRegistrationMode)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 	updates[SettingKeyPasskeyEnabled] = strconv.FormatBool(settings.PasskeyEnabled)
 	updates[SettingKeySessionBindingEnabled] = strconv.FormatBool(settings.SessionBindingEnabled)
@@ -341,11 +389,34 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
+	updates[SettingKeyContactChannels] = settings.ContactChannels
+	updates[SettingKeySupportChatEnabled] = strconv.FormatBool(settings.SupportChatEnabled)
+	updates[SettingKeySupportChatGatewayURL] = settings.SupportChatGatewayURL
+	updates[SettingKeySupportChatTitle] = settings.SupportChatTitle
+	updates[SettingKeySupportChatWelcomeMessage] = settings.SupportChatWelcomeMessage
+	updates[SettingKeySupportChatOfficialContactText] = settings.SupportChatOfficialContactText
+	updates[SettingKeySupportChatOfficialContactURL] = settings.SupportChatOfficialContactURL
 	updates[SettingKeyDocURL] = settings.DocURL
+	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyCompactHomeEnabled] = strconv.FormatBool(settings.CompactHomeEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
+	frontendLocales, err := normalizeFrontendLocales(settings.FrontendLocales)
+	if err != nil {
+		return nil, err
+	}
+	settings.FrontendLocales = frontendLocales
+	frontendLocalesJSON, err := json.Marshal(frontendLocales)
+	if err != nil {
+		return nil, fmt.Errorf("marshal frontend locales: %w", err)
+	}
+	updates[SettingKeyFrontendLocales] = string(frontendLocalesJSON)
+	updates[SettingKeyUserSubscriptionsVisible] = strconv.FormatBool(settings.UserSubscriptionsVisible)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
+	updates[SettingKeySubscriptionNotifyEmailEnabled] = strconv.FormatBool(settings.SubscriptionNotifyEmailEnabled)
+	updates[SettingKeySubscriptionMultiplePurchasesEnabled] = strconv.FormatBool(settings.SubscriptionMultiplePurchasesEnabled)
+	updates[SettingKeySubscriptionQuotaResetUTCOffsetMinutes] = strconv.Itoa(settings.SubscriptionQuotaResetUTCOffsetMinutes)
+	updates[SettingKeySubscriptionQuotaResetHour] = strconv.Itoa(settings.SubscriptionQuotaResetHour)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
 		settings.TableDefaultPageSize,
@@ -359,6 +430,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyTablePageSizeOptions] = string(tablePageSizeOptionsJSON)
 	updates[SettingKeyCustomMenuItems] = settings.CustomMenuItems
 	updates[SettingKeyCustomEndpoints] = settings.CustomEndpoints
+	updates[SettingKeyLumioDesktopConfig] = string(lumioDesktopConfigJSON)
 
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
@@ -383,7 +455,34 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
 	}
 	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
+	affiliateRebateTiersJSON, err := marshalAffiliateRebateTiers(settings.AffiliateRebateTiers)
+	if err != nil {
+		return nil, fmt.Errorf("marshal affiliate rebate tiers: %w", err)
+	}
+	updates[SettingKeyAffiliateRebateTiers] = affiliateRebateTiersJSON
 	updates[SettingKeyAffiliateAdminRechargeEnabled] = strconv.FormatBool(settings.AdminRechargeRebateEnabled)
+	updates[SettingKeyAffiliateSignupBonusEnabled] = strconv.FormatBool(settings.AffiliateSignupBonusEnabled)
+	if settings.AffiliateSignupBonusAmount < 0 {
+		settings.AffiliateSignupBonusAmount = AffiliateSignupBonusAmountDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusAmount] = strconv.FormatFloat(settings.AffiliateSignupBonusAmount, 'f', 8, 64)
+	if settings.AffiliateSignupBonusTotalCap < 0 {
+		settings.AffiliateSignupBonusTotalCap = AffiliateSignupBonusTotalCapDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusTotalCap] = strconv.FormatFloat(settings.AffiliateSignupBonusTotalCap, 'f', 8, 64)
+	if settings.AffiliateSignupBonusDailyCap < 0 {
+		settings.AffiliateSignupBonusDailyCap = AffiliateSignupBonusDailyCapDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusDailyCap] = strconv.FormatFloat(settings.AffiliateSignupBonusDailyCap, 'f', 8, 64)
+	updates[SettingKeyBalanceUsageGateEnabled] = strconv.FormatBool(settings.BalanceUsageGateEnabled)
+	if settings.BalanceUsageGateMinBalance < 0 {
+		settings.BalanceUsageGateMinBalance = BalanceUsageGateMinBalanceDefault
+	}
+	updates[SettingKeyBalanceUsageGateMinBalance] = strconv.FormatFloat(settings.BalanceUsageGateMinBalance, 'f', 8, 64)
+	if settings.BalanceUsageGateMinRecharge < 0 {
+		settings.BalanceUsageGateMinRecharge = BalanceUsageGateMinRechargeDefault
+	}
+	updates[SettingKeyBalanceUsageGateMinRecharge] = strconv.FormatFloat(settings.BalanceUsageGateMinRecharge, 'f', 8, 64)
 	updates[SettingKeyDefaultUserRPMLimit] = strconv.Itoa(settings.DefaultUserRPMLimit)
 	defaultSubsJSON, err := json.Marshal(settings.DefaultSubscriptions)
 	if err != nil {
@@ -419,6 +518,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyChannelMonitorHideThroughput] = strconv.FormatBool(settings.ChannelMonitorHideThroughput)
 	updates[SettingKeyChannelMonitorShowQuota] = strconv.FormatBool(settings.ChannelMonitorShowQuota)
 	updates[SettingKeyChannelMonitorHideUserRanking] = strconv.FormatBool(settings.ChannelMonitorHideUserRanking)
+	updates[SettingKeyChannelMonitorStatusBanner] = normalizeChannelMonitorStatusBanner(settings.ChannelMonitorStatusBanner)
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {
@@ -446,6 +546,19 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// 风控中心功能开关
 	updates[SettingKeyRiskControlEnabled] = strconv.FormatBool(settings.RiskControlEnabled)
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:               settings.SiteMessagesEnabled,
+		DailySendLimit:        settings.SiteMessagesDailySendLimit,
+		RetentionDays:         settings.SiteMessagesRetentionDays,
+		DefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
+	})
+	settings.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	settings.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	settings.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
+	updates[SettingKeySiteMessagesEnabled] = strconv.FormatBool(settings.SiteMessagesEnabled)
+	updates[SettingKeySiteMessagesDailySendLimit] = strconv.Itoa(settings.SiteMessagesDailySendLimit)
+	updates[SettingKeySiteMessagesRetentionDays] = strconv.Itoa(settings.SiteMessagesRetentionDays)
+	updates[SettingKeySiteMessagesDefaultRecipientEmail] = settings.SiteMessagesDefaultRecipientEmail
 
 	// cyber 会话屏蔽开关 + TTL
 	updates[SettingKeyCyberSessionBlockEnabled] = strconv.FormatBool(settings.CyberSessionBlockEnabled)
@@ -558,6 +671,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	}
 
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
+
+	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
+	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
+	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
+	updates[SettingKeyCCSwitchDefaultModelAntigravity] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravity)
+	updates[SettingKeyCCSwitchDefaultModelAntigravityGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravityGemini)
 
 	return updates, nil
 }
