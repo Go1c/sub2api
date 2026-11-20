@@ -1742,6 +1742,15 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		}
 		return openAIGPT61TerraFallbackPricing
 	}
+	if base := openai.GPT62ModelID(model); base != "" {
+		if pricing, ok := s.pricingData[base]; ok {
+			return pricing
+		}
+		if base == "gpt-6.2-sol" {
+			return openAIGPT61SolFallbackPricing // Same published token rates.
+		}
+		return openAIGPT62AstraFallbackPricing
+	}
 	if openai.IsGPT61SolModelSpelling(model) {
 		if pricing, ok := s.pricingData["gpt-6.1-sol"]; ok {
 			return pricing

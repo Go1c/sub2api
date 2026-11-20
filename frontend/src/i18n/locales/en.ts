@@ -2774,6 +2774,7 @@ export default {
         pricePlaceholder: 'Default',
         fastMultiplier: 'Fast Multiplier',
         flexMultiplier: 'Flex Multiplier',
+        ultrafastMultiplier: 'Ultrafast Multiplier',
         multiplierPlaceholder: 'Not set',
         multiplierPositive: 'Fast/Flex multipliers must be greater than 0',
         inputMultiplier: 'Input Mult.',
