@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
@@ -1338,6 +1339,95 @@ func TestOpenAIGatewayServiceForwardImages_APIKeyGenerationUsesConfiguredV1BaseU
 	require.Equal(t, "aGVsbG8=", gjson.Get(rec.Body.String(), "data.0.b64_json").String())
 }
 
+func TestOpenAIGatewayServiceForwardImages_APIKeyAccessStateUsesTypedFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"gpt-image-1","prompt":"draw a cat"}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstreamBody := []byte(`{"error":{"code":"organization_suspended","message":"Organization has been suspended"}}`)
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusForbidden,
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+			"X-Request-Id": []string{"req_images_access_state"},
+		},
+		Body: io.NopCloser(bytes.NewReader(upstreamBody)),
+	}}
+	svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+	account := &Account{
+		ID:       51,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "sk-test",
+		},
+	}
+
+	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusForbidden, failoverErr.StatusCode)
+	require.Equal(t, GatewayFailureStageAccountAuth, failoverErr.Stage)
+	require.Equal(t, GatewayFailureScopeAccount, failoverErr.Scope)
+	require.Equal(t, OpenAIUpstreamAccessStateReason, failoverErr.Reason)
+	require.Equal(t, NextAccountRetry, failoverErr.NextAccountAction)
+	require.Equal(t, http.StatusBadGateway, failoverErr.ClientStatusCode)
+	require.Equal(t, openAIUpstreamAccessUnavailableClientMessage, failoverErr.ClientMessage)
+	require.False(t, failoverErr.RetryableOnSameAccount)
+	require.Equal(t, "req_images_access_state", failoverErr.ResponseHeaders.Get("x-request-id"))
+	require.False(t, c.Writer.Written())
+}
+
+func TestOpenAIGatewayServiceForwardImages_APIKeyRequestTimeoutReturnsFailoverBeforeWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, upstreamBody := range []string{
+		`{"error":{"code":"upstream_unavailable","message":"Upstream request failed","type":"adobe_upstream"}}`,
+		`{"error":{"message":"Model is overloaded, please retry later","type":"rate_limit_error"}}`,
+		`{"error":{"message":"adobe throttled: status 429 retry-after=21.48s envoy=false {\"error_code\":\"rate_limited\",\"message\":\"Too many requests. Please try again later.\"}","type":"rate_limit_error"}}`,
+	} {
+		t.Run(extractUpstreamErrorMessage([]byte(upstreamBody)), func(t *testing.T) {
+			body := []byte(`{"model":"gpt-image-1","prompt":"draw a cat"}`)
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusRequestTimeout,
+				Header: http.Header{
+					"Content-Type": {"application/json"},
+				},
+				Body: io.NopCloser(strings.NewReader(upstreamBody)),
+			}}
+			svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
+			parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+			require.NoError(t, err)
+			account := &Account{
+				ID: 51, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+				Credentials: map[string]any{"api_key": "sk-test"},
+			}
+
+			result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+
+			require.Nil(t, result)
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, http.StatusRequestTimeout, failoverErr.StatusCode)
+			require.Equal(t, upstreamBody, string(failoverErr.ResponseBody))
+			require.False(t, failoverErr.RetryableOnSameAccount)
+			require.False(t, IsResponseCommitted(c))
+			require.False(t, c.Writer.Written())
+			require.Empty(t, rec.Body.String())
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceForwardImages_APIKeyStreamJSONResponseBillsImage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","stream":true,"response_format":"b64_json"}`)
@@ -2115,4 +2205,58 @@ func TestOpenAIGatewayServiceForwardImages_OAuthStreamingDrainsAfterClientDiscon
 	require.Equal(t, 5, result.Usage.InputTokens)
 	require.Equal(t, 9, result.Usage.OutputTokens)
 	require.Equal(t, 4, result.Usage.ImageOutputTokens)
+}
+
+func TestAccountSupportsOpenAIImageCapability_SetupTokenSupportsNative(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeSetupToken,
+	}
+
+	require.True(t, account.SupportsOpenAIImageCapability(OpenAIImagesCapabilityBasic))
+	require.True(t, account.SupportsOpenAIImageCapability(OpenAIImagesCapabilityNative))
+	require.False(t, account.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityEmbeddings))
+}
+
+func TestOpenAIGatewayServiceForwardImages_OAuth429CarriesSameAccountRetryWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"gpt-image-1","prompt":"draw a cat","response_format":"b64_json"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+	svc := &OpenAIGatewayService{httpUpstream: &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Retry-After": []string{"1"}, "X-Request-Id": []string{"req_img_oauth_429"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"type":"rate_limit_error","code":"rate_limit_exceeded","message":"rate limited"}}`)),
+	}}}
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+	account := &Account{ID: 22, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "token-123"}}
+	startedAt := time.Now()
+
+	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.True(t, failoverErr.RetryableOnSameAccount)
+	require.Equal(t, time.Second, failoverErr.SameAccountRetryDelay)
+	require.WithinDuration(t, startedAt.Add(openAIOAuth429RetryWindow), failoverErr.SameAccountRetryDeadline, time.Second)
+}
+
+func TestBuildOpenAIImagesResponsesRequest_ForcesImageToolChoice(t *testing.T) {
+	parsed := &OpenAIImagesRequest{
+		Endpoint: openAIImagesGenerationsEndpoint,
+		Model:    "gpt-image-2",
+		Prompt:   "draw a cat",
+	}
+
+	body, err := buildOpenAIImagesResponsesRequest(parsed, "gpt-image-2")
+	require.NoError(t, err)
+	require.NotNil(t, body)
+	require.Equal(t, "image_generation", gjson.GetBytes(body, "tool_choice.type").String())
+	require.Equal(t, "image_generation", gjson.GetBytes(body, "tools.0.type").String())
+	require.Equal(t, "gpt-image-2", gjson.GetBytes(body, "tools.0.model").String())
 }

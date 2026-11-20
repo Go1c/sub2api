@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -191,7 +192,7 @@ func TestCompositeRequestModelFromMultipartLiveSession(t *testing.T) {
 	require.NoError(t, writer.WriteField("session", `{"model":"live-alias"}`))
 	require.NoError(t, writer.Close())
 
-	require.Equal(t, "live-alias", compositeRequestModelFromBody(writer.FormDataContentType(), body.Bytes()))
+	require.Equal(t, "live-alias", requestmodel.FromBody(writer.FormDataContentType(), body.Bytes()))
 }
 
 func TestCompositeCodexControlPathsUseResponsesRoutes(t *testing.T) {
@@ -311,4 +312,183 @@ func TestCompositeGeminiTargetPlatformMiddlewareUsesPathRoute(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// Live 入口顶层 model 与 session.model 不一致时，合成路由必须按 session.model
+// 分发与改写（与白名单准入、Live handler 一致），不得命中顶层别名的映射并把
+// session 模型覆盖为别名上游。
+func TestCompositeLiveRouteDispatchesBySessionModelNotTopLevelAlias(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	resolver := service.NewCompositeRouteResolver(compositeRouteRepoStub{
+		routes: []service.CompositeModelRoute{
+			{
+				ID:             1,
+				GroupID:        1,
+				PublicModel:    "live-alias",
+				MatchType:      service.CompositeRouteMatchExact,
+				TargetPlatform: service.PlatformOpenAI,
+				UpstreamModel:  "gpt-alias-upstream",
+				Endpoint:       service.CompositeRouteEndpointAny,
+				Priority:       100,
+				Enabled:        true,
+			},
+		},
+	})
+	router.Use(gin.HandlerFunc(servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
+		groupID := int64(1)
+		c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+			GroupID: &groupID,
+			Group:   &service.Group{ID: groupID, Platform: service.PlatformComposite},
+		})
+		c.Next()
+	})))
+	router.Use(compositeTargetPlatformMiddleware(resolver))
+	router.POST("/backend-api/codex/realtime/calls", func(c *gin.Context) {
+		upstream, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context())
+		require.True(t, ok)
+		require.Equal(t, "gpt-realtime-1", upstream,
+			"Live dispatch must resolve the session model, never the top-level alias upstream")
+		body, err := io.ReadAll(c.Request.Body)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"model":"live-alias","session":{"model":"gpt-realtime-1"},"sdp":"v=0"}`, string(body),
+			"session.model must stay untouched when dispatch resolves by session model")
+		c.Status(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/backend-api/codex/realtime/calls",
+		strings.NewReader(`{"model":"live-alias","session":{"model":"gpt-realtime-1"},"sdp":"v=0"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// A route that rewrites the model to a Claude 5.5 model also rewrites a
+// thinking mode that model rejects into the nearest one it accepts; a route
+// that keeps the client's model leaves thinking as the client sent it.
+func TestCompositeTargetPlatformMiddlewareAdaptsThinkingToRewrittenModel(t *testing.T) {
+	cases := []struct {
+		name          string
+		publicModel   string
+		upstreamModel string
+		thinking      string
+		wantThinking  string
+	}{
+		{
+			name:          "enabled becomes adaptive on opus 5.5",
+			publicModel:   "claude-sonnet-5",
+			upstreamModel: "claude-opus-5-5",
+			thinking:      `{"type":"enabled","budget_tokens":4096}`,
+			wantThinking:  `{"type":"adaptive"}`,
+		},
+		{
+			name:          "disabled becomes between_tools on sonnet 5.5",
+			publicModel:   "claude-sonnet-5",
+			upstreamModel: "claude-sonnet-5-5",
+			thinking:      `{"type":"disabled"}`,
+			wantThinking:  `{"type":"between_tools"}`,
+		},
+		{
+			name:          "model not rewritten keeps enabled",
+			publicModel:   "claude-opus-5-5",
+			upstreamModel: "claude-opus-5-5",
+			thinking:      `{"type":"enabled","budget_tokens":4096}`,
+			wantThinking:  `{"type":"enabled","budget_tokens":4096}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			router := gin.New()
+			resolver := service.NewCompositeRouteResolver(compositeRouteRepoStub{
+				routes: []service.CompositeModelRoute{{
+					ID:             1,
+					GroupID:        1,
+					PublicModel:    tc.publicModel,
+					MatchType:      service.CompositeRouteMatchExact,
+					TargetPlatform: service.PlatformAnthropic,
+					UpstreamModel:  tc.upstreamModel,
+					Endpoint:       service.CompositeRouteEndpointAny,
+					Priority:       100,
+					Enabled:        true,
+				}},
+			})
+			router.Use(gin.HandlerFunc(servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
+				groupID := int64(1)
+				c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+					GroupID: &groupID,
+					Group:   &service.Group{ID: groupID, Platform: service.PlatformComposite},
+				})
+				c.Next()
+			})))
+			router.Use(compositeTargetPlatformMiddleware(resolver))
+			router.POST("/v1/messages", func(c *gin.Context) {
+				body, err := io.ReadAll(c.Request.Body)
+				require.NoError(t, err)
+				require.JSONEq(t,
+					`{"model":"`+tc.upstreamModel+`","max_tokens":64,"thinking":`+tc.wantThinking+`,"messages":[]}`,
+					string(body))
+				c.Status(http.StatusNoContent)
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(
+				`{"model":"`+tc.publicModel+`","max_tokens":64,"thinking":`+tc.thinking+`,"messages":[]}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusNoContent, w.Code)
+		})
+	}
+}
+
+func TestCompositeTargetPlatformMiddlewareRejectsOnlyOAuthAmbiguousOwnership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name         string
+		oauthClaimed bool
+		wantStatus   int
+	}{
+		{name: "oauth claimant", oauthClaimed: true, wantStatus: http.StatusBadRequest},
+		{name: "apikey only", oauthClaimed: false, wantStatus: http.StatusNoContent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver := service.NewCompositeRouteResolver(nil)
+			resolver.SetModelOwnershipResolver(func(context.Context, int64, string) (service.CompositeModelOwnership, error) {
+				return service.CompositeModelOwnership{Ambiguous: true, OpenAIGatewayOAuthClaimed: tc.oauthClaimed}, nil
+			})
+			router := gin.New()
+			router.Use(gin.HandlerFunc(servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
+				groupID := int64(8)
+				c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+					GroupID: &groupID,
+					Group:   &service.Group{ID: groupID, Platform: service.PlatformComposite},
+				})
+				c.Next()
+			})))
+			router.Use(compositeTargetPlatformMiddleware(resolver))
+			router.POST("/v1/responses", func(c *gin.Context) {
+				_, resolved := service.ResolvedTargetPlatformFromContext(c.Request.Context())
+				require.False(t, resolved)
+				c.Status(http.StatusNoContent)
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-6-astra"}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, tc.wantStatus, w.Code)
+			if tc.oauthClaimed {
+				require.Contains(t, w.Body.String(), "explicit composite route")
+			}
+		})
+	}
 }

@@ -2846,6 +2846,7 @@ export default {
         pricePlaceholder: '默认',
         fastMultiplier: 'Fast 倍率',
         flexMultiplier: 'Flex 倍率',
+        ultrafastMultiplier: 'Ultra Fast 倍率',
         multiplierPlaceholder: '未配置',
         multiplierPositive: 'Fast/Flex 倍率必须大于 0',
         inputMultiplier: '输入倍率',

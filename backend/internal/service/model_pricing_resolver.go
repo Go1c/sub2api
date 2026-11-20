@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"strings"
 )
 
@@ -258,6 +259,8 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 	applyChannelTokenPriceOverrides(resolved.BasePricing, chPricing)
 	resolved.BasePricing.FastMultiplier = chPricing.FastMultiplier
 	resolved.BasePricing.FlexMultiplier = chPricing.FlexMultiplier
+	resolved.BasePricing.UltrafastMultiplierOverride = chPricing.UltrafastMultiplier
+	resolved.BasePricing.ReasoningEffortMultipliers = maps.Clone(chPricing.ReasoningEffortMultipliers)
 	applyChannelImagePriceOverrides(chPricing, resolved.BasePricing)
 
 	// 区间未命中时回退到上面已经应用渠道覆盖的基础价。
