@@ -1535,8 +1535,14 @@ func isAntigravityThinkingTierAlias(model string) bool {
 // the published token rate, so this keeps -high/-low/-medium and -tiered
 // requests on the corresponding base model's price card.
 func normalizeGeminiThinkingTierAlias(model string) string {
-	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon", "gemini-4-carbon"} {
-		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon", "gemini-4-carbon", "gemini-4-neon"} {
+		tiers := []string{"-high", "-low", "-medium", "-tiered"}
+		// Neon publishes an extra xhigh thinking level. The suffix selects
+		// reasoning depth, not a separate token rate.
+		if baseModel == "gemini-4-neon" {
+			tiers = append(tiers, "-xhigh")
+		}
+		for _, tier := range tiers {
 			if model == baseModel+tier {
 				return baseModel
 			}
