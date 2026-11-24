@@ -17,6 +17,239 @@ const HEADER_OVERRIDE_PLATFORMS = new Set(['anthropic', 'openai', 'grok', 'kimi'
 
 const PLAN_TYPE_CANONICAL = ['plus', 'pro', 'free'] as const
 
+/** 禁止覆写的请求头（与后端 headerOverrideBlockedNames 保持一致） */
+const HEADER_OVERRIDE_BLOCKED_NAMES = new Set([
+  'host',
+  'content-length',
+  'content-type',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'upgrade',
+  'authorization',
+  'x-api-key',
+  'x-goog-api-key',
+  'cookie',
+  'accept-encoding',
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-extensions',
+  'sec-websocket-protocol',
+  'sec-websocket-accept',
+  'session_id',
+  'conversation_id',
+  'x-codex-turn-state',
+  'x-codex-turn-metadata',
+  'chatgpt-account-id',
+  'x-claude-code-session-id',
+  'x-client-request-id',
+  'x-grok-conv-id'
+])
+
+/** RFC 7230 token：合法的 HTTP header 名称字符集 */
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
+function isValidHeaderOverrideName(name: string): boolean {
+  return HEADER_NAME_PATTERN.test(name)
+}
+
+/** 与后端 maxHeaderOverride* 常量保持一致 */
+const HEADER_OVERRIDE_MAX_ENTRIES = 64
+const HEADER_OVERRIDE_MAX_NAME_LENGTH = 200
+const HEADER_OVERRIDE_MAX_VALUE_LENGTH = 8192
+
+/** header value 不允许包含控制字符（与后端 httpguts.ValidHeaderFieldValue 对齐） */
+// eslint-disable-next-line no-control-regex
+const HEADER_VALUE_INVALID_PATTERN = /[\x00-\x08\x0a-\x1f\x7f]/
+
+/** 长度限制按 UTF-8 字节计（与后端 Go len() 对齐，避免多字节值前端放行后端 400） */
+const HEADER_TEXT_ENCODER = new TextEncoder()
+function utf8ByteLength(value: string): number {
+  return HEADER_TEXT_ENCODER.encode(value).length
+}
+
+// ---------- 请求头覆写变量（与后端 account_header_override_vars.go 保持一致） ----------
+
+/** 可用变量名：转发时替换为本次请求的网关身份，仅 api_key 账号解析 */
+export const HEADER_OVERRIDE_VARIABLES = ['user_id', 'api_key_id', 'group_id', 'request_id'] as const
+export type HeaderOverrideVariable = (typeof HEADER_OVERRIDE_VARIABLES)[number]
+
+const HEADER_OVERRIDE_VARIABLE_OPEN = '{{'
+const HEADER_OVERRIDE_VARIABLE_CLOSE = '}}'
+const HEADER_OVERRIDE_VARIABLE_SET: ReadonlySet<string> = new Set(HEADER_OVERRIDE_VARIABLES)
+
+/** 变量在覆写值中的写法。花括号会被 vue-i18n 当作插值解析，因此只在代码里拼接。 */
+export function headerOverrideVariableToken(name: HeaderOverrideVariable): string {
+  return `${HEADER_OVERRIDE_VARIABLE_OPEN}${name}${HEADER_OVERRIDE_VARIABLE_CLOSE}`
+}
+
+/** 插入变量时建议的请求头名（值留给管理员按上游约定修改） */
+export const HEADER_OVERRIDE_VARIABLE_SUGGESTED_NAMES: Record<HeaderOverrideVariable, string> = {
+  user_id: 'x-gateway-user-id',
+  api_key_id: 'x-gateway-api-key-id',
+  group_id: 'x-gateway-group-id',
+  request_id: 'x-gateway-request-id'
+}
+
+export function headerOverrideHasVariable(value: string): boolean {
+  return value.includes(HEADER_OVERRIDE_VARIABLE_OPEN)
+}
+
+export type HeaderOverrideTemplatePart =
+  | { kind: 'literal'; text: string }
+  | { kind: 'variable'; name: HeaderOverrideVariable }
+
+/**
+ * 解析覆写值模板。任何 "{{" 都必须构成完整且已知的变量（名称两侧允许空白），
+ * 否则返回 null —— 与后端保存校验同一规则，拼错的变量名不会被静默当成字面量。
+ */
+export function parseHeaderOverrideTemplate(value: string): HeaderOverrideTemplatePart[] | null {
+  const parts: HeaderOverrideTemplatePart[] = []
+  let rest = value
+  for (;;) {
+    const open = rest.indexOf(HEADER_OVERRIDE_VARIABLE_OPEN)
+    if (open < 0) {
+      if (rest) parts.push({ kind: 'literal', text: rest })
+      return parts
+    }
+    if (open > 0) parts.push({ kind: 'literal', text: rest.slice(0, open) })
+    rest = rest.slice(open + HEADER_OVERRIDE_VARIABLE_OPEN.length)
+    const close = rest.indexOf(HEADER_OVERRIDE_VARIABLE_CLOSE)
+    if (close < 0) return null
+    const name = rest.slice(0, close).trim()
+    if (!HEADER_OVERRIDE_VARIABLE_SET.has(name)) return null
+    parts.push({ kind: 'variable', name: name as HeaderOverrideVariable })
+    rest = rest.slice(close + HEADER_OVERRIDE_VARIABLE_CLOSE.length)
+  }
+}
+
+export type HeaderOverrideRowError =
+  | 'invalidName'
+  | 'blockedName'
+  | 'duplicateName'
+  | 'invalidValue'
+  | 'invalidVariable'
+  | 'variableNotAllowed'
+
+export interface HeaderOverrideValidationOptions {
+  /** 账号是否允许使用变量（仅 api_key 账号；OAuth 账号不会把网关身份发给上游） */
+  allowVariables?: boolean
+}
+
+/**
+ * 逐行校验，返回与 rows 等长的错误数组（无错误为 null）。
+ * 名称为空但值非空 / 名称非法 → invalidName；禁止覆写 → blockedName；
+ * 大小写不敏感重名 → duplicateName（后出现的行）；值含控制字符或超长 → invalidValue；
+ * 变量写法或变量名不对 → invalidVariable；账号类型不支持变量 → variableNotAllowed。
+ */
+export function getHeaderOverrideRowErrors(
+  rows: HeaderOverrideRow[],
+  options: HeaderOverrideValidationOptions = {}
+): Array<HeaderOverrideRowError | null> {
+  const allowVariables = options.allowVariables ?? true
+  const seen = new Set<string>()
+  return rows.map((row) => {
+    const name = row.name.trim()
+    const value = row.value.trim()
+    if (!name) return value ? 'invalidName' : null
+    if (!isValidHeaderOverrideName(name) || name.length > HEADER_OVERRIDE_MAX_NAME_LENGTH) {
+      return 'invalidName'
+    }
+    const lower = name.toLowerCase()
+    if (HEADER_OVERRIDE_BLOCKED_NAMES.has(lower)) return 'blockedName'
+    if (seen.has(lower)) return 'duplicateName'
+    seen.add(lower)
+    if (
+      HEADER_VALUE_INVALID_PATTERN.test(value) ||
+      utf8ByteLength(value) > HEADER_OVERRIDE_MAX_VALUE_LENGTH
+    ) {
+      return 'invalidValue'
+    }
+    if (headerOverrideHasVariable(value)) {
+      if (!allowVariables) return 'variableNotAllowed'
+      if (parseHeaderOverrideTemplate(value) === null) return 'invalidVariable'
+    }
+    return null
+  })
+}
+
+/** 校验请求头覆写行，返回首个错误的 i18n key（无错误返回 null）。 */
+export function validateHeaderOverrideRows(
+  rows: HeaderOverrideRow[],
+  options: HeaderOverrideValidationOptions = {}
+): HeaderOverrideRowError | 'tooManyEntries' | null {
+  const firstError = getHeaderOverrideRowErrors(rows, options).find((error) => error !== null)
+  if (firstError) return firstError
+  const named = rows.filter((row) => row.name.trim()).length
+  if (named > HEADER_OVERRIDE_MAX_ENTRIES) return 'tooManyEntries'
+  return null
+}
+
+/** 行数组 → credentials 存储对象（名称小写化，丢弃空行） */
+export function buildHeaderOverridesObject(rows: HeaderOverrideRow[]): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name.trim().toLowerCase()
+    if (!name) continue
+    result[name] = row.value.trim()
+  }
+  return result
+}
+
+/** credentials 存储对象 → 行数组（按名称排序保证稳定展示） */
+export function splitHeaderOverridesObject(record: unknown): HeaderOverrideRow[] {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return []
+  return Object.entries(record as Record<string, unknown>)
+    .filter(([, value]) => typeof value === 'string')
+    .map(([name, value]) => ({ name, value: value as string }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * 解析粘贴的 JSON 文本为请求头覆写行。
+ * 仅接受扁平 JSON 对象；值允许 string/number/boolean（统一转字符串），
+ * 其余类型或非对象输入返回 null 表示格式非法。键为空白的条目直接丢弃。
+ */
+export function parseHeaderOverridesJson(text: string): HeaderOverrideRow[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const rows: HeaderOverrideRow[] = []
+  for (const [rawName, rawValue] of Object.entries(parsed as Record<string, unknown>)) {
+    const name = rawName.trim()
+    if (!name) continue
+    if (
+      typeof rawValue !== 'string' &&
+      typeof rawValue !== 'number' &&
+      typeof rawValue !== 'boolean'
+    ) {
+      return null
+    }
+    rows.push({ name, value: String(rawValue).trim() })
+  }
+  return rows.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** 请求头覆写行 → 便于迁移/备份的 JSON 文本（跳过名称为空的占位行） */
+export function serializeHeaderOverrideRows(rows: HeaderOverrideRow[]): string {
+  const record: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name.trim()
+    if (!name) continue
+    record[name] = row.value.trim()
+  }
+  return JSON.stringify(record, null, 2)
+}
+
 // ========== Grok 自定义转发地址（base_url 仅改写转发端点，凭证生命周期不受影响） ==========
 
 /** OAuth 账号建号/刷新默认写入的 CLI 网关 host——只有它视同"未定制"。 */
@@ -218,106 +451,6 @@ export function getHeaderOverrideTemplate(platform: string): HeaderOverrideRow[]
     ]
   }
   return []
-}
-
-export function splitHeaderOverridesObject(raw: unknown): HeaderOverrideRow[] {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return []
-  }
-  return Object.entries(raw as Record<string, unknown>).map(([name, value]) => ({
-    name: String(name ?? ''),
-    value: value == null ? '' : String(value),
-  }))
-}
-
-export function validateHeaderOverrideRows(rows: HeaderOverrideRow[]): string | null {
-  if (rows.length > 64) {
-    return 'tooManyEntries'
-  }
-  const seen = new Set<string>()
-  const nameRe = /^[!#$%&'*+\-.0-9A-Z^_`a-z|~]+$/
-  const blocked = new Set([
-    'authorization',
-    'x-api-key',
-    'proxy-authorization',
-    'connection',
-    'content-length',
-    'transfer-encoding',
-    'host',
-  ])
-  for (const row of rows) {
-    const name = row.name.trim()
-    const value = row.value
-    if (!name && !value.trim()) {
-      continue
-    }
-    if (!name || !nameRe.test(name)) {
-      return 'invalidName'
-    }
-    const lower = name.toLowerCase()
-    if (blocked.has(lower)) {
-      return 'blockedName'
-    }
-    if (seen.has(lower)) {
-      return 'duplicateName'
-    }
-    seen.add(lower)
-    if (value.length > 8192 || /[\r\n\0]/.test(value)) {
-      return 'invalidValue'
-    }
-  }
-  return null
-}
-
-/** 行数组 → credentials 存储对象（小写 header 名） */
-export function buildHeaderOverridesObject(rows: HeaderOverrideRow[]): Record<string, string> {
-  const result: Record<string, string> = {}
-  for (const row of rows) {
-    const name = row.name.trim().toLowerCase()
-    if (!name) continue
-    result[name] = row.value.trim()
-  }
-  return result
-}
-
-/**
- * 解析粘贴的 JSON 文本为请求头覆写行。
- * 仅接受扁平 JSON 对象；值允许 string/number/boolean（统一转字符串），
- * 其余类型或非对象输入返回 null 表示格式非法。键为空白的条目直接丢弃。
- */
-export function parseHeaderOverridesJson(text: string): HeaderOverrideRow[] | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-  const rows: HeaderOverrideRow[] = []
-  for (const [rawName, rawValue] of Object.entries(parsed as Record<string, unknown>)) {
-    const name = rawName.trim()
-    if (!name) continue
-    if (
-      typeof rawValue !== 'string' &&
-      typeof rawValue !== 'number' &&
-      typeof rawValue !== 'boolean'
-    ) {
-      return null
-    }
-    rows.push({ name, value: String(rawValue).trim() })
-  }
-  return rows.sort((a, b) => a.name.localeCompare(b.name))
-}
-
-/** 请求头覆写行 → 便于迁移/备份的 JSON 文本（跳过名称为空的占位行） */
-export function serializeHeaderOverrideRows(rows: HeaderOverrideRow[]): string {
-  const record: Record<string, string> = {}
-  for (const row of rows) {
-    const name = row.name.trim()
-    if (!name) continue
-    record[name] = row.value.trim()
-  }
-  return JSON.stringify(record, null, 2)
 }
 
 export function applyHeaderOverride(

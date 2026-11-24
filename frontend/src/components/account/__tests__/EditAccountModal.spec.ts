@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import {
   BUILTIN_PLATFORM_CATALOG,
   resetPlatformCatalog,
   setPlatformCatalog
 } from '@/constants/platformCatalog'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, previewUpstreamGroup, authIsSimpleMode } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
+  previewUpstreamGroup: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
   authIsSimpleMode: { value: true }
 }))
@@ -33,6 +34,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
+      previewUpstreamGroup,
       checkMixedChannelRisk: checkMixedChannelRiskMock
     },
     settings: {
@@ -296,7 +298,7 @@ function buildOpenAISetupTokenAccount() {
   } as any
 }
 
-function mountModal(account = buildAccount()) {
+function mountModal(account = buildAccount(), renderGroupSelector = false) {
   return mount(EditAccountModal, {
     props: {
       show: true,
@@ -310,7 +312,7 @@ function mountModal(account = buildAccount()) {
         Select: SelectStub,
         Icon: true,
         ProxySelector: true,
-        GroupSelector: GroupSelectorStub,
+        GroupSelector: renderGroupSelector ? false : GroupSelectorStub,
         ModelWhitelistSelector: ModelWhitelistSelectorStub
       }
     }
@@ -323,6 +325,28 @@ describe('EditAccountModal', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('uses the saved connection until the administrator changes the upstream', async () => {
+    const account = buildAccount()
+    account.notes = 'local notes'
+    const wrapper = mountModal(account)
+    const sync = wrapper.getComponent({ name: 'UpstreamGroupSyncButton' }).get('button')
+    previewUpstreamGroup.mockResolvedValue({ name: 'Updated group' })
+    await sync.trigger('click')
+    await flushPromises()
+    expect(previewUpstreamGroup).toHaveBeenLastCalledWith({ account_id: account.id }, expect.anything())
+    expect(wrapper.get<HTMLInputElement>('[data-tour="edit-account-form-name"]').element.value).toBe('Updated group')
+    expect(wrapper.get<HTMLTextAreaElement>('textarea').element.value).toBe('local notes')
+
+    await wrapper.get('input[placeholder="https://api.openai.com"]').setValue('https://new-relay.example')
+    expect(sync.element.disabled).toBe(true)
+    await wrapper.get('input[type="password"]').setValue('replacement-key')
+    await sync.trigger('click')
+    expect(previewUpstreamGroup).toHaveBeenLastCalledWith({
+      platform: 'openai', base_url: 'https://new-relay.example', api_key: 'replacement-key', proxy_id: null
+    }, expect.anything())
+    wrapper.unmount()
+  })
 
   it.each(['apikey', 'oauth'])('can opt a passthrough %s account into model filtering without changing groups', async (type) => {
     const account = buildAccount()
@@ -983,6 +1007,111 @@ describe('EditAccountModal', () => {
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.upstream_billing_probe_enabled).toBe(true)
+  })
+
+  it('opts into group sync independently and clears it when probing stops', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    const group = wrapper.get('[data-testid="upstream-billing-group-sync"]')
+    const probe = wrapper.get('[data-testid="upstream-billing-auto-probe"]')
+    const rate = wrapper.get('[data-testid="upstream-billing-rate-sync"]')
+    expect(group.attributes('aria-checked')).toBe('false')
+    await group.trigger('click')
+    expect(probe.attributes('aria-checked')).toBe('true')
+    expect(rate.attributes('aria-checked')).toBe('false')
+    await wrapper.get('form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.lastCall?.[1]).toMatchObject({
+      upstream_billing_group_sync_enabled: true, upstream_billing_rate_sync_enabled: false
+    })
+    await probe.trigger('click')
+    expect(group.attributes('aria-checked')).toBe('false')
+    wrapper.unmount()
+  })
+
+  it('enabling rate sync also enables probing and stops submitting a manual rate', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const syncToggle = wrapper.get('[data-testid="upstream-billing-rate-sync"]')
+    const probeToggle = wrapper.get('[data-testid="upstream-billing-auto-probe"]')
+    const rateInput = wrapper.get<HTMLInputElement>('[data-testid="account-rate-multiplier"]')
+    expect(syncToggle.attributes('aria-checked')).toBe('false')
+    expect(probeToggle.attributes('aria-checked')).toBe('false')
+    expect(rateInput.element.disabled).toBe(false)
+    expect(wrapper.text()).toContain('admin.accounts.billingRateMultiplierHint')
+    expect(wrapper.text()).not.toContain('admin.accounts.upstreamBilling.syncRateManagedHint')
+
+    await syncToggle.trigger('click')
+    expect(syncToggle.attributes('aria-checked')).toBe('true')
+    expect(probeToggle.attributes('aria-checked')).toBe('true')
+    expect(rateInput.element.disabled).toBe(true)
+    expect(wrapper.text()).toContain('admin.accounts.upstreamBilling.syncRateManagedHint')
+    expect(wrapper.text()).not.toContain('admin.accounts.billingRateMultiplierHint')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    const payload = updateAccountMock.mock.calls[0]?.[1]
+    expect(payload?.upstream_billing_probe_enabled).toBe(true)
+    expect(payload?.upstream_billing_rate_sync_enabled).toBe(true)
+    expect(payload).not.toHaveProperty('rate_multiplier')
+  })
+
+  it('disabling probing also disables rate sync and restores manual rate editing', async () => {
+    const account = buildAccount()
+    account.extra = {
+      upstream_billing_probe_enabled: true,
+      upstream_billing_rate_sync_enabled: true
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const syncToggle = wrapper.get('[data-testid="upstream-billing-rate-sync"]')
+    const probeToggle = wrapper.get('[data-testid="upstream-billing-auto-probe"]')
+    const rateInput = wrapper.get<HTMLInputElement>('[data-testid="account-rate-multiplier"]')
+    expect(syncToggle.attributes('aria-checked')).toBe('true')
+    expect(rateInput.element.disabled).toBe(true)
+
+    await probeToggle.trigger('click')
+    expect(probeToggle.attributes('aria-checked')).toBe('false')
+    expect(syncToggle.attributes('aria-checked')).toBe('false')
+    expect(rateInput.element.disabled).toBe(false)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    const payload = updateAccountMock.mock.calls[0]?.[1]
+    expect(payload?.upstream_billing_probe_enabled).toBe(false)
+    expect(payload?.upstream_billing_rate_sync_enabled).toBe(false)
+    expect(payload?.rate_multiplier).toBe(1)
+  })
+
+  it('disabling only rate sync keeps automatic probing enabled', async () => {
+    const account = buildAccount()
+    account.extra = {
+      upstream_billing_probe_enabled: true,
+      upstream_billing_rate_sync_enabled: true
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="upstream-billing-rate-sync"]').trigger('click')
+    expect(wrapper.get('[data-testid="upstream-billing-auto-probe"]').attributes('aria-checked')).toBe(
+      'true'
+    )
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    const payload = updateAccountMock.mock.calls[0]?.[1]
+    expect(payload?.upstream_billing_probe_enabled).toBe(true)
+    expect(payload?.upstream_billing_rate_sync_enabled).toBe(false)
+    expect(payload?.rate_multiplier).toBe(1)
   })
 
   it('clears OpenAI APIKey Responses override when set back to auto', async () => {
