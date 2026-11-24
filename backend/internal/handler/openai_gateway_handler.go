@@ -260,6 +260,11 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
+	// Reseller reconciliation key. Upstream rewrites of this helper dropped it once
+	// (2026-10-30, main 0.2.19); async billing then stored correlation_id as NULL.
+	if sub2RequestID, _ := parent.Value(ctxkey.Sub2RequestID).(string); strings.TrimSpace(sub2RequestID) != "" {
+		base = context.WithValue(base, ctxkey.Sub2RequestID, strings.TrimSpace(sub2RequestID))
+	}
 	return base
 }
 
