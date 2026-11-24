@@ -46,7 +46,18 @@
       class="space-y-5"
     >
       <div>
-        <label class="input-label">{{ t('admin.accounts.accountName') }}</label>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <label class="input-label mb-0">{{ t('admin.accounts.accountName') }}</label>
+          <UpstreamGroupSyncButton
+            v-if="form.type === 'apikey'"
+            v-model:name="form.name"
+            v-model:notes="form.notes"
+            :source="upstreamGroupSource"
+            allow-auto
+            :auto="upstreamGroupSyncEnabled"
+            @update:auto="setUpstreamGroupSync"
+          />
+        </div>
         <input
           v-model="form.name"
           type="text"
@@ -55,6 +66,9 @@
           :placeholder="t('admin.accounts.enterAccountName')"
           data-tour="account-form-name"
         />
+        <p v-if="form.type === 'apikey' && upstreamGroupSyncEnabled" class="input-hint">
+          {{ t('admin.accounts.upstreamBilling.autoSyncGroupHint') }}
+        </p>
       </div>
       <div>
         <label class="input-label">{{ t('admin.accounts.notes') }}</label>
@@ -1499,7 +1513,13 @@
 
             <!-- Whitelist Mode -->
             <div v-if="modelRestrictionMode === 'whitelist'">
-              <ModelWhitelistSelector v-model="allowedModels" :platform="form.platform" :sync-credentials="syncPreviewCredentials" />
+              <ModelWhitelistSelector
+                v-model="allowedModels"
+                :model-mappings="modelMappings"
+                :platform="form.platform"
+                :sync-credentials="syncPreviewCredentials"
+                @upstream-synced="upstreamModelsPreviewed = true"
+              />
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
                 <span v-if="allowedModels.length === 0">{{
@@ -1991,7 +2011,13 @@
 
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector v-model="allowedModels" platform="anthropic" :sync-credentials="syncPreviewCredentials" />
+            <ModelWhitelistSelector
+              v-model="allowedModels"
+              :model-mappings="modelMappings"
+              platform="anthropic"
+              :sync-credentials="syncPreviewCredentials"
+              @upstream-synced="upstreamModelsPreviewed = true"
+            />
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0">{{ t('admin.accounts.supportsAllModels') }}</span>
@@ -2275,6 +2301,7 @@
 
           <HeaderOverrideEditor
             :rows="headerOverrideRows"
+            :allow-variables="false"
             @update:rows="headerOverrideRows = $event"
           />
 
@@ -2337,7 +2364,13 @@
 
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector v-model="allowedModels" :platform="form.platform" :sync-credentials="syncPreviewCredentials" />
+            <ModelWhitelistSelector
+              v-model="allowedModels"
+              :model-mappings="modelMappings"
+              :platform="form.platform"
+              :sync-credentials="syncPreviewCredentials"
+              @upstream-synced="upstreamModelsPreviewed = true"
+            />
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0">{{
@@ -3292,38 +3325,6 @@
       </div>
 
       <div
-        v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
-      >
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <label class="input-label mb-0">{{ t('admin.accounts.openai.longContextBilling') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.openai.longContextBillingDesc') }}
-            </p>
-          </div>
-          <button
-            type="button"
-            data-testid="openai-long-context-billing-toggle"
-            role="switch"
-            :aria-checked="openAILongContextBillingEnabled"
-            @click="toggleOpenAILongContextBilling"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              openAILongContextBillingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
-          >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openAILongContextBillingEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
-          </button>
-        </div>
-      </div>
-
-      <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
@@ -4012,6 +4013,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
+import UpstreamGroupSyncButton from '@/components/account/UpstreamGroupSyncButton.vue'
 import OpenAIImageSizeTiersField from '@/components/account/OpenAIImageSizeTiersField.vue'
 import {
   OPENAI_IMAGE_SIZE_TIERS,
@@ -4286,6 +4288,11 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_acco
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const upstreamGroupSyncEnabled = ref(false)
+function setUpstreamGroupSync(enabled: boolean) {
+  upstreamGroupSyncEnabled.value = enabled
+  if (enabled) upstreamBillingAutoProbeEnabled.value = true
+}
 
 const accountMode = ref<CnAccountMode>('payg')
 const apiProtocol = ref<CnApiProtocol>('adaptive')
@@ -4405,16 +4412,34 @@ function onCnPresetSelect(preset: { mode: CnAccountMode; protocol: CnApiProtocol
   apiKeyBaseUrl.value = preset.url
 }
 
-const syncPreviewCredentials = computed(() => {
-  if (!apiKeyValue.value) return undefined
-  const baseUrl = isCNPlatform.value && apiProtocol.value === 'adaptive'
+const previewBaseUrl = computed(() =>
+  isCNPlatform.value && apiProtocol.value === 'adaptive'
     ? adaptiveBaseUrls.value.chat_completions.trim() || apiKeyBaseUrl.value.trim()
     : apiKeyBaseUrl.value.trim()
+)
+
+const upstreamGroupSource = computed(() => {
+  const antigravity = form.platform === 'antigravity'
+  const baseURL = antigravity ? upstreamBaseUrl.value.trim() : previewBaseUrl.value
+  const apiKey = (antigravity ? upstreamApiKey.value : apiKeyValue.value).trim()
+  return baseURL && apiKey
+    ? { platform: form.platform, base_url: baseURL, api_key: apiKey, proxy_id: form.proxy_id }
+    : null
+})
+
+const syncPreviewCredentials = computed(() => {
+  if (!apiKeyValue.value) return undefined
+  const modelMapping = buildModelMappingObject(
+    modelRestrictionMode.value,
+    allowedModels.value,
+    modelMappings.value
+  )
   return {
     platform: form.platform,
     type: form.type,
-    base_url: baseUrl || undefined,
-    api_key: apiKeyValue.value
+    base_url: previewBaseUrl.value || undefined,
+    api_key: apiKeyValue.value,
+    ...(modelMapping ? { model_mapping: modelMapping } : {})
   }
 })
 
@@ -4481,7 +4506,9 @@ const validateGrokOAuthUpstreamConfig = (): boolean => {
     }
   }
   if (headerOverrideEnabled.value) {
-    const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+    const headerError = validateHeaderOverrideRows(headerOverrideRows.value, {
+      allowVariables: false
+    })
     if (headerError) {
       appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
       return false
@@ -4563,6 +4590,9 @@ loadQuotaNotifyGlobal()
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
 const upstreamBillingAutoProbeEnabled = ref(true)
+watch(upstreamBillingAutoProbeEnabled, (enabled) => {
+  if (!enabled) upstreamGroupSyncEnabled.value = false
+})
 const grokVideoCompatModeEnabled = ref(false)
 const antigravityAccountType = ref<'oauth' | 'upstream'>('oauth') // For antigravity: oauth or upstream
 const antigravityProjectId = ref('')
@@ -5375,15 +5405,34 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
     const account = await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    const modelMapping = payload.credentials?.model_mapping
+    const hasConcreteMappedTarget = payload.type === 'apikey' &&
+      typeof modelMapping === 'object' &&
+      modelMapping !== null &&
+      Object.values(modelMapping).some((target) =>
+        typeof target === 'string' && target.trim() !== '' && !target.includes('*')
+      )
+    if (upstreamModelsPreviewed.value || hasConcreteMappedTarget) {
+      try {
+        const result = await adminAPI.accounts.syncUpstreamModels(account.id)
+        const warnings = result.warnings ?? []
+        if (warnings.some(warning => warning.code === 'upstream_model_metadata_incomplete')) {
+          appStore.showWarning(t('admin.accounts.syncUpstreamModelsMetadataIncomplete'))
+        } else if (warnings.some(warning => warning.code === 'upstream_model_metadata_partial')) {
+          appStore.showWarning(t('admin.accounts.syncUpstreamModelsMetadataPartial'))
+        }
+      } catch {
+        appStore.showWarning(t('admin.accounts.syncUpstreamModelsFailed'))
+      }
+    }
     if (
       payload.type === 'apikey' &&
       payload.upstream_billing_probe_enabled === true
     ) {
-      // 创建即探测：失败不阻断创建流程（快照会在下一周期由 runner 补齐）。
       try {
         await adminAPI.accounts.probeUpstreamBilling(account.id)
       } catch {
-        // ignore probe failure after successful create
+        appStore.showWarning(t('admin.accounts.upstreamBilling.probeFailed'))
       }
     }
     appStore.showSuccess(t('admin.accounts.accountCreated'))
@@ -5431,6 +5480,9 @@ const resetForm = () => {
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
   grokVideoCompatModeEnabled.value = false
+  upstreamRequestIdHeader.value = ''
+  upstreamBillingAutoProbeEnabled.value = true
+  upstreamGroupSyncEnabled.value = false
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
   editQuotaWeeklyLimit.value = null
@@ -6014,6 +6066,7 @@ const handleSubmit = async () => {
     group_ids: form.group_ids,
     extra: withUpstreamRequestIdHeader(extra),
     upstream_billing_probe_enabled: upstreamBillingAutoProbeEnabled.value,
+    upstream_billing_group_sync_enabled: upstreamGroupSyncEnabled.value,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
 }
@@ -6149,6 +6202,7 @@ const createAccountAndFinish = async (
     expires_at: form.expires_at,
     // 上游倍率探测对全部 API-key 平台开放；非 apikey 类型（bedrock/oauth）不传。
     upstream_billing_probe_enabled: type === 'apikey' ? upstreamBillingAutoProbeEnabled.value : undefined,
+    upstream_billing_group_sync_enabled: type === 'apikey' ? upstreamGroupSyncEnabled.value : undefined,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
 }

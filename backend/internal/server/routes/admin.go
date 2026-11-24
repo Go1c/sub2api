@@ -419,6 +419,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
+		accounts.POST("/upstream-billing-probe/group-preview", h.Admin.Account.PreviewUpstreamGroup)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.GET("/:id/claude/reset-credits", h.Admin.Account.ClaudeResetCredits)
 		// Same protection as the Codex reset-quota route (admin auth, audit, compliance guard).

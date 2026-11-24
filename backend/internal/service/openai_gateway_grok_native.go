@@ -67,7 +67,7 @@ func (s *OpenAIGatewayService) DoGrokNativeResponsesJSON(ctx context.Context, c 
 	} else {
 		upstreamReq.Header.Set("User-Agent", grokUpstreamUserAgent)
 	}
-	account.ApplyHeaderOverrides(upstreamReq.Header)
+	account.ApplyHeaderOverrides(upstreamReq.Context(), upstreamReq.Header)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {

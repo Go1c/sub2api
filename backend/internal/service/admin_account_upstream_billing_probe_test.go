@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,99 @@ type upstreamBillingProbeAdminRepo struct {
 
 func (r *upstreamBillingProbeAdminRepo) ListShadowsByParent(context.Context, int64) ([]*Account, error) {
 	return nil, nil
+}
+
+type accountBillingSettingsAdminRepo struct {
+	*upstreamBillingProbeAccountRepo
+	concurrentRate   *float64
+	lastExplicitRate *float64
+	updateCalls      int
+}
+
+func (r *accountBillingSettingsAdminRepo) UpdateWithAccountBillingSettings(
+	_ context.Context,
+	account *Account,
+	settings AccountBillingSettingsUpdate,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	current := r.accounts[account.ID]
+	if current == nil {
+		return ErrAccountNotFound
+	}
+	updated := *account
+	updated.Credentials = mergeMap(nil, account.Credentials)
+	updated.Extra = mergeMap(nil, account.Extra)
+	if updated.Extra == nil {
+		updated.Extra = make(map[string]any)
+	}
+	if settings.ProbeEnabled != nil {
+		updated.Extra[UpstreamBillingProbeEnabledExtraKey] = *settings.ProbeEnabled
+	}
+	if settings.RateSyncEnabled != nil {
+		updated.Extra[UpstreamBillingRateSyncEnabledExtraKey] = *settings.RateSyncEnabled
+	}
+	switch {
+	case settings.RateMultiplier != nil:
+		value := *settings.RateMultiplier
+		updated.RateMultiplier = &value
+		r.lastExplicitRate = &value
+	case r.concurrentRate != nil:
+		value := *r.concurrentRate
+		updated.RateMultiplier = &value
+		r.lastExplicitRate = nil
+	default:
+		updated.RateMultiplier = cloneAccountValuePointer(current.RateMultiplier)
+		r.lastExplicitRate = nil
+	}
+	r.accounts[account.ID] = &updated
+	r.updateCalls++
+	return nil
+}
+
+func TestUpdateAccountRoutesRateIntentThroughAtomicBillingUpdater(t *testing.T) {
+	accountID := int64(109)
+	initialRate := 0.1
+	concurrentRate := 0.2
+	repo := &accountBillingSettingsAdminRepo{
+		upstreamBillingProbeAccountRepo: &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+			accountID: {
+				ID:             accountID,
+				Name:           "before",
+				Platform:       PlatformOpenAI,
+				Type:           AccountTypeAPIKey,
+				Status:         StatusActive,
+				RateMultiplier: &initialRate,
+				Extra: map[string]any{
+					UpstreamBillingProbeEnabledExtraKey:    true,
+					UpstreamBillingRateSyncEnabledExtraKey: true,
+				},
+			},
+		}},
+		concurrentRate: &concurrentRate,
+	}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	updated, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{Name: "after"})
+	require.NoError(t, err)
+	require.Equal(t, 1, repo.updateCalls)
+	require.Nil(t, repo.lastExplicitRate)
+	require.Equal(t, concurrentRate, *updated.RateMultiplier)
+
+	// 手工倍率只有在同步不再开启时才被接受，所以同一请求先关闭同步再设值
+	// （同步仍开启时的手工倍率由 TestUpdateAccountRejectsManualRateWhileRateSyncEnabled 覆盖）。
+	zero := 0.0
+	syncDisabled := false
+	updated, err = svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{
+		RateSyncEnabled: &syncDisabled,
+		RateMultiplier:  &zero,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, repo.updateCalls)
+	require.NotNil(t, repo.lastExplicitRate)
+	require.Zero(t, *repo.lastExplicitRate)
+	require.Zero(t, *updated.RateMultiplier)
 }
 
 func TestCreateAccountDropsManagedUpstreamBillingProbeState(t *testing.T) {
@@ -405,4 +499,187 @@ func TestBulkUpdateAccountsKeepsProbeSnapshotForUnrelatedCredentials(t *testing.
 	require.NoError(t, err)
 	require.Len(t, repo.bulkUpdates, 1)
 	require.NotContains(t, repo.bulkUpdates[0].Extra, UpstreamBillingProbeExtraKey)
+}
+
+func openCodeGoAdminUsageAccount(id int64, apiKey string) *Account {
+	previousAttempt := time.Date(2026, time.August, 15, 8, 0, 0, 0, time.UTC)
+	return &Account{
+		ID:       id,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Status:   StatusActive,
+		Credentials: map[string]any{
+			"api_key":  apiKey,
+			"base_url": "https://opencode.ai/zen/go/v1",
+		},
+		Extra: map[string]any{
+			OpenCodeGoUsageAutoRefreshExtraKey: true,
+			OpenCodeGoUsageSnapshotExtraKey: &OpenCodeGoUsageSnapshot{
+				Status:        OpenCodeGoUsageStatusOK,
+				LastAttemptAt: previousAttempt,
+				NextRefreshAt: previousAttempt.Add(time.Hour),
+			},
+		},
+	}
+}
+
+// 普通账号编辑（脱敏 extra 不带受管键）不得丢 OpenCode Go 受管状态。
+func TestUpdateAccountPreservesOpenCodeGoManagedStateForUnrelatedEdit(t *testing.T) {
+	accountID := int64(210)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: openCodeGoAdminUsageAccount(accountID, "sk-1"),
+	}}
+
+	svc := &adminServiceImpl{accountRepo: repo}
+	updated, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{
+		Extra: map[string]any{"custom": "value"},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, true, updated.Extra[OpenCodeGoUsageAutoRefreshExtraKey])
+	snapshot, ok := updated.Extra[OpenCodeGoUsageSnapshotExtraKey].(*OpenCodeGoUsageSnapshot)
+	require.True(t, ok)
+	require.Equal(t, OpenCodeGoUsageStatusOK, snapshot.Status)
+	require.Equal(t, "value", updated.Extra["custom"])
+}
+
+// 客户端在 extra 里伪造受管键必须被丢弃，以数据库中的受管状态为准。
+func TestUpdateAccountRejectsInjectedOpenCodeGoManagedKeys(t *testing.T) {
+	accountID := int64(211)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: openCodeGoAdminUsageAccount(accountID, "sk-1"),
+	}}
+
+	svc := &adminServiceImpl{accountRepo: repo}
+	updated, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{
+		Extra: map[string]any{
+			OpenCodeGoUsageAutoRefreshExtraKey: false,
+			OpenCodeGoUsageSnapshotExtraKey:    map[string]any{"status": "forged"},
+			"custom":                           "value",
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, true, updated.Extra[OpenCodeGoUsageAutoRefreshExtraKey])
+	snapshot, ok := updated.Extra[OpenCodeGoUsageSnapshotExtraKey].(*OpenCodeGoUsageSnapshot)
+	require.True(t, ok)
+	require.Equal(t, OpenCodeGoUsageStatusOK, snapshot.Status)
+	require.Equal(t, "value", updated.Extra["custom"])
+}
+
+// OpenCode 身份改变（api_key / base_url / type）必须清除旧受管状态，防止跨组污染。
+func TestUpdateAccountClearsOpenCodeGoManagedStateWhenIdentityChanges(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *UpdateAccountInput
+	}{
+		{name: "api key", input: &UpdateAccountInput{Credentials: map[string]any{"api_key": "sk-new"}}},
+		{name: "base url", input: &UpdateAccountInput{Credentials: map[string]any{"base_url": "https://api.openai.com/v1"}}},
+		{name: "type", input: &UpdateAccountInput{Type: AccountTypeOAuth}},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			accountID := int64(220 + i)
+			repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+				accountID: openCodeGoAdminUsageAccount(accountID, "sk-1"),
+			}}
+
+			updated, err := (&adminServiceImpl{accountRepo: repo}).UpdateAccount(context.Background(), accountID, tt.input)
+
+			require.NoError(t, err)
+			require.NotContains(t, updated.Extra, OpenCodeGoUsageAutoRefreshExtraKey)
+			require.NotContains(t, updated.Extra, OpenCodeGoUsageSnapshotExtraKey)
+		})
+	}
+}
+
+// UpdateAccountExtra 是 key 级合并入口，伪造的受管键必须被剥离。
+func TestUpdateAccountExtraDropsOpenCodeGoManagedKeys(t *testing.T) {
+	accountID := int64(230)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: openCodeGoAdminUsageAccount(accountID, "sk-1"),
+	}}
+
+	svc := &adminServiceImpl{accountRepo: repo}
+	err := svc.UpdateAccountExtra(context.Background(), accountID, map[string]any{
+		OpenCodeGoUsageAutoRefreshExtraKey: false,
+		OpenCodeGoUsageSnapshotExtraKey:    map[string]any{"status": "forged"},
+		"custom":                           "value",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, repo.updates[accountID], 1)
+	persisted := repo.updates[accountID][0]
+	require.NotContains(t, persisted, OpenCodeGoUsageAutoRefreshExtraKey)
+	require.NotContains(t, persisted, OpenCodeGoUsageSnapshotExtraKey)
+	require.Equal(t, "value", persisted["custom"])
+}
+
+// 批量更新同样不得接受伪造的受管键。
+func TestBulkUpdateAccountsDropsOpenCodeGoManagedKeys(t *testing.T) {
+	accountID := int64(240)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: openCodeGoAdminUsageAccount(accountID, "sk-1"),
+	}}
+
+	svc := &adminServiceImpl{accountRepo: repo}
+	_, err := svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{accountID},
+		Extra: map[string]any{
+			OpenCodeGoUsageAutoRefreshExtraKey: false,
+			OpenCodeGoUsageSnapshotExtraKey:    map[string]any{"status": "forged"},
+			"custom":                           "value",
+		},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, repo.bulkUpdates, 1)
+	require.NotContains(t, repo.bulkUpdates[0].Extra, OpenCodeGoUsageAutoRefreshExtraKey)
+	require.NotContains(t, repo.bulkUpdates[0].Extra, OpenCodeGoUsageSnapshotExtraKey)
+	require.Equal(t, "value", repo.bulkUpdates[0].Extra["custom"])
+}
+
+// 创建入口不接受伪造的受管键。
+func TestCreateAccountDropsOpenCodeGoManagedKeys(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "opencode",
+		Platform:             PlatformOpenAI,
+		Type:                 AccountTypeAPIKey,
+		Credentials:          map[string]any{"api_key": "sk-1", "base_url": "https://opencode.ai/zen/go/v1"},
+		SkipDefaultGroupBind: true,
+		Extra: map[string]any{
+			OpenCodeGoUsageAutoRefreshExtraKey: true,
+			OpenCodeGoUsageSnapshotExtraKey:    map[string]any{"status": "forged"},
+			"custom":                           "value",
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotContains(t, created.Extra, OpenCodeGoUsageAutoRefreshExtraKey)
+	require.NotContains(t, created.Extra, OpenCodeGoUsageSnapshotExtraKey)
+	require.Equal(t, "value", created.Extra["custom"])
+}
+
+func TestCreateAccountGroupSyncIsExplicitAndEnablesOnlyTheProbe(t *testing.T) {
+	enabled, disabled := true, false
+	input := &CreateAccountInput{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	account, err := buildAccountForCreate(input, map[string]any{UpstreamBillingGroupSyncEnabledExtraKey: true})
+	require.NoError(t, err)
+	require.NotContains(t, account.Extra, UpstreamBillingGroupSyncEnabledExtraKey)
+	input.GroupSyncEnabled = &enabled
+	account, err = buildAccountForCreate(input, nil)
+	require.NoError(t, err)
+	require.True(t, upstreamBillingProbeEnabled(account))
+	require.Equal(t, true, account.Extra[UpstreamBillingGroupSyncEnabledExtraKey])
+	require.False(t, upstreamBillingRateSyncEnabled(account))
+	copyExtra, err := duplicateAccountExtra(account.Extra)
+	require.NoError(t, err)
+	require.NotContains(t, copyExtra, UpstreamBillingGroupSyncEnabledExtraKey)
+	input.ProbeEnabled = &disabled
+	_, err = buildAccountForCreate(input, nil)
+	require.ErrorIs(t, err, ErrUpstreamBillingGroupSyncRequiresProbe)
 }

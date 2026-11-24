@@ -12,8 +12,22 @@
       class="space-y-5"
     >
       <div>
-        <label class="input-label">{{ t('common.name') }}</label>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <label class="input-label mb-0">{{ t('common.name') }}</label>
+          <UpstreamGroupSyncButton
+            v-if="account.type === 'apikey' || (account.platform === 'antigravity' && account.type === 'upstream')"
+            v-model:name="form.name"
+            v-model:notes="form.notes"
+            :source="upstreamGroupSource"
+            :allow-auto="account.type === 'apikey'"
+            :auto="upstreamGroupSyncEnabled"
+            @update:auto="setUpstreamGroupSync"
+          />
+        </div>
         <input v-model="form.name" type="text" required class="input" data-tour="edit-account-form-name" />
+        <p v-if="account.type === 'apikey' && upstreamGroupSyncEnabled" class="input-hint">
+          {{ t('admin.accounts.upstreamBilling.autoSyncGroupHint') }}
+        </p>
       </div>
       <div>
         <label class="input-label">{{ t('admin.accounts.notes') }}</label>
@@ -739,6 +753,7 @@
           </div>
           <HeaderOverrideEditor
             :rows="headerOverrideRows"
+            :allow-variables="headerOverrideAllowVariables"
             @update:rows="headerOverrideRows = $event"
           />
           <div class="flex flex-wrap gap-2">
@@ -1940,6 +1955,37 @@
             </span>
           </span>
         </label>
+      </div>
+
+      <!-- OpenAI Codex namespace 工具摊平（兼容开关，仅 OAuth） -->
+      <div
+        v-if="account?.platform === 'openai' && account?.type === 'oauth'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.flattenNamespaces') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.flattenNamespacesDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="edit-openai-flatten-namespaces-toggle"
+            @click="openaiFlattenNamespacesEnabled = !openaiFlattenNamespacesEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              openaiFlattenNamespacesEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                openaiFlattenNamespacesEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
       </div>
 
       <!-- OpenAI Codex hosted image_generation bridge policy -->
@@ -3147,6 +3193,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
+import UpstreamGroupSyncButton from '@/components/account/UpstreamGroupSyncButton.vue'
 import OpenAIImageSizeTiersField from '@/components/account/OpenAIImageSizeTiersField.vue'
 import {
   OPENAI_IMAGE_SIZE_TIERS,
@@ -3523,6 +3570,8 @@ const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const headerOverrideEnabled = ref(false)
 const headerOverrideRows = ref<HeaderOverrideRow[]>([])
+// 身份上报变量仅 api_key 账号可用：OAuth 订阅上游不能收到网关用户身份
+const headerOverrideAllowVariables = computed(() => props.account?.type === 'apikey')
 const grokOAuthCustomBaseUrlEnabled = ref(false)
 const grokOAuthBaseUrl = ref('')
 const headerOverrideCapable = computed(() =>
@@ -3697,6 +3746,11 @@ const autoPause5hThreshold = ref<number | null>(null)
 const autoPause7dThreshold = ref<number | null>(null)
 const autoPause5hDisabled = ref(false)
 const autoPause7dDisabled = ref(false)
+const upstreamGroupSyncEnabled = ref(false)
+function setUpstreamGroupSync(enabled: boolean) {
+  upstreamGroupSyncEnabled.value = enabled
+  if (enabled) upstreamBillingAutoProbeEnabled.value = true
+}
 const upstreamBillingAutoProbeEnabled = ref(false)
 const upstreamBillingRateSyncEnabled = ref(false)
 
@@ -3711,6 +3765,7 @@ const handleUpstreamBillingAutoProbeChange = (enabled: boolean) => {
   upstreamBillingAutoProbeEnabled.value = enabled
   if (!enabled) {
     upstreamBillingRateSyncEnabled.value = false
+    upstreamGroupSyncEnabled.value = false
   }
 }
 const grokVideoCompatModeEnabled = ref(false)
@@ -4132,6 +4187,25 @@ const form = reactive({
   expires_at: null as number | null
 })
 
+const billingBaseUrl = computed(() => (
+  isCNApiKeyAccount.value && editApiProtocol.value === 'adaptive'
+    ? editAdaptiveBaseUrls.value.chat_completions
+    : editBaseUrl.value
+).trim())
+const savedBillingBaseUrl = ref('')
+const upstreamGroupSource = computed(() => {
+  const account = props.account
+  if (!account) return null
+  const apiKey = editApiKey.value.trim()
+  if (apiKey && billingBaseUrl.value) {
+    return { platform: account.platform, base_url: billingBaseUrl.value, api_key: apiKey, proxy_id: form.proxy_id }
+  }
+  if (billingBaseUrl.value === savedBillingBaseUrl.value && form.proxy_id === account.proxy_id && !apiKey) {
+    return { account_id: account.id }
+  }
+  return null
+})
+
 const statusOptions = computed(() => {
   const options = [
     { value: 'active', label: t('common.active') },
@@ -4258,6 +4332,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	upstreamBillingRateSyncEnabled.value =
 		upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
 	grokVideoCompatModeEnabled.value = extra?.grok_video_compat_mode === true
+	upstreamGroupSyncEnabled.value =
+		upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_group_sync_enabled === true
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -4650,6 +4726,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     selectedErrorCodes.value = []
   }
   editApiKey.value = ''
+  savedBillingBaseUrl.value = billingBaseUrl.value
 }
 
 async function loadTLSProfiles() {
@@ -5276,6 +5353,9 @@ const handleSubmit = async () => {
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
     if (props.account.type === 'apikey') {
+      if (form.name === props.account.name) delete updatePayload.name
+      if (form.notes === (props.account.notes || '')) delete updatePayload.notes
+      updatePayload.upstream_billing_group_sync_enabled = upstreamGroupSyncEnabled.value
       updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
       updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
       if (upstreamBillingRateSyncEnabled.value) {
@@ -5380,7 +5460,9 @@ const handleSubmit = async () => {
       // Add header override if enabled (anthropic/openai apikey only)
       if (isHeaderOverridePlatform(props.account.platform)) {
         if (headerOverrideEnabled.value) {
-          const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+          const headerError = validateHeaderOverrideRows(headerOverrideRows.value, {
+            allowVariables: headerOverrideAllowVariables.value
+          })
           if (headerError) {
             appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
             return
@@ -5585,7 +5667,9 @@ const handleSubmit = async () => {
       }
 
       if (headerOverrideEnabled.value) {
-        const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+        const headerError = validateHeaderOverrideRows(headerOverrideRows.value, {
+            allowVariables: headerOverrideAllowVariables.value
+          })
         if (headerError) {
           appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
           return
@@ -5843,6 +5927,11 @@ const handleSubmit = async () => {
         } else {
           newExtra.openai_responses_mode = openAIResponsesMode.value
         }
+        if (openAIImagesUrlToB64JsonEnabled.value) {
+          newExtra.images_url_to_b64_json = true
+        } else {
+          delete newExtra.images_url_to_b64_json
+        }
 			// 探测/同步开关走顶层专用字段（updatePayload），不再塞进 extra。
 			delete newExtra.upstream_billing_probe_enabled
 			delete newExtra.upstream_billing_rate_sync_enabled
@@ -5926,6 +6015,13 @@ const handleSubmit = async () => {
         } else {
           delete newExtra.grok_video_compat_mode
         }
+      }
+      // 上游倍率自动探测对全部 API-key 平台开放（sub2api 上游即可应答），
+      // Bedrock 凭证无静态 Key 不参与。探测开关走顶层字段，避免 extra 再带一份。
+      if (props.account.type === 'apikey') {
+        delete newExtra.upstream_billing_probe_enabled
+        delete newExtra.upstream_billing_rate_sync_enabled
+        delete newExtra.upstream_billing_group_sync_enabled
       }
       // Total quota
       if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
