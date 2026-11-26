@@ -75,6 +75,9 @@ func NeedsToolContinuation(reqBody map[string]any) bool {
 		if !ok {
 			continue
 		}
+		if isCodexAgentContextOutputMap(itemMap) {
+			continue
+		}
 		itemType, _ := itemMap["type"].(string)
 		if isCodexToolCallItemType(itemType) || itemType == "item_reference" {
 			return true
@@ -102,6 +105,9 @@ func AnalyzeToolContinuationSignals(reqBody map[string]any) ToolContinuationSign
 	for _, item := range input {
 		itemMap, ok := item.(map[string]any)
 		if !ok {
+			continue
+		}
+		if isCodexAgentContextOutputMap(itemMap) {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
@@ -170,6 +176,9 @@ func ValidateFunctionCallOutputContextBytes(body []byte) FunctionCallOutputValid
 	var referenceIDs map[string]struct{}
 	input.ForEach(func(_, item gjson.Result) bool {
 		if !item.IsObject() {
+			return true
+		}
+		if isCodexAgentContextOutput(item) {
 			return true
 		}
 		itemType := item.Get("type").String()
@@ -243,7 +252,7 @@ func AnalyzeToolCallOutputContextCoverageBytes(body []byte) ToolCallOutputContex
 	var outputCallIDs map[string]struct{}
 	var contextIDs map[string]struct{}
 	input.ForEach(func(_, item gjson.Result) bool {
-		if !item.IsObject() {
+		if !item.IsObject() || isCodexAgentContextOutput(item) {
 			return true
 		}
 		itemType := item.Get("type").String()
@@ -313,6 +322,9 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 		if !ok {
 			continue
 		}
+		if isCodexAgentContextOutputMap(itemMap) {
+			continue
+		}
 		itemType, _ := itemMap["type"].(string)
 		switch {
 		case isCodexToolCallOutputItemType(itemType):
@@ -337,6 +349,9 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 	for _, item := range input {
 		itemMap, ok := item.(map[string]any)
 		if !ok {
+			continue
+		}
+		if isCodexAgentContextOutputMap(itemMap) {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
@@ -410,6 +425,9 @@ func HasItemReferenceForCallIDs(reqBody map[string]any, callIDs []string) bool {
 	for _, item := range input {
 		itemMap, ok := item.(map[string]any)
 		if !ok {
+			continue
+		}
+		if isCodexAgentContextOutputMap(itemMap) {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)

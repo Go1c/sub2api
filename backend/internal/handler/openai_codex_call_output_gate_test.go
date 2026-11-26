@@ -16,7 +16,6 @@ func TestCodexCallOutputGateSkipsDeclaredToolsWithoutCandidate(t *testing.T) {
 	require.False(t, mayContainCodexCallOutputCandidate(body, "automation_update"))
 	require.False(t, mayContainCodexCallOutputCandidate(body, "create_thread", "send_message_to_thread"))
 	for name, normalize := range map[string]func([]byte) ([]byte, bool){
-		"untrusted":  normalizeCodexUntrustedContext,
 		"automation": normalizeCodexAutomationBootstrap,
 		"delegation": normalizeCodexDelegationBootstrap,
 	} {
@@ -53,7 +52,7 @@ func TestCodexCallOutputGateAdmitsEveryRewrite(t *testing.T) {
 			parts = append(parts, items[rng.Intn(len(items))])
 		}
 		body := []byte(`{"model":"gpt-5","tools":[{"type":"function","name":"automation_update"}],"input":[` + strings.Join(parts, ",") + `]}`)
-		_, rewritten := normalizeCodexCallOutputBootstrap(body, isCodexAutomationCandidate, false)
+		_, rewritten := normalizeCodexCallOutputBootstrap(body, isCodexAutomationCandidate, true)
 		if rewritten {
 			rewrites++
 			require.True(t, mayContainCodexCallOutputCandidate(body, "automation_update"), "%s", body)

@@ -645,7 +645,7 @@ func openAIWSRawItemsHasPrefix(items []json.RawMessage, prefix []json.RawMessage
 
 func openAIWSRawItemsHasFunctionCallOutput(items []json.RawMessage) bool {
 	for _, item := range items {
-		if isCodexToolCallOutputItemType(gjson.GetBytes(item, "type").String()) {
+		if isCodexToolCallOutputItemType(gjson.GetBytes(item, "type").String()) && !isCodexAgentContextOutput(gjson.ParseBytes(item)) {
 			return true
 		}
 	}
@@ -659,6 +659,9 @@ func openAIWSRawItemsHaveToolCallContextForOutputs(items []json.RawMessage) bool
 	contextCallIDs := make(map[string]struct{})
 	outputCallIDs := make(map[string]struct{})
 	for _, item := range items {
+		if isCodexAgentContextOutput(gjson.ParseBytes(item)) {
+			continue
+		}
 		itemType := gjson.GetBytes(item, "type").String()
 		callID := strings.TrimSpace(gjson.GetBytes(item, "call_id").String())
 		switch {
@@ -729,14 +732,14 @@ func openAIWSRawPayloadHasToolCallOutput(payload []byte) bool {
 	}
 	if input.IsArray() {
 		for _, item := range input.Array() {
-			if isCodexToolCallOutputItemType(item.Get("type").String()) {
+			if isCodexToolCallOutputItemType(item.Get("type").String()) && !isCodexAgentContextOutput(item) {
 				return true
 			}
 		}
 		return false
 	}
 	if input.Type == gjson.JSON {
-		return isCodexToolCallOutputItemType(input.Get("type").String())
+		return isCodexToolCallOutputItemType(input.Get("type").String()) && !isCodexAgentContextOutput(input)
 	}
 	return false
 }
